@@ -1,0 +1,43 @@
+# Домены: https://vvvion.space и запасной https://vvvion-space.grok.me
+# Аккаунты и книги полки лежат в томе vvvion_pgdata. Пересборка и перезагрузка его не стирают.
+# Не используйте `docker compose down -v`: флаг -v удаляет базу.
+#   cp vps.env.example .env
+#   docker compose up -d --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: vvvion
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vvvion}
+      POSTGRES_DB: vvvion
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vvvion -d vvvion"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      DATABASE_URL: postgres://vvvion:${POSTGRES_PASSWORD:-vvvion}@db:5432/vvvion
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-vvvion-change-this-secret-now-32}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://vvvion.space}
+      BETTER_AUTH_TRUSTED_ORIGINS: "${BETTER_AUTH_TRUSTED_ORIGINS:-https://vvvion.space,https://vvvion-space.grok.me}"
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-space-vvvion-app}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+      CRON_SECRET: ${CRON_SECRET:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    name: vvvion_pgdata

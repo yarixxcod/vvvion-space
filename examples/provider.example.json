@@ -1,0 +1,12 @@
+{
+  "name": "OpenAI",
+  "baseUrl": "https://api.openai.com/v1",
+  "apiKey": "sk-replace-me",
+  "chatPath": "/chat/completions",
+  "models": ["gpt-4o-mini"],
+  "model": "gpt-4o-mini",
+  "systemPrompt": "Отвечай кратко и по делу.",
+  "temperature": 0.7,
+  "maxTokens": 1200,
+  "extraHeaders": []
+}

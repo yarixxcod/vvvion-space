@@ -1,0 +1,17 @@
+node_modules/
+.vercel/
+.data/
+.bin/
+screenshots/
+artifacts/
+.grok/
+.tanstack/
+*.log
+
+# Payment and Firebase server secrets. Placeholders stay in *.example.
+.env
+.env.local
+.env.*.local
+attachments/env.txt
+attachments/*firebase-adminsdk*.json
+**/firebase-admin.json

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "414901495610",
+    "project_id": "space-vvvion-app",
+    "storage_bucket": "space-vvvion-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:414901495610:android:697bf67c3c6ed79d571203",
+        "android_client_info": {
+          "package_name": "space.vvvion.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTuLxR__y0zuaRywD14F8pfb8uITsW1DQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

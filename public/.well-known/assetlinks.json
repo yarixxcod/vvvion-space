@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "space.vvvion.app",
+      "sha256_cert_fingerprints": [
+        "E6:2F:48:FE:0F:3D:14:7D:8D:22:69:C5:19:51:45:43:B2:92:A3:FC:4C:31:CD:AF:99:55:1C:70:B5:21:10:67"
+      ]
+    }
+  }
+]

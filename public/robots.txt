@@ -1,0 +1,45 @@
+# Public pages are meant to be found. Private links, the API and sign-in are not.
+# Russian is the default. English and Kazakh are the same pages with ?lang=en and ?lang=kk.
+
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /c/
+Allow: /.well-known/assetlinks.json
+Disallow: /s/
+Disallow: /b/
+Disallow: /p/
+Disallow: /d/
+Disallow: /r/
+Disallow: /api/
+Disallow: /login
+
+User-agent: Yandex
+Allow: /
+Allow: /about
+Allow: /c/
+Allow: /.well-known/assetlinks.json
+Disallow: /s/
+Disallow: /b/
+Disallow: /p/
+Disallow: /d/
+Disallow: /r/
+Disallow: /api/
+Disallow: /login
+Host: vvvion.space
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /og.jpg
+Allow: /icon-512.png
+Allow: /icon-192.png
+
+User-agent: bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+Sitemap: https://vvvion.space/sitemap.xml

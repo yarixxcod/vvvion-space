@@ -1,0 +1,32 @@
+import NextAuth from 'next-auth';
+import EmailProvider from 'next-auth/providers/email';
+import { PrismaAdapter } from '@auth/prisma-adapter';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export default NextAuth({
+  // Email magic links require a database adapter (Prisma shown; Drizzle, etc. also work)
+  adapter: PrismaAdapter(prisma),
+  providers: [
+    EmailProvider({
+      server: {
+        host: process.env.EMAIL_SERVER_HOST,
+        port: Number(process.env.EMAIL_SERVER_PORT),
+        secure: true,
+        auth: {
+          user: process.env.EMAIL_SERVER_USER,
+          pass: process.env.EMAIL_SERVER_PASSWORD,
+        },
+      },
+      from: process.env.EMAIL_FROM,
+    }),
+  ],
+});
+
+// Add this to your .env file:
+// EMAIL_SERVER_USER=resend
+// EMAIL_SERVER_PASSWORD=re_xxxxxxxxx
+// EMAIL_SERVER_HOST=smtp.resend.com
+// EMAIL_SERVER_PORT=465
+// EMAIL_FROM=onboarding@resend.dev

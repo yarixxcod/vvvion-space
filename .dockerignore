@@ -1,0 +1,14 @@
+node_modules
+.output
+.vercel
+.git
+screenshots
+artifacts
+*.log
+.env
+.env.*
+.grok/auth.json
+.grok/preview.log
+.grok/preview.pid
+.data
+data

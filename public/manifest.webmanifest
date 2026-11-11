@@ -1,0 +1,31 @@
+{
+  "name": "vvvion.space",
+  "short_name": "vvvion",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "lang": "ru",
+  "dir": "ltr",
+  "background_color": "#0c0c0e",
+  "theme_color": "#0c0c0e",
+  "description": "Чат с ИИ и круг: сообщения, лента, книги, сервисы, диск и банк вублей.",
+  "categories": ["social", "entertainment"],
+  "prefer_related_applications": false,
+  "launch_handler": { "client_mode": "navigate-existing" },
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Сообщения", "short_name": "Чаты", "url": "/c/messages", "description": "Диалоги, группы и голосовые", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Лента", "url": "/c/feed", "description": "Записи и ответы круга", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Развлечения", "url": "/c/play", "description": "Читальня и смотрельня", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Сервисы", "url": "/c/services", "description": "Погода, новости и курсы", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Диск", "url": "/c/disk", "description": "Картинки и голосовые", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Банк", "url": "/c/bank", "description": "Вубли внутри сервиса", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
