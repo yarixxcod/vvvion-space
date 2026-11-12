@@ -2,8 +2,8 @@
   "installCommand": "npm install --omit=dev --no-audit --no-fund",
   "regions": ["fra1"],
   "crons": [
-    { "path": "/api/push/cron", "schedule": "0 * * * *" },
-    { "path": "/api/cron/cryptopay-reconcile", "schedule": "30 * * * *" }
+    { "path": "/api/push/cron", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/cryptopay-reconcile", "schedule": "0 4 * * *" }
   ],
   "headers": [
     {
