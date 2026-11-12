@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileText, Folder, FolderPlus, Music2, Pencil, Share2, Trash2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { ArtistNames } from "@/components/yaronetic/artist-card";
 import { FileBar } from "@/components/yaronetic/file-bar";
 import { FileEditor, type AudioPatch } from "@/components/yaronetic/file-editor";
+import { FileMenu, type FileAction } from "@/components/yaronetic/file-facts";
 import { openAlbum, forgetTrack } from "@/components/yaronetic/music-dock";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { VerifyMailButton } from "@/components/yaronetic/verify-mail";
@@ -149,6 +150,7 @@ function TrackRow({
   bytes,
   disabled,
   picked,
+  menu,
   onPlay,
   onPick,
 }: {
@@ -157,60 +159,71 @@ function TrackRow({
   bytes: number;
   disabled: boolean;
   picked: boolean;
+  menu: ReactNode;
   onPlay: () => void;
   onPick: () => void;
 }) {
+  const [ready, setReady] = useState(false);
   const [tags, setTags] = useState<MusicTags | null>(null);
   const [cover, setCover] = useState<string | null>(null);
 
   useEffect(() => {
     let dead = false;
+    setReady(false);
     void loadTags(src, name)
       .then((parsed) => {
         if (dead) return;
         setTags(parsed);
         setCover(coverUrl(parsed.cover));
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!dead) setReady(true);
+      });
     return () => {
       dead = true;
     };
   }, [name, src]);
+
+  if (!ready) return null;
 
   const title = tags?.title || name.replace(/\.[^.]+$/, "");
   const bits = musicBits(tags, bytes);
   const extra = bits || sizeLabel(bytes);
 
   return (
-    <div className="flex min-w-0 flex-1 items-start gap-2.5">
-      <span className="relative mt-0.5 shrink-0">
-        <button type="button" className="press block" onClick={onPlay} disabled={disabled}>
-          {cover ? <img src={cover} alt="" className="size-14 rounded-xl object-cover" /> : (
-            <span className="grid size-14 place-items-center rounded-xl bg-subtle">
-              <Music2 className="size-4 text-muted" />
+    <li className="flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span className="relative shrink-0">
+          <button type="button" className="press block" onClick={onPlay} disabled={disabled}>
+            {cover ? <img src={cover} alt="" className="size-14 rounded-xl object-cover" /> : (
+              <span className="grid size-14 place-items-center rounded-xl bg-subtle">
+                <Music2 className="size-4 text-muted" />
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            aria-pressed={picked}
+            aria-label={picked ? "Снять выбор" : "Выбрать"}
+            className={`absolute -top-1.5 -left-1.5 z-10 grid size-6 place-items-center rounded-full border text-[11px] leading-none ${picked ? "border-accent bg-accent text-accent-fg" : "border-line bg-bg text-transparent"}`}
+            onClick={onPick}
+          >
+            ✓
+          </button>
+        </span>
+        <span className="min-w-0 flex-1">
+          <button type="button" className="press block w-full truncate text-left text-[0.95rem] leading-snug" onClick={onPlay} disabled={disabled}>{title}</button>
+          {tags?.artist ? (
+            <span className="mt-0.5 block overflow-x-auto whitespace-nowrap text-[0.8125rem] leading-snug text-faint [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <ArtistNames name={tags.artist} className="text-faint" />
             </span>
-          )}
-        </button>
-        <button
-          type="button"
-          aria-pressed={picked}
-          aria-label={picked ? "Снять выбор" : "Выбрать"}
-          className={`absolute -top-1.5 -left-1.5 z-10 grid size-6 place-items-center rounded-full border text-[11px] leading-none ${picked ? "border-accent bg-accent text-accent-fg" : "border-line bg-bg text-transparent"}`}
-          onClick={onPick}
-        >
-          ✓
-        </button>
-      </span>
-      <span className="min-w-0 flex-1">
-        <button type="button" className="press block w-full text-left text-[0.95rem] leading-snug break-words text-pretty" onClick={onPlay} disabled={disabled}>{title}</button>
-        {tags?.artist ? (
-          <span className="mt-0.5 block text-[0.8125rem] leading-snug text-pretty text-faint">
-            <ArtistNames name={tags.artist} className="text-faint" />
-          </span>
-        ) : null}
-        {extra ? <span className="mt-1 block text-xs leading-none tabular-nums text-faint">{extra}</span> : null}
-      </span>
-    </div>
+          ) : null}
+          {extra ? <span className="mt-1 block truncate text-xs leading-none tabular-nums whitespace-nowrap text-faint">{extra}</span> : null}
+        </span>
+      </div>
+      {menu}
+    </li>
   );
 }
 
@@ -518,6 +531,38 @@ export function MegaDisk() {
     );
   }
 
+  function fileActions(entry: MegaEntry): FileAction[] {
+    const rows: FileAction[] = [
+      {
+        label: "Поделиться",
+        icon: <Share2 className="size-4" />,
+        disabled: busy || !view?.ready,
+        onClick: () => setShare({ id: entry.id, name: entry.name }),
+      },
+      {
+        label: "Изменить",
+        icon: <Pencil className="size-4" />,
+        disabled: busy,
+        onClick: () => setEdit(entry),
+      },
+    ];
+    if (entry.kind === "file") {
+      rows.push({
+        label: "Скачать",
+        icon: <Download className="size-4" />,
+        disabled: busy || !view?.ready,
+        onClick: () => void download(entry.id, entry.name, entry.bytes),
+      });
+    }
+    rows.push({
+      label: "Убрать",
+      icon: <Trash2 className="size-4" />,
+      disabled: busy || !view?.ready,
+      onClick: () => void remove(entry.id, entry.name),
+    });
+    return rows;
+  }
+
   if (!view) return <PageLoader />;
 
   const shown = compareFiles(
@@ -539,7 +584,7 @@ export function MegaDisk() {
           <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(ratio > 0 ? 4 : 0, ratio * 100)}%` }} />
         </div>
         <p className="mt-2 text-xs text-faint">
-          {view.diskName || "Сервер ещё не назначен"}
+          {view.ready ? "Файлы распределяются по свободным серверам" : "Сервер ещё не назначен"}
           {view.active ? ` · до ${untilLabel(view.until)}` : view.until ? " · срок вышел, файлы ещё можно скачать" : ""}
         </p>
         <p className="mt-1 text-xs text-muted">{tx({ ru: "Короткий обрыв сети не сбрасывает загрузку и скачивание: оборванный кусок повторяется сам. Файл до 20 МБ можно прислать и боту в Telegram — он ляжет в корень.", en: "A short network dip does not restart an upload or a download: the broken piece is sent again. A file up to 20 MB can also go to the Telegram bot and lands in the root.", kk: "Желі қысқа үзілсе, жүктеу басынан басталмайды: үзілген бөлік қайта кетеді. 20 МБ-қа дейінгі файлды Telegram ботына жіберуге болады — ол түбірге түседі." })}</p>
@@ -680,30 +725,42 @@ export function MegaDisk() {
         {shown.map((entry) => {
           const kind = fileKind(entry);
           const src = href(entry.id);
+          const menu = (
+            <FileMenu
+              label={entry.name}
+              facts={entry.kind === "file" ? { name: entry.name, mime: entry.mime, bytes: entry.bytes, createdAt: entry.createdAt, server: entry.server } : undefined}
+              actions={fileActions(entry)}
+            />
+          );
+          if (entry.kind === "file" && isMusicFile(entry.name, entry.mime)) {
+            return (
+              <TrackRow
+                key={entry.id}
+                src={src}
+                name={entry.name}
+                bytes={entry.bytes}
+                disabled={!view.ready}
+                picked={picked.includes(entry.id)}
+                menu={menu}
+                onPick={() => toggle(entry.id)}
+                onPlay={() => {
+                  const songs = shown.filter((item) => item.kind === "file" && isMusicFile(item.name, item.mime));
+                  const at = Math.max(0, songs.findIndex((item) => item.id === entry.id));
+                  openAlbum(
+                    songs.map((item) => ({ src: href(item.id), name: item.name, bytes: item.bytes })),
+                    at,
+                  );
+                }}
+              />
+            );
+          }
           return (
-            <li key={entry.id} className={`flex gap-1 rounded-2xl border border-line bg-bg px-3 py-2 ${entry.kind === "folder" ? "items-center" : "items-start"}`}>
+            <li key={entry.id} className={`flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2`}>
               {entry.kind === "folder" ? (
                 <button type="button" className="press flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => void openFolder(entry.id)}>
                   <Folder className="size-4 shrink-0 text-muted" />
                   <span className="truncate text-sm">{entry.name}</span>
                 </button>
-              ) : isMusicFile(entry.name, entry.mime) ? (
-                <TrackRow
-                  src={src}
-                  name={entry.name}
-                  bytes={entry.bytes}
-                  disabled={!view.ready}
-                  picked={picked.includes(entry.id)}
-                  onPick={() => toggle(entry.id)}
-                  onPlay={() => {
-                    const songs = shown.filter((item) => item.kind === "file" && isMusicFile(item.name, item.mime));
-                    const at = Math.max(0, songs.findIndex((item) => item.id === entry.id));
-                    openAlbum(
-                      songs.map((item) => ({ src: href(item.id), name: item.name, bytes: item.bytes })),
-                      at,
-                    );
-                  }}
-                />
               ) : (
                 <div className="flex min-w-0 flex-1 items-start gap-2.5 py-0.5">
                   <span className="relative shrink-0">
@@ -732,46 +789,7 @@ export function MegaDisk() {
                   </button>
                 </div>
               )}
-              <div className="flex shrink-0">
-              <button
-                type="button"
-                className="press grid size-8 place-items-center rounded-lg text-muted disabled:opacity-40"
-                aria-label="Поделиться"
-                disabled={busy || !view.ready}
-                onClick={() => setShare({ id: entry.id, name: entry.name })}
-              >
-                <Share2 className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                className="press grid size-8 place-items-center rounded-lg text-muted disabled:opacity-40"
-                aria-label="Изменить"
-                disabled={busy}
-                onClick={() => setEdit(entry)}
-              >
-                <Pencil className="size-3.5" />
-              </button>
-              {entry.kind === "file" ? (
-                <button
-                  type="button"
-                  className="press grid size-8 place-items-center rounded-lg text-muted disabled:opacity-40"
-                  aria-label="Скачать"
-                  disabled={busy || !view.ready}
-                  onClick={() => void download(entry.id, entry.name, entry.bytes)}
-                >
-                  <Download className="size-3.5" />
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="press grid size-8 place-items-center rounded-lg text-muted disabled:opacity-40"
-                aria-label="Убрать"
-                disabled={busy || !view.ready}
-                onClick={() => void remove(entry.id, entry.name)}
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-              </div>
+              {menu}
             </li>
           );
         })}

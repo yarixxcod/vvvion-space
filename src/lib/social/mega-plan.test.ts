@@ -9,7 +9,9 @@ import {
   installShell,
   MEGA_CHUNK,
   pickNode,
+  puttyScript,
   siblingName,
+  siteOrigin,
   sshPortOk,
 } from "./mega-plan.ts";
 
@@ -36,6 +38,18 @@ test("names and hosts", () => {
   assert.ok(MEGA_CHUNK <= 1_800_000);
   assert.ok(MEGA_CHUNK >= 1024 * 1024);
   assert.ok(MEGA_CHUNK < 2_000_000);
+});
+
+test("putty script calls the site once and stays off 443", () => {
+  const ticket = "ab".repeat(24);
+  const script = puttyScript("https://vvvion.space/c/admin", ticket);
+  assert.equal(siteOrigin("https://vvvion.space/c/admin"), "https://vvvion.space");
+  assert.match(script, /\$SITE\/api\/mega\/join\?ticket=\$TICKET/);
+  assert.match(script, new RegExp(ticket));
+  assert.match(script, /ufw allow "\$PORT"\/tcp/);
+  assert.equal(script.includes(":443"), false);
+  assert.equal(script.includes("8443"), false);
+  assert.throws(() => puttyScript("notaurl", ticket), /Адрес сайта/);
 });
 
 test("least loaded disk wins", () => {

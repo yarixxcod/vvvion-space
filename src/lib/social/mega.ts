@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { getSql } from "@/lib/db";
+import { getSql, withTransaction } from "@/lib/db";
 import { assertActive, assertAdmin } from "@/lib/social/access";
 import { isUniqueViolation } from "@/lib/social/sql-error";
 import { priceOf } from "@/lib/social/prices";
 import {
+  AGENT_SOURCE,
   agentPortOk,
   diskNameOk,
   entryName,
@@ -13,6 +14,8 @@ import {
   MEGA_DAYS,
   MEGA_PRICE,
   MEGA_QUOTA,
+  puttyScript,
+  siteOrigin,
   sshPortOk,
   sshUserOk,
 } from "@/lib/social/mega-plan";
@@ -37,6 +40,7 @@ export type MegaEntry = {
   bytes: number;
   mime: string;
   createdAt: string;
+  server: string;
 };
 
 export type MegaView = MegaOffer & {
@@ -175,6 +179,62 @@ async function linkOf(userId: string): Promise<NodeLink | null> {
   };
 }
 
+async function linkForFile(userId: string, fileId: string): Promise<NodeLink | null> {
+  const sql = await getSql();
+  const rows = await sql<{
+    id: string;
+    host: string;
+    agent_port: number;
+    agent_token: string;
+    disk_name: string;
+    status: string;
+  }>`
+    select n.id, n.host, n.agent_port, n.agent_token, n.disk_name, n.status
+    from mega_entries e
+    join mega_nodes n on n.id = e.node_id
+    where e.id = ${fileId} and e.user_id = ${userId}
+    limit 1
+  `;
+  const row = rows[0];
+  if (!row) return linkOf(userId);
+  let token = "";
+  try {
+    token = openSeal(row.agent_token);
+  } catch {
+    token = "";
+  }
+  return {
+    id: row.id,
+    host: row.host,
+    port: Number(row.agent_port),
+    token,
+    diskName: row.disk_name,
+    status: row.status,
+  };
+}
+
+async function claimLeastNode(bytes: number): Promise<string> {
+  return withTransaction(async (sql) => {
+    const rows = await sql<{ id: string }>`
+      select id from mega_nodes
+      where status = 'ready'
+      order by used_bytes asc, created_at asc
+      limit 1
+      for update
+    `;
+    const id = rows[0]?.id;
+    if (!id) throw new Error("Диск ещё не поставлен");
+    await sql`update mega_nodes set used_bytes = used_bytes + ${bytes} where id = ${id}`;
+    return id;
+  });
+}
+
+async function releaseClaim(id: string, bytes: number): Promise<void> {
+  if (!id || bytes < 1) return;
+  const sql = await getSql();
+  await sql`update mega_nodes set used_bytes = greatest(used_bytes - ${bytes}, 0) where id = ${id}`;
+}
+
 async function offerOf(userId: string): Promise<MegaOffer & { ready: boolean; diskName: string }> {
   const sql = await getSql();
   const rows = await sql<{ until_at: string | null }>`
@@ -187,7 +247,7 @@ async function offerOf(userId: string): Promise<MegaOffer & { ready: boolean; di
     from mega_entries
     where user_id = ${userId} and kind = 'file' and status = 'ok'
   `;
-  const link = await linkOf(userId);
+  const readyRows = await sql<{ ok: number }>`select 1 as ok from mega_nodes where status = 'ready' limit 1`;
   return {
     active,
     until,
@@ -196,8 +256,8 @@ async function offerOf(userId: string): Promise<MegaOffer & { ready: boolean; di
     verified: await verified(userId),
     quota: MEGA_QUOTA,
     used: Number(usedRows[0]?.n ?? 0),
-    ready: link?.status === "ready" && Boolean(link.token),
-    diskName: link?.diskName ?? "",
+    ready: Boolean(readyRows[0]),
+    diskName: "",
   };
 }
 
@@ -231,18 +291,20 @@ async function sweepExpired(): Promise<void> {
     grouped.set(row.user_id, list);
   }
   for (const [userId, ids] of grouped) {
-    const link = await linkOf(userId);
-    if (link?.status === "ready") {
-      try {
-        await dropRemote(link, userId, ids);
-      } catch {
-        /* the row still leaves the list */
-      }
-    }
+    const links = new Map<string, NodeLink>();
     for (const id of ids) {
+      const link = await linkForFile(userId, id);
+      if (link?.status === "ready") {
+        links.set(link.id, link);
+        try {
+          await dropRemote(link, userId, [id]);
+        } catch {
+          /* the row still leaves the list */
+        }
+      }
       await sql`delete from mega_entries where id = ${id} and user_id = ${userId}`;
     }
-    if (link) {
+    for (const link of links.values()) {
       try {
         await refreshUsed(link);
       } catch {
@@ -277,12 +339,13 @@ async function readView(userId: string, folder: string | null): Promise<MegaView
         select id, name from up order by depth desc
       `
     : [];
-  const entries = await sql<{ id: string; name: string; kind: string; bytes: number | string; mime: string; created_at: string }>`
-    select id, name, kind, bytes, mime, created_at::text as created_at
-    from mega_entries
-    where user_id = ${userId} and coalesce(parent_id, '') = ${key} and status = 'ok'
-      and (expires_at is null or expires_at > now())
-    order by kind desc, lower(name)
+  const entries = await sql<{ id: string; name: string; kind: string; bytes: number | string; mime: string; created_at: string; server: string | null }>`
+    select e.id, e.name, e.kind, e.bytes, e.mime, e.created_at::text as created_at, n.name as server
+    from mega_entries e
+    left join mega_nodes n on n.id = e.node_id
+    where e.user_id = ${userId} and coalesce(e.parent_id, '') = ${key} and e.status = 'ok'
+      and (e.expires_at is null or e.expires_at > now())
+    order by e.kind desc, lower(e.name)
   `;
   return {
     ...offer,
@@ -297,6 +360,7 @@ async function readView(userId: string, folder: string | null): Promise<MegaView
         bytes: Number(row.bytes) || 0,
         mime: row.mime,
         createdAt: row.created_at,
+        server: row.server || "",
       })),
   };
 }
@@ -535,8 +599,7 @@ async function refreshUsed(link: NodeLink): Promise<void> {
     set used_bytes = (
       select coalesce(sum(e.bytes), 0)
       from mega_entries e
-      join mega_grants g on g.user_id = e.user_id
-      where g.node_id = n.id and e.kind = 'file' and e.status = 'ok'
+      where e.node_id = n.id and e.kind = 'file' and e.status = 'ok'
     )
     where n.id = ${link.id}
   `;
@@ -560,13 +623,17 @@ export const removeMega = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<MegaView> => {
     await assertActive(context.userId);
-    const link = await linkOf(context.userId);
-    if (!link || link.status !== "ready") throw new Error("Диск сейчас не отвечает");
     const ids = await filesUnder(context.userId, data.id);
-    if (ids.length) await dropRemote(link, context.userId, ids);
+    const links = new Map<string, NodeLink>();
+    for (const id of ids) {
+      const link = await linkForFile(context.userId, id);
+      if (!link || link.status !== "ready") continue;
+      links.set(link.id, link);
+      await dropRemote(link, context.userId, [id]);
+    }
     const sql = await getSql();
     await sql`delete from mega_entries where id = ${data.id} and user_id = ${context.userId}`;
-    await refreshUsed(link);
+    for (const link of links.values()) await refreshUsed(link);
     return readView(context.userId, data.folder);
   });
 
@@ -652,20 +719,30 @@ export async function beginMegaUpload(userId: string, name: string, folder: stri
   if (!offer.ready) throw new Error("Диск ещё не поставлен");
   if (!Number.isFinite(size) || size < 1 || size > MEGA_QUOTA) throw new Error("Файл пустой или больше 2 ГБ");
   if (offer.used + size > MEGA_QUOTA) throw new Error("На мегадиске не хватает места");
+  const nodeId = await claimLeastNode(size);
   const clean = entryName(name);
   const key = await parentKey(userId, folder);
   const sql = await getSql();
   const id = crypto.randomUUID();
-  const rows = await sql<{ id: string }>`
-    insert into mega_entries (id, user_id, parent_id, name, kind, mime, bytes, expect, status)
-    select ${id}, ${userId}, ${key || null}, ${clean}, 'file', ${mimeOf(mime)}, 0, ${size}, 'up'
-    where not exists (
-      select 1 from mega_entries
-      where user_id = ${userId} and coalesce(parent_id, '') = ${key} and name = ${clean} and status = 'ok'
-    )
-    returning id
-  `;
-  if (!rows[0]) throw new Error("Такое имя уже есть");
+  let rows: { id: string }[] = [];
+  try {
+    rows = await sql<{ id: string }>`
+      insert into mega_entries (id, user_id, parent_id, name, kind, mime, bytes, expect, status, node_id)
+      select ${id}, ${userId}, ${key || null}, ${clean}, 'file', ${mimeOf(mime)}, 0, ${size}, 'up', ${nodeId}
+      where not exists (
+        select 1 from mega_entries
+        where user_id = ${userId} and coalesce(parent_id, '') = ${key} and name = ${clean} and status = 'ok'
+      )
+      returning id
+    `;
+  } catch (error) {
+    await releaseClaim(nodeId, size);
+    throw error instanceof Error ? error : new Error("Файл не записался");
+  }
+  if (!rows[0]) {
+    await releaseClaim(nodeId, size);
+    throw new Error("Такое имя уже есть");
+  }
   return id;
 }
 
@@ -688,7 +765,7 @@ export async function writeMegaChunk(userId: string, id: string, offset: number,
   if (!UUID.test(id) || !Number.isInteger(offset) || offset < 0 || bytes.length < 1 || bytes.length > MEGA_CHUNK) {
     throw new Error("Кусок файла не принят");
   }
-  const link = await linkOf(userId);
+  const link = await linkForFile(userId, id);
   if (!link || link.status !== "ready") throw new Error("Диск сейчас не отвечает");
   const sql = await getSql();
   const rows = await sql<{ bytes: number | string; expect: number | string }>`
@@ -721,7 +798,7 @@ export async function writeMegaChunkStream(userId: string, id: string, offset: n
   if (!UUID.test(id) || !Number.isInteger(offset) || offset < 0 || !Number.isInteger(length) || length < 1 || length > MEGA_CHUNK) {
     throw new Error("Кусок файла не принят");
   }
-  const link = await linkOf(userId);
+  const link = await linkForFile(userId, id);
   if (!link || link.status !== "ready") throw new Error("Диск сейчас не отвечает");
   const sql = await getSql();
   const rows = await sql<{ bytes: number | string; expect: number | string }>`
@@ -796,7 +873,7 @@ export async function storeMegaBytes(
 
 export async function finishMegaUpload(userId: string, id: string): Promise<void> {
   if (!UUID.test(id)) throw new Error("Файл не найден");
-  const link = await linkOf(userId);
+  const link = await linkForFile(userId, id);
   if (!link || link.status !== "ready") throw new Error("Диск сейчас не отвечает");
   const sql = await getSql();
   const rows = await sql<{ bytes: number | string; expect: number | string }>`
@@ -822,11 +899,11 @@ export async function finishMegaUpload(userId: string, id: string): Promise<void
 export async function cancelMegaUpload(userId: string, id: string): Promise<void> {
   if (!UUID.test(id)) return;
   const sql = await getSql();
-  const rows = await sql<{ status: string }>`
-    select status from mega_entries where id = ${id} and user_id = ${userId}
+  const pending = await sql<{ node_id: string | null; expect: number | string }>`
+    select node_id, expect from mega_entries where id = ${id} and user_id = ${userId} and status = 'up'
   `;
-  if (rows[0]?.status !== "up") return;
-  const link = await linkOf(userId);
+  if (!pending[0]) return;
+  const link = await linkForFile(userId, id);
   if (link?.status === "ready") {
     try {
       await dropRemote(link, userId, [id]);
@@ -835,6 +912,14 @@ export async function cancelMegaUpload(userId: string, id: string): Promise<void
     }
   }
   await sql`delete from mega_entries where id = ${id} and user_id = ${userId} and status = 'up'`;
+  if (pending[0].node_id) await releaseClaim(pending[0].node_id, Number(pending[0].expect) || 0);
+  if (link?.status === "ready") {
+    try {
+      await refreshUsed(link);
+    } catch {
+      /* the release above stands */
+    }
+  }
 }
 
 async function fileMeta(userId: string, id: string): Promise<{ name: string; mime: string; size: number; link: NodeLink }> {
@@ -847,7 +932,7 @@ async function fileMeta(userId: string, id: string): Promise<{ name: string; mim
   `;
   const row = rows[0];
   if (!row) throw new Error("Файл не найден");
-  const link = await linkOf(userId);
+  const link = await linkForFile(userId, id);
   if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
     if (link?.status === "ready") {
       try {
@@ -925,7 +1010,7 @@ async function shareMeta(viewerId: string, id: string): Promise<{ name: string; 
     `;
     if (!allowed[0]) throw new Error("Файл не найден");
   }
-  const link = await linkOf(row.user_id);
+  const link = await linkForFile(row.user_id, id);
   if (!link || link.status !== "ready" || !link.token) throw new Error("Диск сейчас не отвечает");
   return {
     name: row.name,
@@ -1199,7 +1284,7 @@ export async function publicMegaFileMeta(token: string, id: string): Promise<{ n
 export async function publicMegaFileBody(token: string, id: string, range?: { start: number; end: number } | null): Promise<Response> {
   const share = await shareRoot(token);
   if (!share || !(await insideShare(share.owner, share.root, id))) throw new Error("Файл не найден");
-  const link = await linkOf(share.owner);
+  const link = await linkForFile(share.owner, id);
   if (!link || link.status !== "ready" || !link.token) throw new Error("Диск сейчас не отвечает");
   const extra: Record<string, string> = {};
   if (range) {
@@ -1468,8 +1553,177 @@ export const removeMegaNode = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await assertAdmin(context.userId);
     const sql = await getSql();
-    const taken = await sql<{ n: number | string }>`select count(*)::int as n from mega_grants where node_id = ${data}`;
-    if (Number(taken[0]?.n ?? 0) > 0) throw new Error("На этом диске ещё есть подписки");
+    const files = await sql<{ n: number | string }>`
+      select count(*)::int as n from mega_entries where node_id = ${data} and kind = 'file'
+    `;
+    if (Number(files[0]?.n ?? 0) > 0) throw new Error("На этом диске ещё есть файлы");
+    await sql`update mega_grants set node_id = null where node_id = ${data}`;
     await sql`delete from mega_nodes where id = ${data}`;
     return listNodes();
   });
+
+function sha(value: string): string {
+  return serverCrypto().createHash("sha256").update(value).digest("hex");
+}
+
+function joinJson(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
+export const puttyMegaScript = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const raw = input && typeof input === "object" ? (input as { origin?: unknown }).origin : "";
+    return { origin: siteOrigin(typeof raw === "string" ? raw : "") };
+  })
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.userId);
+    const ticket = serverCrypto().randomBytes(24).toString("hex");
+    const sql = await getSql();
+    await sql`
+      insert into mega_enrolls (id, token_hash, expires_at)
+      values (${crypto.randomUUID()}, ${sha(ticket)}, now() + interval '30 minutes')
+    `;
+    return { script: puttyScript(data.origin, ticket) };
+  });
+
+async function enrollOf(ticket: string): Promise<{
+  id: string;
+  agent_token: string;
+  disk_name: string;
+  agent_port: number;
+  used_at: string | null;
+} | null> {
+  if (!/^[a-f0-9]{32,64}$/.test(ticket)) return null;
+  const sql = await getSql();
+  const rows = await sql<{
+    id: string;
+    agent_token: string;
+    disk_name: string;
+    agent_port: number;
+    used_at: string | null;
+  }>`
+    select id, agent_token, disk_name, agent_port, used_at::text as used_at
+    from mega_enrolls
+    where token_hash = ${sha(ticket)} and expires_at > now()
+    limit 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function issueAgent(ticket: string): Promise<Response> {
+  const row = await enrollOf(ticket);
+  if (!row || row.used_at) return joinJson(404, { message: "Скрипт устарел. Возьмите новый в панели." });
+  const sql = await getSql();
+  let sealed = row.agent_token;
+  let disk = row.disk_name;
+  let port = Number(row.agent_port) || 8742;
+  if (!sealed || !disk) {
+    const token = serverCrypto().randomBytes(24).toString("hex");
+    disk = `box${token.slice(0, 6)}`;
+    sealed = seal(token);
+    port = 8742;
+    const saved = await sql<{ agent_token: string; disk_name: string; agent_port: number }>`
+      update mega_enrolls
+      set agent_token = ${sealed}, disk_name = ${disk}, agent_port = ${port}
+      where id = ${row.id} and used_at is null and agent_token = ''
+      returning agent_token, disk_name, agent_port
+    `;
+    if (!saved[0]) {
+      const again = await enrollOf(ticket);
+      if (!again?.agent_token || !again.disk_name) return joinJson(404, { message: "Скрипт устарел. Возьмите новый в панели." });
+      sealed = again.agent_token;
+      disk = again.disk_name;
+      port = Number(again.agent_port) || 8742;
+    }
+  }
+  let token = "";
+  try {
+    token = openSeal(sealed);
+  } catch {
+    return joinJson(500, { message: "Скрипт не собрался" });
+  }
+  if (!diskNameOk(disk) || !agentPortOk(port)) return joinJson(500, { message: "Скрипт не собрался" });
+  return new Response(AGENT_SOURCE, {
+    status: 200,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      "x-mega-token": token,
+      "x-mega-disk": disk,
+      "x-mega-port": String(port),
+    },
+  });
+}
+
+async function acceptMachine(request: Request): Promise<Response> {
+  let body: { ticket?: unknown; host?: unknown; port?: unknown };
+  try {
+    body = (await request.json()) as { ticket?: unknown; host?: unknown; port?: unknown };
+  } catch {
+    return joinJson(400, { message: "Не разобрать" });
+  }
+  const ticket = typeof body.ticket === "string" ? body.ticket : "";
+  const host = typeof body.host === "string" ? body.host.trim().toLowerCase() : "";
+  const port = Number(body.port);
+  if (!hostOk(host) || !agentPortOk(port)) return joinJson(400, { message: "Адрес или порт не подходит" });
+  const row = await enrollOf(ticket);
+  if (!row || row.used_at || !row.agent_token || !row.disk_name) return joinJson(404, { message: "Скрипт устарел. Возьмите новый в панели." });
+  if (Number(row.agent_port) !== port) return joinJson(400, { message: "Порт не совпал" });
+  const id = crypto.randomUUID();
+  const sql = await getSql();
+  const taken = await sql<{ id: string }>`
+    update mega_enrolls set used_at = now()
+    where id = ${row.id} and used_at is null
+    returning id
+  `;
+  if (!taken[0]) return joinJson(404, { message: "Скрипт уже использован" });
+  try {
+    await sql`
+      insert into mega_nodes (id, name, host, ssh_port, ssh_user, ssh_secret, disk_name, agent_port, agent_token, status, detail)
+      values (
+        ${id}, 'Новый диск', ${host}, 22, 'root', ${seal("")},
+        ${row.disk_name}, ${port}, ${row.agent_token}, 'new', 'Машина отметилась'
+      )
+    `;
+  } catch (error) {
+    await sql`update mega_enrolls set used_at = null where id = ${row.id}`;
+    const text = error instanceof Error ? error.message : "";
+    if (text.toLowerCase().includes("unique") || text.includes("mega_nodes_host")) return joinJson(409, { message: "Такой сервер уже есть" });
+    return joinJson(500, { message: "Диск не записался" });
+  }
+  let token = "";
+  try {
+    token = openSeal(row.agent_token);
+  } catch {
+    token = "";
+  }
+  const probe = token
+    ? await fetch(`http://${host}:${port}/health`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(8000),
+      }).catch(() => null)
+    : null;
+  const health = probe ? ((await probe.json().catch(() => null)) as { ok?: boolean; used?: number } | null) : null;
+  if (probe?.ok && health?.ok) {
+    await sql`
+      update mega_nodes set status = 'ready', detail = 'Работает', used_bytes = ${Number(health.used) || 0}
+      where id = ${id}
+    `;
+  } else {
+    await sql`update mega_nodes set status = 'error', detail = 'Скрипт запущен, снаружи порт не открыт' where id = ${id}`;
+  }
+  return joinJson(200, { ok: true, name: "Новый диск" });
+}
+
+export async function handleMegaJoin(request: Request): Promise<Response> {
+  if (request.method === "GET") {
+    const ticket = new URL(request.url).searchParams.get("ticket") || "";
+    return issueAgent(ticket);
+  }
+  if (request.method === "POST") return acceptMachine(request);
+  return joinJson(405, { message: "Метод не подходит" });
+}

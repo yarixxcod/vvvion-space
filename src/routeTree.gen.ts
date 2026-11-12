@@ -46,6 +46,7 @@ import { Route as ApiCircleFileIdRouteImport } from './routes/api/circle-file/$i
 import { Route as ApiCronCryptopayReconcileRouteImport } from './routes/api/cron/cryptopay-reconcile'
 import { Route as ApiDiskIdRouteImport } from './routes/api/disk/$id'
 import { Route as ApiMegaIdRouteImport } from './routes/api/mega/$id'
+import { Route as ApiMegaJoinRouteImport } from './routes/api/mega/join'
 import { Route as ApiPostFileIdRouteImport } from './routes/api/post-file/$id'
 import { Route as ApiPushCronRouteImport } from './routes/api/push/cron'
 import { Route as ApiPushRegisterRouteImport } from './routes/api/push/register'
@@ -252,6 +253,11 @@ const ApiMegaIdRoute = ApiMegaIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiMegaRoute,
 } as any)
+const ApiMegaJoinRoute = ApiMegaJoinRouteImport.update({
+  id: '/join',
+  path: '/join',
+  getParentRoute: () => ApiMegaRoute,
+} as any)
 const ApiPostFileIdRoute = ApiPostFileIdRouteImport.update({
   id: '/api/post-file/$id',
   path: '/api/post-file/$id',
@@ -387,6 +393,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
   '/api/disk/$id': typeof ApiDiskIdRoute
   '/api/mega/$id': typeof ApiMegaIdRoute
+  '/api/mega/join': typeof ApiMegaJoinRoute
   '/api/post-file/$id': typeof ApiPostFileIdRoute
   '/api/push/cron': typeof ApiPushCronRoute
   '/api/push/register': typeof ApiPushRegisterRoute
@@ -445,6 +452,7 @@ export interface FileRoutesByTo {
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
   '/api/disk/$id': typeof ApiDiskIdRoute
   '/api/mega/$id': typeof ApiMegaIdRoute
+  '/api/mega/join': typeof ApiMegaJoinRoute
   '/api/post-file/$id': typeof ApiPostFileIdRoute
   '/api/push/cron': typeof ApiPushCronRoute
   '/api/push/register': typeof ApiPushRegisterRoute
@@ -504,6 +512,7 @@ export interface FileRoutesById {
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
   '/api/disk/$id': typeof ApiDiskIdRoute
   '/api/mega/$id': typeof ApiMegaIdRoute
+  '/api/mega/join': typeof ApiMegaJoinRoute
   '/api/post-file/$id': typeof ApiPostFileIdRoute
   '/api/push/cron': typeof ApiPushCronRoute
   '/api/push/register': typeof ApiPushRegisterRoute
@@ -564,6 +573,7 @@ export interface FileRouteTypes {
     | '/api/cron/cryptopay-reconcile'
     | '/api/disk/$id'
     | '/api/mega/$id'
+    | '/api/mega/join'
     | '/api/post-file/$id'
     | '/api/push/cron'
     | '/api/push/register'
@@ -622,6 +632,7 @@ export interface FileRouteTypes {
     | '/api/cron/cryptopay-reconcile'
     | '/api/disk/$id'
     | '/api/mega/$id'
+    | '/api/mega/join'
     | '/api/post-file/$id'
     | '/api/push/cron'
     | '/api/push/register'
@@ -680,6 +691,7 @@ export interface FileRouteTypes {
     | '/api/cron/cryptopay-reconcile'
     | '/api/disk/$id'
     | '/api/mega/$id'
+    | '/api/mega/join'
     | '/api/post-file/$id'
     | '/api/push/cron'
     | '/api/push/register'
@@ -1014,6 +1026,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMegaIdRouteImport
       parentRoute: typeof ApiMegaRoute
     }
+    '/api/mega/join': {
+      id: '/api/mega/join'
+      path: '/join'
+      fullPath: '/api/mega/join'
+      preLoaderRoute: typeof ApiMegaJoinRouteImport
+      parentRoute: typeof ApiMegaRoute
+    }
     '/api/post-file/$id': {
       id: '/api/post-file/$id'
       path: '/api/post-file/$id'
@@ -1189,10 +1208,12 @@ const ApiDiskRouteWithChildren =
 
 interface ApiMegaRouteChildren {
   ApiMegaIdRoute: typeof ApiMegaIdRoute
+  ApiMegaJoinRoute: typeof ApiMegaJoinRoute
 }
 
 const ApiMegaRouteChildren: ApiMegaRouteChildren = {
   ApiMegaIdRoute: ApiMegaIdRoute,
+  ApiMegaJoinRoute: ApiMegaJoinRoute,
 }
 
 const ApiMegaRouteWithChildren =

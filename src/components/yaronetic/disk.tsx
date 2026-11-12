@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Download, Folder, FolderPlus, Link2, Pencil, Trash2 } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { toast } from "sonner";
 import { ArtistNames } from "@/components/yaronetic/artist-card";
 import { FileBar } from "@/components/yaronetic/file-bar";
 import { FileEditor, type AudioPatch } from "@/components/yaronetic/file-editor";
+import { FileMenu, type FileAction } from "@/components/yaronetic/file-facts";
 import { MegaDisk } from "@/components/yaronetic/mega-disk";
 import { openAlbum, forgetTrack } from "@/components/yaronetic/music-dock";
 import { PageLoader } from "@/components/yaronetic/page-loader";
@@ -38,7 +39,8 @@ async function downloadUrl(url: string, name: string) {
   saveBlob(await res.blob(), name);
 }
 
-function DiskTrack({ file, src, picked, onPlay, onPick }: { file: DiskFile; src: string; picked: boolean; onPlay: () => void; onPick: () => void }) {
+function DiskTrack({ file, src, picked, menu, onPlay, onPick }: { file: DiskFile; src: string; picked: boolean; menu: ReactNode; onPlay: () => void; onPick: () => void }) {
+  const [ready, setReady] = useState(false);
   const [title, setTitle] = useState(file.name.replace(/\.[^.]+$/, ""));
   const [artist, setArtist] = useState("");
   const [sub, setSub] = useState("");
@@ -46,6 +48,7 @@ function DiskTrack({ file, src, picked, onPlay, onPick }: { file: DiskFile; src:
 
   useEffect(() => {
     let dead = false;
+    setReady(false);
     void loadTags(src, file.name)
       .then((tags) => {
         if (dead) return;
@@ -54,38 +57,78 @@ function DiskTrack({ file, src, picked, onPlay, onPick }: { file: DiskFile; src:
         setSub(musicBits(tags, file.bytes));
         setCover(coverUrl(tags.cover));
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!dead) setReady(true);
+      });
     return () => {
       dead = true;
     };
   }, [file.bytes, file.name, src]);
 
+  if (!ready) return null;
+
   return (
-    <div className="flex min-w-0 flex-1 items-start gap-2.5">
-      <span className="relative mt-0.5 shrink-0">
-        <button type="button" className="press block" onClick={onPlay}>
-          {cover ? <img src={cover} alt="" loading="lazy" className="size-14 rounded-xl object-cover" /> : <span className="grid size-14 place-items-center rounded-xl bg-subtle text-sm text-faint">♪</span>}
-        </button>
-        <button
-          type="button"
-          aria-pressed={picked}
-          aria-label={picked ? "Снять выбор" : "Выбрать"}
-          className={cn("absolute -top-1.5 -left-1.5 z-10 grid size-6 place-items-center rounded-full border text-[11px] leading-none", picked ? "border-accent bg-accent text-accent-fg" : "border-line bg-bg text-transparent")}
-          onClick={onPick}
-        >
-          ✓
-        </button>
-      </span>
-      <span className="min-w-0 flex-1">
-        <button type="button" className="press block w-full text-left text-[0.95rem] leading-snug break-words text-pretty" onClick={onPlay}>{title}</button>
-        {artist ? (
-          <span className="mt-0.5 block text-[0.8125rem] leading-snug text-pretty text-faint">
-            <ArtistNames name={artist} className="text-faint" />
-          </span>
-        ) : null}
-        {sub ? <span className="mt-1 block text-xs leading-none tabular-nums text-faint">{sub}</span> : null}
-      </span>
-    </div>
+    <li className="flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <span className="relative shrink-0">
+          <button type="button" className="press block" onClick={onPlay}>
+            {cover ? <img src={cover} alt="" loading="lazy" className="size-14 rounded-xl object-cover" /> : <span className="grid size-14 place-items-center rounded-xl bg-subtle text-sm text-faint">♪</span>}
+          </button>
+          <button
+            type="button"
+            aria-pressed={picked}
+            aria-label={picked ? "Снять выбор" : "Выбрать"}
+            className={cn("absolute -top-1.5 -left-1.5 z-10 grid size-6 place-items-center rounded-full border text-[11px] leading-none", picked ? "border-accent bg-accent text-accent-fg" : "border-line bg-bg text-transparent")}
+            onClick={onPick}
+          >
+            ✓
+          </button>
+        </span>
+        <span className="min-w-0 flex-1">
+          <button type="button" className="press block w-full truncate text-left text-[0.95rem] leading-snug" onClick={onPlay}>{title}</button>
+          {artist ? (
+            <span className="mt-0.5 block overflow-x-auto whitespace-nowrap text-[0.8125rem] leading-snug text-faint [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <ArtistNames name={artist} className="text-faint" />
+            </span>
+          ) : null}
+          {sub ? <span className="mt-1 block truncate text-xs leading-none tabular-nums whitespace-nowrap text-faint">{sub}</span> : null}
+        </span>
+      </div>
+      {menu}
+    </li>
+  );
+}
+
+function PlainAudio({ file, src, menu }: { file: DiskFile; src: string; menu: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  const [title, setTitle] = useState(file.name);
+
+  useEffect(() => {
+    let dead = false;
+    setReady(false);
+    void loadTags(src, file.name)
+      .then((tags) => {
+        if (!dead) setTitle(tags.title || file.name);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!dead) setReady(true);
+      });
+    return () => {
+      dead = true;
+    };
+  }, [file.name, src]);
+
+  if (!ready) return null;
+  return (
+    <li className="rounded-2xl border border-line bg-bg px-3 py-2">
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 py-1 text-[0.95rem] leading-snug break-words">{title}</p>
+        {menu}
+      </div>
+      <audio controls preload="metadata" src={src} className="mt-2 h-9 w-full" />
+    </li>
   );
 }
 
@@ -257,6 +300,24 @@ function OwnDisk() {
     setPicked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
+  function diskMenu(file: DiskFile) {
+    const actions: FileAction[] = [
+      { label: "Изменить", icon: <Pencil className="size-4" />, disabled: busy, onClick: () => setEdit(file) },
+      {
+        label: "Скачать",
+        icon: <Download className="size-4" />,
+        onClick: () => void downloadUrl(`${file.url}?dl=1`, file.name).catch(() => toast.error("Не удалось скачать")),
+      },
+      {
+        label: picked.includes(file.id) ? "Снять выбор" : "Выбрать",
+        icon: <span className="text-sm">{picked.includes(file.id) ? "✓" : "○"}</span>,
+        onClick: () => toggle(file.id),
+      },
+      { label: "Убрать", icon: <Trash2 className="size-4" />, disabled: busy, onClick: () => void remove(file) },
+    ];
+    return <FileMenu label={file.name} facts={{ name: file.name, mime: file.mime, bytes: file.bytes, createdAt: file.createdAt }} actions={actions} />;
+  }
+
   async function moveTo(folderId: string | null) {
     if (!picked.length || busy) return;
     setBusy(true);
@@ -411,24 +472,13 @@ function OwnDisk() {
           <h3 className="px-1 text-sm font-medium">{tx({ ru: "Картинки", en: "Pictures", kk: "Суреттер" })}</h3>
           <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {images.map((file) => (
-              <li key={file.id} className="overflow-hidden rounded-2xl border border-line bg-bg">
+              <li key={file.id} className={cn("overflow-hidden rounded-2xl border bg-bg", picked.includes(file.id) ? "border-accent" : "border-line")}>
                 <button type="button" className="block w-full" onClick={() => setOpen(file)}>
                   <img src={srcOf(file)} alt={file.name} loading="lazy" className="aspect-square w-full object-cover" />
                 </button>
                 <div className="flex items-center gap-1 px-2 py-1.5">
-                  <button type="button" aria-pressed={picked.includes(file.id)} className={cn("press grid size-8 shrink-0 place-items-center rounded-lg text-xs", picked.includes(file.id) ? "bg-accent text-accent-fg" : "text-muted")} onClick={() => toggle(file.id)}>
-                    {picked.includes(file.id) ? "✓" : ""}
-                  </button>
-                  <p className="min-w-0 flex-1 truncate text-xs text-muted">{file.name}</p>
-                  <button type="button" className="press grid size-8 place-items-center rounded-lg text-muted" aria-label="Изменить" onClick={() => setEdit(file)}>
-                    <Pencil className="size-3.5" />
-                  </button>
-                  <button type="button" className="press grid size-8 place-items-center rounded-lg text-muted" aria-label="Скачать" onClick={() => void downloadUrl(`${file.url}?dl=1`, file.name).catch(() => toast.error("Не удалось скачать"))}>
-                    <Download className="size-3.5" />
-                  </button>
-                  <button type="button" className="press grid size-8 place-items-center rounded-lg text-muted" aria-label="Убрать" disabled={busy} onClick={() => void remove(file)}>
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  <p className="min-w-0 flex-1 text-xs leading-snug break-words text-muted">{file.name}</p>
+                  {diskMenu(file)}
                 </div>
               </li>
             ))}
@@ -443,45 +493,27 @@ function OwnDisk() {
             {voices.map((file) => {
               const music = isMusicFile(file.name, file.mime);
               const songs = voices.filter((item) => isMusicFile(item.name, item.mime));
+              if (music) {
+                return (
+                  <DiskTrack
+                    key={`${file.id}:${rev}`}
+                    file={file}
+                    src={srcOf(file)}
+                    picked={picked.includes(file.id)}
+                    menu={diskMenu(file)}
+                    onPick={() => toggle(file.id)}
+                    onPlay={() => {
+                      const at = Math.max(0, songs.findIndex((item) => item.id === file.id));
+                      openAlbum(
+                        songs.map((item) => ({ src: srcOf(item), name: item.name, bytes: item.bytes })),
+                        at,
+                      );
+                    }}
+                  />
+                );
+              }
               return (
-                <li key={`${file.id}:${rev}`} className="rounded-2xl border border-line bg-bg px-3 py-2">
-                  <div className="flex items-start gap-1">
-                    {music ? (
-                      <DiskTrack
-                        file={file}
-                        src={srcOf(file)}
-                        picked={picked.includes(file.id)}
-                        onPick={() => toggle(file.id)}
-                        onPlay={() => {
-                          const at = Math.max(0, songs.findIndex((item) => item.id === file.id));
-                          openAlbum(
-                            songs.map((item) => ({ src: srcOf(item), name: item.name, bytes: item.bytes })),
-                            at,
-                          );
-                        }}
-                      />
-                    ) : (
-                      <>
-                        <button type="button" aria-pressed={picked.includes(file.id)} className={cn("press mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border text-[11px] leading-none", picked.includes(file.id) ? "border-accent bg-accent text-accent-fg" : "border-line bg-bg text-transparent")} onClick={() => toggle(file.id)}>
-                          ✓
-                        </button>
-                        <p className="min-w-0 flex-1 py-1 text-[0.95rem] leading-snug break-words">{file.name}</p>
-                      </>
-                    )}
-                    <div className="flex shrink-0">
-                    <button type="button" className="press grid size-8 place-items-center rounded-lg text-muted" aria-label="Изменить" onClick={() => setEdit(file)}>
-                      <Pencil className="size-3.5" />
-                    </button>
-                    <button type="button" className="press grid size-8 place-items-center rounded-lg text-muted" aria-label="Скачать" onClick={() => void downloadUrl(`${file.url}?dl=1`, file.name).catch(() => toast.error("Не удалось скачать"))}>
-                      <Download className="size-3.5" />
-                    </button>
-                    <button type="button" className="press grid size-8 place-items-center rounded-lg text-muted" aria-label="Убрать" disabled={busy} onClick={() => void remove(file)}>
-                      <Trash2 className="size-3.5" />
-                    </button>
-                    </div>
-                  </div>
-                  {music ? null : <audio controls preload="metadata" src={srcOf(file)} className="mt-2 h-9 w-full" />}
-                </li>
+                <PlainAudio key={`${file.id}:${rev}`} file={file} src={srcOf(file)} menu={diskMenu(file)} />
               );
             })}
           </ul>

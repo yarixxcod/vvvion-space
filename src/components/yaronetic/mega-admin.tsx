@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { SecretInput } from "@/components/yaronetic/secret-input";
 import { sizeLabel } from "@/components/yaronetic/upload-meter";
-import { checkMegaNode, installMegaNode, listMegaNodes, removeMegaNode, saveMegaNode, type MegaNodePublic } from "@/lib/social/mega";
+import { checkMegaNode, installMegaNode, listMegaNodes, puttyMegaScript, removeMegaNode, saveMegaNode, type MegaNodePublic } from "@/lib/social/mega";
 
 const STATUS = { new: "Не поставлен", ready: "Работает", error: "Не отвечает" } as const;
 
@@ -25,6 +25,7 @@ export function MegaAdmin() {
   const [editPassword, setEditPassword] = useState("");
   const [editDisk, setEditDisk] = useState("");
   const [editPort, setEditPort] = useState("8742");
+  const [script, setScript] = useState("");
 
   useEffect(() => {
     void listMegaNodes()
@@ -49,8 +50,41 @@ export function MegaAdmin() {
     <section>
       <h3 className="text-sm font-medium">Мегадиск</h3>
       <p className="mt-1 text-[13px] text-muted">
-        Сервер, куда встанет диск на 2 ГБ. Пароль остаётся здесь и больше не показывается. Скрипт слушает свой порт и не занимает 443 и 8443. Новый человек попадает на менее занятый диск.
+        Сервер можно записать паролем SSH или вставить скрипт в PuTTY: машина сама появится здесь как «Новый диск». Название меняется кнопкой «Изменить», пустой диск убирается кнопкой «Убрать». Новые файлы всех людей ложатся на самый свободный сервер.
       </p>
+      <div className="mt-3 rounded-2xl border border-line bg-bg p-3">
+        <button
+          type="button"
+          disabled={busy}
+          className="press h-10 rounded-xl border border-line px-3 text-sm disabled:opacity-40"
+          onClick={() => {
+            if (busy) return;
+            setBusy(true);
+            void puttyMegaScript({ data: { origin: window.location.origin } })
+              .then((next) => {
+                setScript(next.script);
+                toast("Скрипт готов. Он действует 30 минут и один раз.");
+              })
+              .catch((err: unknown) => toast.error(err instanceof Error ? err.message : "Скрипт не собрался"))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Скрипт для PuTTY
+        </button>
+        {script ? (
+          <>
+            <textarea className="field mt-2 min-h-36 font-mono text-xs" readOnly value={script} />
+            <button
+              type="button"
+              className="press mt-2 h-9 rounded-lg bg-accent px-3 text-xs font-medium text-accent-fg"
+              onClick={() => void navigator.clipboard.writeText(script).then(() => toast("Скрипт скопирован"), () => toast.error("Не скопировалось"))}
+            >
+              Копировать
+            </button>
+            <p className="mt-2 text-[13px] text-muted">Вставьте в PuTTY от root. Один скрипт — одна машина. Потом смените название или уберите диск.</p>
+          </>
+        ) : null}
+      </div>
       {nodes === null ? <PageLoader compact /> : null}
       <ul className="mt-3 space-y-2">
         {(nodes ?? []).map((node) => (
@@ -97,7 +131,7 @@ export function MegaAdmin() {
                 disabled={busy}
                 className="press h-9 rounded-lg border border-line px-2 text-xs disabled:opacity-40"
                 onClick={() => {
-                  if (!window.confirm("Убрать сервер из панели? Каталог на нём не стирается.")) return;
+                  if (!window.confirm("Убрать сервер из панели? Если на нём ещё есть файлы, он останется.")) return;
                   void run(() => removeMegaNode({ data: node.id }), "Сервер убран");
                 }}
               >

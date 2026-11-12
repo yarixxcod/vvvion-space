@@ -8,6 +8,26 @@ import { parseLrc, type LrcLine } from "@/lib/music/lrc";
 import { findLyrics } from "@/lib/music/lyrics";
 import { setTrackEnded, setTrackFailed, trackFormat, trackIsPlaying, trackLength, trackPlay, trackSeek, trackStart, trackStop, trackToggle, watchTrack } from "@/lib/sounds";
 import { initMediaSessionHandlers, syncMediaSession } from "@/lib/player/media-session";
+import {
+  nativeAttach,
+  nativeDuration,
+  nativeMeta,
+  nativeNext,
+  nativeOpen,
+  nativeOwns,
+  nativePause,
+  nativePlay,
+  nativePlaying,
+  nativePosition,
+  nativePrev,
+  nativeRepeat,
+  nativeSeek,
+  nativeShuffle,
+  nativeState,
+  nativeStop,
+  nativeWatch,
+  type NativePlayerState,
+} from "@/lib/player/native";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/haptic";
 
@@ -112,14 +132,24 @@ function allowedSrc(src: string) {
   return src.startsWith("/api/") || src.startsWith("/sounds/") || src.startsWith("blob:");
 }
 
-function heardAt() {
+function playingNow() {
+  return nativeOwns() ? nativePlaying() : trackIsPlaying();
+}
+
+function positionNow() {
+  if (nativeOwns()) return nativePosition();
   const now = trackSeek();
   if (shieldAt > 0.2 && now < shieldAt - 0.2) return shieldAt;
   shieldAt = 0;
   return Number.isFinite(now) ? now : 0;
 }
 
-function heardDur() {
+function lengthNow() {
+  if (nativeOwns()) {
+    const length = nativeDuration();
+    if (length > 0) shieldDur = length;
+    return length || shieldDur;
+  }
   const length = trackLength();
   if (length > 0) {
     shieldDur = length;
@@ -128,7 +158,16 @@ function heardDur() {
   return shieldDur;
 }
 
+function heardAt() {
+  return positionNow();
+}
+
+function heardDur() {
+  return lengthNow();
+}
+
 function syncMedia() {
+  if (nativeOwns()) return;
   const track = queue[index] ?? null;
   syncMediaSession(
     track ? { title: track.title, artist: track.artist, album: track.album, cover: track.cover } : null,
@@ -146,7 +185,7 @@ function savePlayer() {
       sessionStorage.removeItem(SAVE_KEY);
       return;
     }
-    const livePlay = trackIsPlaying();
+    const livePlay = playingNow();
     if (livePlay) pendingPlay = false;
     const items = queue.filter((item) => allowedSrc(item.src)).slice(0, MAX_QUEUE);
     if (!items.length) {
@@ -228,13 +267,15 @@ export function openAlbum(items: { src: string; name: string; bytes?: number }[]
   pendingPlay = true;
   emit();
   const first = queue[index];
-  if (first) trackStart(first.src, trackFormat(first.file));
+  trackStop();
+  if (!nativeOpen(queue, index, { shuffle, repeat, autoplay: true }) && first) trackStart(first.src, trackFormat(first.file));
   void pool(songs, 3, async (item, at) => {
     const parsed = await loadTags(item.src, item.name);
     if (mine !== ticket) return;
     const current = queue[at];
     if (!current || current.src !== item.src) return;
     queue[at] = paint(item.src, item.name, parsed);
+    if (nativeOwns()) nativeMeta(at, queue[at]);
     emit();
   });
 }
@@ -243,12 +284,18 @@ function arm() {
   shieldAt = 0;
   shieldDur = 0;
   pendingPlay = true;
+  if (nativeOwns()) return;
   const chosen = queue[index];
   if (chosen) trackStart(chosen.src, trackFormat(chosen.file));
 }
 
 export function skip(step: 1 | -1): boolean {
   if (!queue.length) return false;
+  if (nativeOwns()) {
+    if (step < 0) nativePrev();
+    else nativeNext();
+    return true;
+  }
   if (step < 0) {
     const prev = history.pop();
     if (prev != null && prev !== index && prev >= 0 && prev < queue.length) {
@@ -282,11 +329,13 @@ export function skip(step: 1 | -1): boolean {
 function toggleShuffle() {
   shuffle = !shuffle;
   shuffleBag = [];
+  if (nativeOwns()) nativeShuffle(shuffle);
   emit();
 }
 
 function cycleRepeat() {
   repeat = repeat === "off" ? "all" : repeat === "all" ? "one" : "off";
+  if (nativeOwns()) nativeRepeat(repeat);
   emit();
 }
 
@@ -310,12 +359,20 @@ function clearTrack() {
   shieldAt = 0;
   shieldDur = 0;
   pendingPlay = false;
+  nativeStop();
   trackStop();
   emit();
 }
 
 function playCurrent() {
   if (!queue[index]) return;
+  if (nativeOwns()) {
+    pendingPlay = true;
+    haptic("light");
+    nativePlay();
+    savePlayer();
+    return;
+  }
   if (trackIsPlaying()) {
     syncMedia();
     return;
@@ -330,6 +387,11 @@ function playCurrent() {
 function pauseCurrent() {
   haptic("light");
   pendingPlay = false;
+  if (nativeOwns()) {
+    nativePause();
+    savePlayer();
+    return;
+  }
   if (trackIsPlaying()) trackToggle();
   savePlayer();
   syncMedia();
@@ -338,6 +400,11 @@ function pauseCurrent() {
 function seekSeconds(sec: number) {
   if (!Number.isFinite(sec)) return;
   shieldAt = 0;
+  if (nativeOwns()) {
+    nativeSeek(sec);
+    savePlayer();
+    return;
+  }
   const length = trackLength() || shieldDur;
   const next = length > 0 ? Math.min(length, Math.max(0, sec)) : Math.max(0, sec);
   trackSeek(next);
@@ -346,13 +413,17 @@ function seekSeconds(sec: number) {
 }
 
 function seekRatio(value: number) {
-  const length = trackLength() || shieldDur;
+  const length = lengthNow();
   if (!length) return;
   seekSeconds(Math.min(1, Math.max(0, value)) * length);
 }
 
 function goPrev() {
   haptic("light");
+  if (nativeOwns()) {
+    nativePrev();
+    return;
+  }
   const pos = trackSeek();
   const mark = pos >= 0.25 ? pos : shieldAt;
   if (mark > 3) {
@@ -371,6 +442,10 @@ function goPrev() {
 
 function goNext() {
   haptic("light");
+  if (nativeOwns()) {
+    nativeNext();
+    return;
+  }
   if (!queue.length) return;
   if (queue.length === 1 && repeat !== "off") {
     shieldAt = 0;
@@ -420,6 +495,43 @@ setTrackFailed(() => {
   clearTrack();
 });
 
+function applyNative(state: NativePlayerState) {
+  if (state.event === "progress" || state.event === "buffering" || state.event === "ready" || state.event === "seek" || state.event === "state") return;
+  if (state.event === "error") {
+    const chosen = (state.index >= 0 ? queue[state.index] : undefined) ?? queue.find((item) => item.src === state.id);
+    if (!chosen) return;
+    const at = state.positionMs > 0 ? state.positionMs / 1000 : 0;
+    nativeStop();
+    pendingPlay = true;
+    trackStart(chosen.src, trackFormat(chosen.file), true, at);
+    emit();
+    return;
+  }
+  if (state.event === "stop") {
+    pendingPlay = false;
+    emit();
+    return;
+  }
+  if (state.event === "ended") {
+    pendingPlay = false;
+    index = 0;
+    emit();
+    return;
+  }
+  if (state.index >= 0 && state.index < queue.length) index = state.index;
+  else if (state.id) {
+    const found = queue.findIndex((item) => item.src === state.id);
+    if (found >= 0) index = found;
+  }
+  if (state.event === "play") pendingPlay = true;
+  if (state.event === "pause") pendingPlay = false;
+  if (state.repeat === "off" || state.repeat === "one" || state.repeat === "all") repeat = state.repeat;
+  shuffle = state.shuffle;
+  emit();
+}
+
+nativeWatch(applyNative);
+
 function restorePlayer() {
   if (typeof window === "undefined") return;
   type SavedDeck = {
@@ -444,6 +556,42 @@ function restorePlayer() {
     .filter((item): item is { src: string; file: string } => Boolean(item) && typeof item?.src === "string" && typeof item?.file === "string" && allowedSrc(item.src))
     .slice(0, MAX_QUEUE);
   readyToSave = true;
+  if (nativeAttach()) {
+    const live = nativeState();
+    if (live && !items.length) {
+      const lone = blank(live.url || live.id, live.title || "Трек");
+      lone.title = live.title || lone.title;
+      lone.artist = live.artist;
+      lone.album = live.album;
+      queue = [lone];
+      index = 0;
+    } else if (items.length) {
+      queue = items.map((item) => blank(item.src, item.file));
+      const found = live?.id ? queue.findIndex((item) => item.src === live.id) : -1;
+      index = found >= 0 ? found : Math.min(Math.max(0, Number(saved?.index) || 0), queue.length - 1);
+    }
+    mode = saved?.mode === "mini" ? "mini" : "full";
+    shuffle = live?.shuffle === true;
+    repeat = live?.repeat === "one" || live?.repeat === "all" ? live.repeat : "off";
+    lyricsOn = saved?.lyrics === true;
+    history = [];
+    shuffleBag = [];
+    pendingPlay = live?.playWhenReady === true;
+    emit();
+    if (items.length) {
+      const mine = ++ticket;
+      void pool(items, 3, async (item, atIndex) => {
+        const parsed = await loadTags(item.src, item.file);
+        if (mine !== ticket) return;
+        const current = queue[atIndex];
+        if (!current || current.src !== item.src) return;
+        queue[atIndex] = paint(item.src, item.file, parsed);
+        if (nativeOwns()) nativeMeta(atIndex, queue[atIndex]);
+        emit();
+      });
+    }
+    return;
+  }
   if (!items.length) return;
   queue = items.map((item) => blank(item.src, item.file));
   index = Math.min(Math.max(0, Number(saved?.index) || 0), queue.length - 1);
@@ -469,6 +617,7 @@ function restorePlayer() {
       const current = queue[atIndex];
       if (!current || current.src !== item.src) return;
       queue[atIndex] = paint(item.src, item.file, parsed);
+      if (nativeOwns()) nativeMeta(atIndex, queue[atIndex]);
       emit();
     },
   );
@@ -482,14 +631,16 @@ if (typeof window !== "undefined") {
     if (queue.length) syncMedia();
   }, 2000);
   watchTrack(() => syncMedia());
-  initMediaSessionHandlers({
-    play: playCurrent,
-    pause: pauseCurrent,
-    next: goNext,
-    prev: goPrev,
-    seek: seekSeconds,
-    stop: clearTrack,
-  });
+  if (!nativeAttach()) {
+    initMediaSessionHandlers({
+      play: playCurrent,
+      pause: pauseCurrent,
+      next: goNext,
+      prev: goPrev,
+      seek: seekSeconds,
+      stop: clearTrack,
+    });
+  }
 }
 
 let resumed = false;
@@ -497,6 +648,7 @@ let resumed = false;
 function resumeSaved() {
   if (resumed) return;
   resumed = true;
+  if (nativeOwns()) return;
   const chosen = queue[index];
   if (!chosen) return;
   trackStart(chosen.src, trackFormat(chosen.file), pendingPlay, shieldAt);
@@ -690,22 +842,29 @@ function Lyrics({ track, at, duration }: { track: Track; at: number; duration: n
 }
 
 export function MusicCard({ name, src, mine }: { name: string; src: string; mine?: boolean }) {
+  const [ready, setReady] = useState(false);
   const [tags, setTags] = useState<MusicTags | null>(null);
   const [cover, setCover] = useState<string | null>(null);
 
   useEffect(() => {
     let dead = false;
+    setReady(false);
     void loadTags(src, name)
       .then((parsed) => {
         if (dead) return;
         setTags(parsed);
         setCover(coverUrl(parsed.cover));
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!dead) setReady(true);
+      });
     return () => {
       dead = true;
     };
   }, [name, src]);
+
+  if (!ready) return null;
 
   const title = tags?.title || name.replace(/\.[^.]+$/, "") || name;
   const sub = [tags?.artist, musicBits(tags, 0)].filter(Boolean).join(" · ");
@@ -743,7 +902,18 @@ export function MusicDock() {
     resumeSaved();
   }, []);
 
-  useEffect(() => watchTrack(() => setPlaying(trackIsPlaying())), []);
+  useEffect(() => watchTrack(() => setPlaying(playingNow())), []);
+
+  useEffect(() => {
+    const stop = nativeWatch(() => {
+      setPlaying(playingNow());
+      setAt(positionNow());
+      setDur(lengthNow() || 0);
+    });
+    return () => {
+      stop();
+    };
+  }, []);
 
   useEffect(() => {
     if (!trackSrc) {
@@ -753,13 +923,11 @@ export function MusicDock() {
       return;
     }
     const pull = () => {
-      const pos = trackSeek();
-      const length = trackLength();
-      const shown = shieldAt > 0.2 && pos < shieldAt - 0.2 ? shieldAt : pos;
-      const span = length > 0 ? length : shieldDur;
-      if (Number.isFinite(shown)) setAt(shown);
+      const pos = positionNow();
+      const span = lengthNow();
+      if (Number.isFinite(pos)) setAt(pos);
       if (span > 0) setDur(span);
-      setPlaying(trackIsPlaying());
+      setPlaying(playingNow());
     };
     pull();
     const id = window.setInterval(pull, 80);
@@ -794,27 +962,27 @@ export function MusicDock() {
   const facts = [current.album, current.genre, musicBits(current, 0)].filter(Boolean).join(" · ");
 
   function toggle() {
-    if (trackIsPlaying()) pauseCurrent();
+    if (playingNow()) pauseCurrent();
     else playCurrent();
-    setPlaying(trackIsPlaying());
+    setPlaying(playingNow());
   }
 
   function seek(value: number) {
     seekRatio(value);
-    const length = trackLength() || dur;
+    const length = lengthNow() || dur;
     if (length) setAt(Math.min(length, Math.max(0, value * length)));
   }
 
   function prev() {
     goPrev();
-    setAt(trackSeek());
-    setPlaying(trackIsPlaying());
+    setAt(positionNow());
+    setPlaying(playingNow());
   }
 
   function next() {
     goNext();
-    setAt(trackSeek());
-    setPlaying(trackIsPlaying());
+    setAt(positionNow());
+    setPlaying(playingNow());
   }
 
   return (

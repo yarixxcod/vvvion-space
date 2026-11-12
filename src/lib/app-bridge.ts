@@ -31,6 +31,33 @@ type VvvionApp = {
   debugLog?: () => unknown;
   copy?: (text: string) => void;
   openExternal?: (url: string) => boolean;
+  playTrack?: (track: {
+    url: string;
+    title?: string;
+    artist?: string;
+    album?: string;
+    artwork?: string;
+    id?: string;
+    positionMs?: number;
+    autoplay?: boolean;
+    repeat?: "off" | "one" | "all";
+    shuffle?: boolean;
+  }) => boolean;
+  setQueue?: (
+    items: { url: string; title?: string; artist?: string; album?: string; artwork?: string; id?: string }[],
+    startIndex?: number,
+    opts?: { positionMs?: number; autoplay?: boolean; repeat?: "off" | "one" | "all"; shuffle?: boolean },
+  ) => boolean;
+  play?: () => void;
+  pause?: () => void;
+  next?: () => void;
+  prev?: () => void;
+  seek?: (ms: number) => void;
+  stop?: () => void;
+  setRepeat?: (mode: "off" | "one" | "all") => void;
+  setShuffle?: (on: boolean) => void;
+  updateMeta?: (meta: { index?: number; title?: string; artist?: string; album?: string; artwork?: string }) => void;
+  getState?: () => import("@/lib/player/native").NativePlayerState | null;
 };
 
 declare global {

@@ -295,3 +295,98 @@ done
 test "$ok" = 1
 `;
 }
+
+export function siteOrigin(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("Адрес сайта не подходит");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Адрес сайта не подходит");
+  if (url.username || url.password) throw new Error("Адрес сайта не подходит");
+  return url.origin;
+}
+
+/** One paste into PuTTY. The ticket is single-use and is not the disk password. */
+export function puttyScript(site: string, ticket: string): string {
+  const origin = siteOrigin(site);
+  if (!/^[a-f0-9]{32,64}$/.test(ticket)) throw new Error("Скрипт собран неверно");
+  return `#!/bin/bash
+set -eu
+SITE='${origin}'
+TICKET='${ticket}'
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Запустите от root"
+  exit 1
+fi
+command -v python3 >/dev/null || { echo "На сервере нет python3"; exit 1; }
+command -v curl >/dev/null || { echo "На сервере нет curl"; exit 1; }
+command -v systemctl >/dev/null || { echo "На сервере нет systemd"; exit 1; }
+mkdir -p /opt/vvvion-mega /var/lib/vvvion-mega
+HDR=$(mktemp)
+BODY=$(mktemp)
+trap 'rm -f "$HDR" "$BODY"' EXIT
+curl -fsS --max-time 30 -D "$HDR" -o /opt/vvvion-mega/agent.py "$SITE/api/mega/join?ticket=$TICKET"
+TOKEN=$(tr -d '\r' < "$HDR" | awk 'tolower($1)=="x-mega-token:" {print $2}')
+DISK=$(tr -d '\r' < "$HDR" | awk 'tolower($1)=="x-mega-disk:" {print $2}')
+PORT=$(tr -d '\r' < "$HDR" | awk 'tolower($1)=="x-mega-port:" {print $2}')
+test -n "$TOKEN"
+test -n "$DISK"
+test -n "$PORT"
+mkdir -p "/var/lib/vvvion-mega/$DISK"
+chmod 755 /opt/vvvion-mega/agent.py
+umask 077
+cat > /etc/systemd/system/vvvion-mega.service << EOF
+[Unit]
+Description=VVVION megadisk
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=MEGA_ROOT=/var/lib/vvvion-mega/$DISK
+Environment=MEGA_TOKEN=$TOKEN
+Environment=MEGA_PORT=$PORT
+ExecStart=$(command -v python3) /opt/vvvion-mega/agent.py
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | head -n 1 | grep -q "Status: active"; then
+  ufw allow "$PORT"/tcp >/dev/null || true
+fi
+systemctl daemon-reload
+systemctl enable vvvion-mega.service >/dev/null
+systemctl restart vvvion-mega.service
+python3 - << PY
+import time, urllib.request
+url = "http://127.0.0.1:" + "$PORT" + "/health"
+last = None
+for _ in range(8):
+    try:
+        req = urllib.request.Request(url, headers={"Authorization": "Bearer " + "$TOKEN"})
+        urllib.request.urlopen(req, timeout=5).read()
+        raise SystemExit(0)
+    except Exception as err:
+        last = err
+        time.sleep(0.4)
+raise SystemExit("Агент не поднялся")
+PY
+IP=$(curl -4 -fsS --max-time 8 https://api.ipify.org || true)
+if [ -z "$IP" ]; then
+  echo "Не вижу внешний адрес сервера"
+  exit 1
+fi
+CODE=$(curl -sS --max-time 20 -o "$BODY" -w '%{http_code}' -X POST "$SITE/api/mega/join" -H 'content-type: application/json' --data "{\\"ticket\\":\\"$TICKET\\",\\"host\\":\\"$IP\\",\\"port\\":$PORT}")
+if [ "$CODE" != "200" ]; then
+  echo "Сайт не принял диск"
+  cat "$BODY"
+  exit 1
+fi
+echo "Диск появился в панели. Название можно сменить там."
+`;
+}
+
