@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
+import { bytesResponse } from "@/lib/http/byte-range";
 import { assertActive } from "@/lib/social/access";
 
 const IMAGE_MAX = 3_000_000;
@@ -88,9 +89,8 @@ async function requireUser(request: Request): Promise<string | Response> {
 
 function mediaResponse(request: Request, row: Stored): Response {
   const bytes = Buffer.from(row.data, "base64");
-  const total = bytes.length;
   const mime = safeMime(row.mime);
-  const inline = row.kind === "image" || row.kind === "video";
+  const inline = row.kind === "image" || row.kind === "video" || row.kind === "audio";
   const ascii = row.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 80) || "file";
   const headers = new Headers();
   headers.set("content-type", mime);
@@ -102,19 +102,7 @@ function mediaResponse(request: Request, row: Stored): Response {
     "content-disposition",
     `${inline ? "inline" : "attachment"}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(row.name)}`,
   );
-  const match = /^bytes=(\d+)-(\d*)$/.exec(request.headers.get("range")?.trim() ?? "");
-  if (match) {
-    const start = Number(match[1]);
-    const end = match[2] ? Math.min(Number(match[2]), total - 1) : total - 1;
-    if (start >= 0 && start < total && end >= start) {
-      const slice = bytes.subarray(start, end + 1);
-      headers.set("content-range", `bytes ${start}-${end}/${total}`);
-      headers.set("content-length", String(slice.length));
-      return new Response(slice, { status: 206, headers });
-    }
-  }
-  headers.set("content-length", String(total));
-  return new Response(bytes, { status: 200, headers });
+  return bytesResponse(request, bytes, headers);
 }
 
 export async function handlePostPublish(request: Request): Promise<Response> {

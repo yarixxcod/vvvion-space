@@ -39,6 +39,7 @@ import { Route as MessagesIdRouteImport } from './routes/messages/$id'
 import { Route as PTokenRouteImport } from './routes/p/$token'
 import { Route as RCodeRouteImport } from './routes/r/$code'
 import { Route as STokenRouteImport } from './routes/s/$token'
+import { Route as ApiAppWidgetsRouteImport } from './routes/api/app/widgets'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAvatarUserIdRouteImport } from './routes/api/avatar/$userId'
 import { Route as ApiBooksIdRouteImport } from './routes/api/books/$id'
@@ -217,6 +218,11 @@ const STokenRoute = STokenRouteImport.update({
   path: '/s/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAppWidgetsRoute = ApiAppWidgetsRouteImport.update({
+  id: '/api/app/widgets',
+  path: '/api/app/widgets',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -386,6 +392,7 @@ export interface FileRoutesByFullPath {
   '/p/$token': typeof PTokenRoute
   '/r/$code': typeof RCodeRoute
   '/s/$token': typeof STokenRoute
+  '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
   '/api/books/$id': typeof ApiBooksIdRoute
@@ -445,6 +452,7 @@ export interface FileRoutesByTo {
   '/p/$token': typeof PTokenRoute
   '/r/$code': typeof RCodeRoute
   '/s/$token': typeof STokenRoute
+  '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
   '/api/books/$id': typeof ApiBooksIdRoute
@@ -505,6 +513,7 @@ export interface FileRoutesById {
   '/p/$token': typeof PTokenRoute
   '/r/$code': typeof RCodeRoute
   '/s/$token': typeof STokenRoute
+  '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
   '/api/books/$id': typeof ApiBooksIdRoute
@@ -566,6 +575,7 @@ export interface FileRouteTypes {
     | '/p/$token'
     | '/r/$code'
     | '/s/$token'
+    | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
     | '/api/books/$id'
@@ -625,6 +635,7 @@ export interface FileRouteTypes {
     | '/p/$token'
     | '/r/$code'
     | '/s/$token'
+    | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
     | '/api/books/$id'
@@ -684,6 +695,7 @@ export interface FileRouteTypes {
     | '/p/$token'
     | '/r/$code'
     | '/s/$token'
+    | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
     | '/api/books/$id'
@@ -744,6 +756,7 @@ export interface RootRouteChildren {
   PTokenRoute: typeof PTokenRoute
   RCodeRoute: typeof RCodeRoute
   STokenRoute: typeof STokenRoute
+  ApiAppWidgetsRoute: typeof ApiAppWidgetsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAvatarUserIdRoute: typeof ApiAvatarUserIdRoute
   ApiCronCryptopayReconcileRoute: typeof ApiCronCryptopayReconcileRoute
@@ -975,6 +988,13 @@ declare module '@tanstack/react-router' {
       path: '/s/$token'
       fullPath: '/s/$token'
       preLoaderRoute: typeof STokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/app/widgets': {
+      id: '/api/app/widgets'
+      path: '/api/app/widgets'
+      fullPath: '/api/app/widgets'
+      preLoaderRoute: typeof ApiAppWidgetsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -1274,6 +1294,7 @@ const rootRouteChildren: RootRouteChildren = {
   PTokenRoute: PTokenRoute,
   RCodeRoute: RCodeRoute,
   STokenRoute: STokenRoute,
+  ApiAppWidgetsRoute: ApiAppWidgetsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAvatarUserIdRoute: ApiAvatarUserIdRoute,
   ApiCronCryptopayReconcileRoute: ApiCronCryptopayReconcileRoute,

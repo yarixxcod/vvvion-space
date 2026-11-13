@@ -58,6 +58,7 @@ type VvvionApp = {
   setShuffle?: (on: boolean) => void;
   updateMeta?: (meta: { index?: number; title?: string; artist?: string; album?: string; artwork?: string }) => void;
   getState?: () => import("@/lib/player/native").NativePlayerState | null;
+  setWidgetCity?: (city: string) => void;
 };
 
 declare global {
@@ -98,6 +99,22 @@ export async function appCopy(text: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export function setWidgetCity(city: string) {
+  if (typeof window === "undefined" || !appHas("widgets")) return;
+  const clean = Array.from(city)
+    .filter((ch) => ch.charCodeAt(0) > 31)
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} .,'-]{0,59}$/u.test(clean)) return;
+  try {
+    window.VvvionApp?.setWidgetCity?.(clean);
+  } catch {
+    /* the shell has gone */
   }
 }
 

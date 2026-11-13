@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth/server";
 import { playbackType } from "@/lib/music/tags";
+import { byteRange } from "@/lib/http/byte-range";
 import { assertActive } from "@/lib/social/access";
 import { MEGA_CHUNK } from "@/lib/social/mega-plan";
 import { beginMegaUpload, cancelMegaUpload, finishMegaUpload, peekMegaFile, peekMegaShare, publicMegaFileBody, publicMegaFileMeta, readMegaDownload, readMegaShare, stampMegaHead, uploadOffset, writeMegaChunk, writeMegaChunkStream } from "@/lib/social/mega";
@@ -82,20 +83,10 @@ export async function handleMega(request: Request): Promise<Response> {
   }
 }
 
-function byteRange(header: string | null, size: number): { start: number; end: number } | "bad" | null {
-  if (!header) return null;
-  const suffix = /^bytes=-(\d+)$/i.exec(header.trim());
-  if (suffix) {
-    const tail = Number(suffix[1]);
-    if (!Number.isFinite(tail) || tail < 1 || size < 1) return "bad";
-    return { start: Math.max(0, size - tail), end: size - 1 };
-  }
-  const match = /^bytes=(\d+)-(\d*)$/i.exec(header.trim());
-  if (!match || size < 1) return "bad";
-  const start = Number(match[1]);
-  const end = match[2] ? Math.min(Number(match[2]), size - 1) : Math.min(start + 8 * 1024 * 1024 - 1, size - 1);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) return "bad";
-  return { start, end };
+function unsat(headers: Headers, size: number): Response {
+  headers.set("content-range", `bytes */${size}`);
+  headers.delete("content-length");
+  return new Response(null, { status: 416, headers });
 }
 
 export async function readMega(request: Request, id: string): Promise<Response> {
@@ -117,7 +108,7 @@ export async function readMega(request: Request, id: string): Promise<Response> 
     });
     if (file.size > 0) headers.set("content-length", String(file.size));
     const asked = byteRange(request.headers.get("range"), file.size);
-    if (asked === "bad") return new Response(null, { status: 416, headers });
+    if (asked === "bad") return unsat(headers, file.size);
     if (request.method === "HEAD") {
       if (asked) {
         headers.set("content-range", `bytes ${asked.start}-${asked.end}/${file.size}`);
@@ -127,7 +118,7 @@ export async function readMega(request: Request, id: string): Promise<Response> 
       return new Response(null, { status: 200, headers });
     }
     const part = shared ? await readMegaShare(userId, id, asked) : await readMegaDownload(userId, id, asked);
-    if (part.response.status === 416 || !part.response.body) return new Response(null, { status: 416, headers });
+    if (part.response.status === 416 || !part.response.body) return unsat(headers, file.size);
     if (asked) {
       headers.set("content-range", `bytes ${asked.start}-${asked.end}/${file.size}`);
       headers.set("content-length", String(asked.end - asked.start + 1));
@@ -160,7 +151,7 @@ export async function readPublicMegaHttp(request: Request, token: string, id: st
     });
     if (file.size > 0) headers.set("content-length", String(file.size));
     const asked = byteRange(request.headers.get("range"), file.size);
-    if (asked === "bad") return new Response(null, { status: 416, headers });
+    if (asked === "bad") return unsat(headers, file.size);
     if (request.method === "HEAD") {
       if (asked) {
         headers.set("content-range", `bytes ${asked.start}-${asked.end}/${file.size}`);
@@ -170,7 +161,7 @@ export async function readPublicMegaHttp(request: Request, token: string, id: st
       return new Response(null, { status: 200, headers });
     }
     const upstream = await publicMegaFileBody(token, id, asked);
-    if (upstream.status === 416 || !upstream.body) return new Response(null, { status: 416, headers });
+    if (upstream.status === 416 || !upstream.body) return unsat(headers, file.size);
     if (asked) {
       headers.set("content-range", `bytes ${asked.start}-${asked.end}/${file.size}`);
       headers.set("content-length", String(asked.end - asked.start + 1));

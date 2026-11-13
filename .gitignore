@@ -15,3 +15,5 @@ artifacts/
 attachments/env.txt
 attachments/*firebase-adminsdk*.json
 **/firebase-admin.json
+.vercel
+.env*

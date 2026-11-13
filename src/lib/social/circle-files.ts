@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { auth } from "@/lib/auth/server";
 import { acceptUpload, claimedMime, serveFile } from "@/lib/social/file-accept";
+import { byteRange } from "@/lib/http/byte-range";
 import { getSql } from "@/lib/db";
 import { assertActive } from "@/lib/social/access";
 import { grantAchievement } from "@/lib/social/achievements";
@@ -276,16 +277,6 @@ async function finishUpload(userId: string, body: Record<string, unknown>): Prom
   return json(200, { messageId });
 }
 
-function byteRange(header: string | null, size: number): { start: number; end: number } | "bad" | null {
-  if (!header) return null;
-  const match = /^bytes=(\d+)-(\d*)$/i.exec(header.trim());
-  if (!match || size < 1) return "bad";
-  const start = Number(match[1]);
-  const end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) return "bad";
-  return { start, end };
-}
-
 function applyRange(headers: Headers, range: { start: number; end: number }, size: number): Headers {
   const next = new Headers(headers);
   next.set("accept-ranges", "bytes");
@@ -323,7 +314,11 @@ async function chunkBody(request: Request, id: string, name: string, mime: strin
     "content-disposition": `${served.inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
   });
   const asked = byteRange(request.headers.get("range"), total);
-  if (asked === "bad") return new Response(null, { status: 416, headers });
+  if (asked === "bad") {
+    headers.set("content-range", `bytes */${total}`);
+    headers.delete("content-length");
+    return new Response(null, { status: 416, headers });
+  }
   if (request.method === "HEAD") {
     if (asked) return new Response(null, { status: 206, headers: applyRange(headers, asked, total) });
     return new Response(null, { status: 200, headers });
@@ -395,7 +390,11 @@ export async function readCircleFile(request: Request, id: string): Promise<Resp
       const size = info.size;
       headers.set("content-length", String(size));
       const asked = byteRange(request.headers.get("range"), size);
-      if (asked === "bad") return new Response(null, { status: 416, headers });
+      if (asked === "bad") {
+        headers.set("content-range", `bytes */${size}`);
+        headers.delete("content-length");
+        return new Response(null, { status: 416, headers });
+      }
       if (request.method === "HEAD") {
         return new Response(null, { status: asked ? 206 : 200, headers: asked ? applyRange(headers, asked, size) : headers });
       }
@@ -412,7 +411,11 @@ export async function readCircleFile(request: Request, id: string): Promise<Resp
   const size = bytes.length;
   headers.set("content-length", String(size));
   const asked = byteRange(request.headers.get("range"), size);
-  if (asked === "bad") return new Response(null, { status: 416, headers });
+  if (asked === "bad") {
+    headers.set("content-range", `bytes */${size}`);
+    headers.delete("content-length");
+    return new Response(null, { status: 416, headers });
+  }
   if (request.method === "HEAD") {
     return new Response(null, { status: asked ? 206 : 200, headers: asked ? applyRange(headers, asked, size) : headers });
   }

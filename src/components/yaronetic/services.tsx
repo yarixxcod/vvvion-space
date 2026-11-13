@@ -3,6 +3,7 @@ import { ChevronLeft, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCircleNest } from "@/lib/circle-history";
 import { forgetCity, loadWeather, watchCity } from "@/lib/weather/service";
+import { setWidgetCity } from "@/lib/app-bridge";
 import { weatherKind, type WeatherCard, type WeatherKind } from "@/lib/weather/parse";
 import { StoryPlate } from "@/components/yaronetic/story-plate";
 import { PageLoader } from "@/components/yaronetic/page-loader";
@@ -182,7 +183,9 @@ function Weather({ onBack }: { onBack: () => void }) {
     let cancelled = false;
     void loadWeather()
       .then((rows) => {
-        if (!cancelled) setCards(rows);
+        if (cancelled) return;
+        setCards(rows);
+        setWidgetCity(rows[0]?.city || "Алматы");
       })
       .catch(() => {
         if (!cancelled) {
@@ -204,7 +207,9 @@ function Weather({ onBack }: { onBack: () => void }) {
       const card = await watchCity({ data: { city } });
       setCards((current) => {
         const rest = (current ?? []).filter((item) => item.city.toLocaleLowerCase("ru") !== card.city.toLocaleLowerCase("ru"));
-        return [card, ...rest];
+        const next = [card, ...rest];
+        setWidgetCity(next[0]?.city || "Алматы");
+        return next;
       });
       setDraft("");
     } catch (err) {
@@ -216,11 +221,14 @@ function Weather({ onBack }: { onBack: () => void }) {
 
   async function remove(city: string) {
     const previous = cards;
-    setCards((current) => current?.filter((item) => item.city !== city) ?? current);
+    const next = cards?.filter((item) => item.city !== city) ?? cards;
+    setCards(next);
+    setWidgetCity(next?.[0]?.city || "Алматы");
     try {
       await forgetCity({ data: { city } });
     } catch (err) {
       setCards(previous);
+      setWidgetCity(previous?.[0]?.city || "Алматы");
       toast.error(err instanceof Error ? err.message : tx({ ru: "Не удалось убрать город", en: "The city stayed", kk: "Қала кетпеді" }));
     }
   }

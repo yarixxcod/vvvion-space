@@ -2,6 +2,7 @@ import { zipSync } from "fflate";
 import { auth } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
 import { playbackType } from "@/lib/music/tags";
+import { bytesResponse } from "@/lib/http/byte-range";
 import { assertActive } from "@/lib/social/access";
 import { DISK_ID, diskPath } from "@/lib/social/disk-path";
 import { isPremium, PREMIUM_DISK } from "@/lib/social/premium";
@@ -171,7 +172,6 @@ function fileResponse(request: Request, row: { data: string; mime: string; name:
   const bytes = Buffer.from(row.data, "base64");
   const headers = new Headers({
     "content-type": playbackType(row.name, row.mime || ""),
-    "content-length": String(bytes.length),
     "cache-control": "private, max-age=86400",
     "x-content-type-options": "nosniff",
   });
@@ -180,8 +180,7 @@ function fileResponse(request: Request, row: { data: string; mime: string; name:
     "content-disposition",
     `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
   );
-  if (request.method === "HEAD") return new Response(null, { status: 200, headers });
-  return new Response(bytes, { status: 200, headers });
+  return bytesResponse(request, bytes, headers);
 }
 
 export async function readDiskFile(request: Request, id: string): Promise<Response> {

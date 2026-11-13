@@ -114,6 +114,11 @@ async function balanceOf(sql: Sql, userId: string): Promise<number> {
   return num(rows[0]?.balance);
 }
 
+export async function readWalletBalance(userId: string): Promise<number> {
+  const sql = await getSql();
+  return balanceOf(sql, userId);
+}
+
 async function verified(sql: Sql, userId: string): Promise<boolean> {
   const rows = await sql.query<{ ok: boolean | null }>(`select "emailVerified" as ok from "user" where id = $1`, [userId]);
   return Boolean(rows[0]?.ok);

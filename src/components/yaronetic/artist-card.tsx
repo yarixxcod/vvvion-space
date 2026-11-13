@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { artistCard, type ArtistNote } from "@/lib/social/artist";
@@ -73,10 +74,9 @@ function ArtistSheet({ name, onClose }: { name: string; onClose: () => void }) {
   }, [onClose]);
 
   const close = tx({ ru: "Закрыть", en: "Close", kk: "Жабу" });
-
-  return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label={name}>
-      <div className="w-full max-w-md rounded-[1.6rem] border border-line bg-elev p-4 shadow-[var(--shadow)]">
+  const sheet = (
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/55 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label={name} onClick={onClose}>
+      <div className="max-h-[min(32rem,calc(100dvh-1.5rem))] w-full max-w-md overflow-y-auto rounded-[1.6rem] border border-line bg-elev p-4 shadow-[var(--shadow)]" onClick={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-between gap-2">
           <BackButton onClick={onClose} label={tx({ ru: "Назад", en: "Back", kk: "Артқа" })} />
           <button type="button" className="press hidden h-10 rounded-xl border border-line px-3 text-sm md:inline-flex" onClick={onClose}>
@@ -96,4 +96,6 @@ function ArtistSheet({ name, onClose }: { name: string; onClose: () => void }) {
       </div>
     </div>
   );
+  if (typeof document === "undefined") return sheet;
+  return createPortal(sheet, document.body);
 }
