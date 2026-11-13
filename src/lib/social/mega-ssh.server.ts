@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { AGENT_SOURCE, diskNameOk, installShell, unitText } from "@/lib/social/mega-plan";
+import { hostFingerprint, hostKeyMatches } from "@/lib/social/mega-host-key";
 
 const require = createRequire(import.meta.url);
 
@@ -9,9 +10,10 @@ type Conn = {
     host: string;
     port: number;
     username: string;
-    password: string;
+    password?: string;
+    privateKey?: string;
     readyTimeout: number;
-    hostVerifier: () => boolean;
+    hostVerifier: (key: Buffer) => boolean;
   }) => void;
   exec: (command: string, cb: (err: Error | null, stream: ExecStream) => void) => void;
   sftp: (cb: (err: Error | null, sftp: { writeFile: (path: string, data: Buffer, cb: (err: Error | null) => void) => void }) => void) => void;
@@ -28,10 +30,15 @@ export type SshTarget = {
   port: number;
   username: string;
   password: string;
+  hostKey?: string;
   disk: string;
   agentPort: number;
   token: string;
 };
+
+function keyMaterial(secret: string): boolean {
+  return /BEGIN [A-Z0-9 ]*PRIVATE KEY/.test(secret);
+}
 
 function scrub(text: string, token: string): string {
   return text.replaceAll(token, "…").replace(/\s+/g, " ").trim().slice(0, 180);
@@ -40,6 +47,7 @@ function scrub(text: string, token: string): string {
 function explain(error: unknown, token: string): Error {
   const raw = error instanceof Error ? error.message : "SSH не открылся";
   const text = scrub(raw, token);
+  if (/host key|fingerprint|verification failed/i.test(text)) return new Error("Отпечаток сервера не совпал. Подключение остановлено");
   if (/authentication|auth fail|all configured/i.test(text)) return new Error("Логин или пароль не подошли");
   if (/timed out|timeout/i.test(text)) return new Error("Сервер не ответил по SSH");
   if (/ECONNREFUSED/i.test(text)) return new Error("Порт SSH закрыт");
@@ -71,14 +79,48 @@ function connect(conn: Conn, target: SshTarget): Promise<void> {
       clearTimeout(timer);
       reject(error ?? new Error("SSH не открылся"));
     });
+    const key = keyMaterial(target.password);
     conn.connect({
       host: target.host,
       port: target.port,
       username: target.username,
-      password: target.password,
+      password: key ? undefined : target.password,
+      privateKey: key ? target.password : undefined,
       readyTimeout: 15_000,
-      hostVerifier: () => true,
+      hostVerifier: (seen) => Boolean(target.hostKey) && hostKeyMatches(target.hostKey || "", seen),
     });
+  });
+}
+
+export function peekHostKey(target: SshTarget): Promise<string> {
+  return new Promise((resolve, reject) => {
+    void client().then((conn) => {
+      const timer = setTimeout(() => {
+        conn.end();
+        reject(new Error("Сервер не ответил по SSH"));
+      }, 12_000);
+      let done = false;
+      conn.on("error", (error) => {
+        if (done) return;
+        clearTimeout(timer);
+        reject(error ?? new Error("SSH не открылся"));
+      });
+      conn.connect({
+        host: target.host,
+        port: target.port,
+        username: target.username,
+        password: "probe",
+        readyTimeout: 10_000,
+        hostVerifier: (seen) => {
+          if (done) return false;
+          done = true;
+          clearTimeout(timer);
+          resolve(hostFingerprint(seen));
+          conn.end();
+          return false;
+        },
+      });
+    }).catch(reject);
   });
 }
 
@@ -118,6 +160,10 @@ function writeFile(conn: Conn, path: string, data: Buffer): Promise<void> {
 
 export async function installAgent(target: SshTarget): Promise<void> {
   if (!diskNameOk(target.disk)) throw new Error("Диск собран неверно");
+  if (!target.hostKey) {
+    const fingerprint = await peekHostKey(target);
+    throw new Error(`Подтвердите отпечаток SSH ${fingerprint}`);
+  }
   const conn = await client();
   try {
     await connect(conn, target);

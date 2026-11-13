@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { isBlockedIp, publicFetch } from "@/lib/security/net-guard";
 
 export type McpToolDef = {
   exposed: string;
@@ -47,20 +48,7 @@ export function mcpUrlsOf(value: unknown): string[] {
 }
 
 function blockedIp(ip: string): boolean {
-  const value = ip.toLowerCase();
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(value);
-  if (mapped?.[1]) return blockedIp(mapped[1]);
-  if (value === "::1" || value.startsWith("fe80:") || value.startsWith("fc") || value.startsWith("fd")) return true;
-  if (value.includes(":")) return false;
-  const parts = value.split(".").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return true;
-  const [a, b] = parts;
-  if (a === 0 || a === 10 || a === 127) return true;
-  if (a === 169 && b === 254) return true;
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true;
-  return false;
+  return isBlockedIp(ip);
 }
 
 async function publicUrl(raw: string): Promise<string> {
@@ -109,13 +97,12 @@ async function rpc(url: string, method: string, params: unknown, id?: number): P
   });
   const saved = sessions.get(url);
   if (saved && saved.until > Date.now()) headers.set("mcp-session-id", saved.id);
-  const res = await fetch(url, {
+  const res = await publicFetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(id == null ? { jsonrpc: "2.0", method, params } : { jsonrpc: "2.0", id, method, params }),
-    redirect: "manual",
     signal: AbortSignal.timeout(12_000),
-  });
+  }, { hops: 0 });
   const session = res.headers.get("mcp-session-id");
   if (session && session.length < 200) sessions.set(url, { id: session, until: Date.now() + 10 * 60_000 });
   if (res.status >= 300 && res.status < 400) throw new Error("Сервер MCP перенаправил запрос");

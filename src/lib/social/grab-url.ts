@@ -1,3 +1,5 @@
+import { hostInList } from "../security/net-guard.ts";
+
 export type ClipHost = "youtube" | "instagram" | "tiktok" | "pinterest" | "vk";
 
 export type InstagramTarget =
@@ -8,6 +10,16 @@ export type InstagramTarget =
 
 const ALPH = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
+const CLIP_DOMAINS: Record<ClipHost, readonly string[]> = {
+  youtube: ["youtube.com", "youtu.be", "youtube-nocookie.com"],
+  instagram: ["instagram.com", "instagr.am"],
+  tiktok: ["tiktok.com"],
+  pinterest: ["pinterest.com", "pin.it", "pinterest.ru"],
+  vk: ["vk.com", "vk.ru", "vkvideo.ru"],
+};
+
+export const GRAB_HOSTS = Object.values(CLIP_DOMAINS).flat();
+
 export function clipHost(raw: string): ClipHost | null {
   let host = "";
   try {
@@ -15,11 +27,9 @@ export function clipHost(raw: string): ClipHost | null {
   } catch {
     return null;
   }
-  if (host === "youtu.be" || host.endsWith("youtube.com") || host.endsWith("youtube-nocookie.com")) return "youtube";
-  if (host === "instagr.am" || host.endsWith("instagram.com")) return "instagram";
-  if (host.endsWith("tiktok.com")) return "tiktok";
-  if (host.endsWith("pinterest.com") || host === "pin.it" || host.endsWith("pinterest.ru")) return "pinterest";
-  if (host.endsWith("vk.com") || host.endsWith("vk.ru") || host.endsWith("vkvideo.ru")) return "vk";
+  for (const [name, domains] of Object.entries(CLIP_DOMAINS) as [ClipHost, readonly string[]][]) {
+    if (hostInList(host, domains)) return name;
+  }
   return null;
 }
 
@@ -72,7 +82,7 @@ export function rewriteInstagram(raw: string): string {
     const next = url.searchParams.get("u");
     if (next?.startsWith("http")) return rewriteInstagram(next);
   }
-  if (!url.hostname.replace(/^www\./, "").toLowerCase().endsWith("instagram.com") && url.hostname !== "www.instagram.com") return url.toString();
+  if (!hostInList(url.hostname, ["instagram.com"])) return url.toString();
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts[0] === "s" && parts[1]) {
     const text = decodeShare(parts[1]);
@@ -100,7 +110,7 @@ export function instagramTarget(raw: string): InstagramTarget | null {
   } catch {
     return null;
   }
-  if (!url.hostname.replace(/^www\./, "").toLowerCase().endsWith("instagram.com")) return null;
+  if (!hostInList(url.hostname, ["instagram.com"])) return null;
   const parts = url.pathname.split("/").filter(Boolean);
   const storyQuery = (url.searchParams.get("story_media_id") || "").split("_")[0] || "";
   if (parts[0] === "stories" && parts[1] === "highlights" && /^\d{5,}$/.test(parts[2] || "")) return { kind: "highlight", id: parts[2] || "" };

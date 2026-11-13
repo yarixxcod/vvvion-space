@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { auth } from "@/lib/auth/server";
+import { acceptUpload, claimedMime, serveFile } from "@/lib/social/file-accept";
 import { getSql } from "@/lib/db";
 import { assertActive } from "@/lib/social/access";
 import { grantAchievement } from "@/lib/social/achievements";
@@ -145,8 +146,8 @@ async function startUpload(userId: string, body: Record<string, unknown>): Promi
   const size = typeof body.size === "number" ? body.size : Number(body.size);
   if (!Number.isFinite(size) || size < 1 || size > CIRCLE_MAX) throw new Error("Файл больше 200 МБ");
   const name = cleanName(typeof body.name === "string" ? body.name : "файл");
-  const mimeRaw = typeof body.mime === "string" ? body.mime.split(";")[0].trim().toLowerCase() : "";
-  const mime = /^[\w.+-]+\/[\w.+-]+$/.test(mimeRaw) ? mimeRaw.slice(0, 120) : "application/octet-stream";
+  const mime = claimedMime(typeof body.mime === "string" ? body.mime : "");
+  if (!mime || mime === "image/svg+xml" || mime === "text/html" || mime.endsWith("+xml")) throw new Error("Этот тип файла не принимается");
   const id = crypto.randomUUID();
   const sql = await getSql();
   const bytes = Math.round(size);
@@ -196,12 +197,25 @@ async function cancelUpload(userId: string, body: Record<string, unknown>): Prom
   return json(200, { ok: true });
 }
 
+async function signedMime(id: string, claimed: string): Promise<string> {
+  const sql = await getSql();
+  const rows = await sql<{ data: string }>`select data from file_chunks where id = ${id} and idx = 0`;
+  const head = Buffer.from(rows[0]?.data || "", "base64").subarray(0, 64);
+  const mime = acceptUpload(claimed, head);
+  if (!mime) throw new Error("Этот тип файла не принимается");
+  return mime;
+}
+
 async function finishUpload(userId: string, body: Record<string, unknown>): Promise<Response> {
   const id = typeof body.id === "string" ? body.id : "";
   if (!isUuid(id)) throw new Error("Загрузка не найдена");
   const meta = await readMeta(id);
   if (!meta || meta.userId !== userId) throw new Error("Загрузка не найдена");
   if (meta.received !== meta.size) throw new Error("Файл загрузился не целиком");
+  const mime = await signedMime(id, meta.mime);
+  const sql = await getSql();
+  await sql`update file_uploads set mime = ${mime} where id = ${id}`;
+  meta.mime = mime;
   if (meta.roomId === "chat" || body.scope === "chat") {
     void grantAchievement(userId, "file");
     return json(200, { id });
@@ -209,7 +223,6 @@ async function finishUpload(userId: string, body: Record<string, unknown>): Prom
   const text = typeof body.body === "string" ? body.body.trim().slice(0, 4000) : "";
   const attachTo = typeof body.messageId === "string" ? body.messageId.trim() : "";
   const kind = await assertMember(meta.roomId, userId);
-  const sql = await getSql();
   if (kind === "dm") {
     const peers = await sql<{ user_id: string }>`
       select user_id from room_members where room_id = ${meta.roomId} and user_id <> ${userId}
@@ -300,14 +313,14 @@ async function chunkBody(request: Request, id: string, name: string, mime: strin
   }
   const total = cursor || size;
   const filename = cleanName(name);
-  const inline = mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/") || mime === "application/pdf";
+  const served = serveFile(mime);
   const headers = new Headers({
-    "content-type": mime || "application/octet-stream",
+    "content-type": served.type,
     "content-length": String(total),
     "cache-control": "private, max-age=3600",
     "x-content-type-options": "nosniff",
     "accept-ranges": "bytes",
-    "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    "content-disposition": `${served.inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
   });
   const asked = byteRange(request.headers.get("range"), total);
   if (asked === "bad") return new Response(null, { status: 416, headers });
@@ -366,11 +379,12 @@ export async function readCircleFile(request: Request, id: string): Promise<Resp
     return json(403, { message: error instanceof Error ? error.message : "Файл не найден" });
   }
   const filename = cleanName(file.name);
+  const served = serveFile(file.mime);
   const headers = new Headers({
-    "content-type": file.mime || "application/octet-stream",
+    "content-type": served.type,
     "cache-control": "private, max-age=3600",
     "x-content-type-options": "nosniff",
-    "content-disposition": `${file.mime.startsWith("image/") || file.mime.startsWith("video/") || file.mime.startsWith("audio/") || file.mime === "application/pdf" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    "content-disposition": `${served.inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
   });
   headers.set("accept-ranges", "bytes");
   if (file.blob_path && isUuid(file.blob_path)) {

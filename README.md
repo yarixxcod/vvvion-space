@@ -230,8 +230,10 @@ npm run build
 
 Продакшен живёт на [vvvion.space](https://vvvion.space). В [`vercel.json`](vercel.json) заданы регион `fra1`, заголовки безопасности и два cron-задания:
 
-- `/api/push/cron` — каждый час
-- `/api/cron/cryptopay-reconcile` — сверка счетов Crypto Pay, в 30-ю минуту часа
+- `/api/push/cron` — раз в сутки, в 03:00 UTC
+- `/api/cron/cryptopay-reconcile` — сверка счетов Crypto Pay, раз в сутки, в 04:00 UTC
+
+На тарифе Vercel Hobby каждое задание может запускаться не чаще раза в сутки, поэтому в репозитории стоит суточное расписание. Оплата всё равно закрывается вебхуком Crypto Pay сразу. Почасовой cron (`0 * * * *` и `30 * * * *`) заработает только на платном тарифе.
 
 Секреты задаются в окружении Vercel, не в репозитории.
 
@@ -266,6 +268,7 @@ docker compose up -d --build
 | `FIREBASE_PROJECT_ID` | Проект Firebase для пуш-уведомлений |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Ключ сервисного аккаунта Firebase (лучше в base64) |
 | `CRON_SECRET` | Защита cron-маршрутов (`/api/push/cron`, сверка Crypto Pay) |
+| `ALTCHA_HMAC_KEY` | Секрет подписи CAPTCHA, случайная строка не короче 32 символов. Без него проверка не проходит |
 | `TINYFISH_API_KEY` | Ключ поиска TinyFish, если сервис используется |
 | `CRYPTOPAY_TOKEN` | Токен Crypto Pay API |
 | `CRYPTOPAY_NETWORK` | Сеть Crypto Pay: `mainnet` или `testnet` |
