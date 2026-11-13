@@ -27,16 +27,26 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
 
   useEffect(() => {
     const raw = handle.trim().replace(/^@/, "");
-    if (raw.length < 3) {
-      setFound(null);
-      return;
-    }
+    let active = true;
+
+    // Never leave a previous recipient selected while a new handle is checked.
+    setFound(null);
+    if (raw.length < 3) return;
+
     const timer = window.setTimeout(() => {
       void lookupHandle({ data: { handle: raw } })
-        .then((hit) => setFound(hit ? hit.name : null))
-        .catch(() => setFound(null));
+        .then((hit) => {
+          if (active) setFound(hit ? hit.name : null);
+        })
+        .catch(() => {
+          if (active) setFound(null);
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [handle]);
 
   return (

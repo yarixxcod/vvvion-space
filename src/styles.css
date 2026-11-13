@@ -240,3 +240,23 @@ html.vv-reduce-motion .heart-pop { animation: none; }
 
 
 
+
+
+/* VVVion Space 3.0.1 — additive interaction and motion polish */
+:root{--vv-motion-fast:140ms;--vv-motion-base:220ms;--vv-motion-slow:360ms;--vv-ease-out:cubic-bezier(.2,.75,.25,1)}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-behavior:smooth;scrollbar-gutter:stable}
+body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+:where(button,a,[role="button"],input,textarea,select){-webkit-tap-highlight-color:transparent}
+:where(button,a,[role="button"]){transition:background-color var(--vv-motion-fast) ease,border-color var(--vv-motion-fast) ease,color var(--vv-motion-fast) ease,box-shadow var(--vv-motion-base) var(--vv-ease-out),opacity var(--vv-motion-fast) ease,transform var(--vv-motion-fast) var(--vv-ease-out)}
+:where(button,a,[role="button"]):focus-visible,:where(input,textarea,select):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.press:active:not(:disabled){opacity:.9;transform:scale(.985)}
+.field{transition:border-color var(--vv-motion-fast) ease,background-color var(--vv-motion-fast) ease,box-shadow var(--vv-motion-base) var(--vv-ease-out)}
+.prose-y :where(img,video,iframe){max-width:100%;border-radius:.85rem}
+.prose-y :where(pre,table){max-width:100%;overflow-x:auto}
+::selection{color:var(--accent-fg);background:var(--accent)}
+@keyframes vv-soft-enter{from{opacity:0;transform:translateY(8px) scale(.992)}to{opacity:1;transform:translateY(0) scale(1)}}
+.vv-enter{animation:vv-soft-enter var(--vv-motion-slow) var(--vv-ease-out) both}
+@media(hover:hover) and (pointer:fine){.press:hover:not(:disabled){filter:brightness(1.045)}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+html.vv-reduce-motion .vv-enter,html.vv-lowend .vv-enter{animation:none!important}
