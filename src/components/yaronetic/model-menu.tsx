@@ -184,7 +184,7 @@ export function ModelMenu({
         <ChevronDown className={cn("size-4 shrink-0 text-muted transition", open && "rotate-180")} />
       </button>
       {open && !narrow ? (
-        <div className="absolute bottom-full left-0 z-30 mb-1 max-h-80 w-max min-w-[16rem] max-w-[80vw] overflow-y-auto rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
+        <div className="vv-enter absolute bottom-full left-0 z-30 mb-1 max-h-80 w-max min-w-[16rem] max-w-[80vw] overflow-y-auto rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
           {list}
         </div>
       ) : null}
@@ -192,7 +192,7 @@ export function ModelMenu({
         ? createPortal(
             <div className="fixed inset-0 z-[80] flex items-end bg-black/45" onClick={() => setOpen(false)}>
               <div
-                className="w-full rounded-t-3xl border border-line bg-elev px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
+                className="vv-enter w-full rounded-t-3xl border border-line bg-elev px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div
