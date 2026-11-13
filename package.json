@@ -16,7 +16,7 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/ai/chat-owner.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/preview-path-prefix.test.ts src/lib/social/push-policy.test.ts src/lib/app-nav.test.ts src/lib/pay/vubli-rate.test.ts src/lib/pay/cryptopay.test.ts src/lib/pay/settle.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/ai/chat-owner.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/preview-path-prefix.test.ts src/lib/social/push-policy.test.ts src/lib/app-nav.test.ts src/lib/pay/vubli-rate.test.ts src/lib/pay/cryptopay.test.ts src/lib/pay/settle.test.ts src/lib/security/net-guard.test.ts src/lib/security/captcha.test.ts src/lib/social/file-accept.test.ts src/lib/social/grab-url.test.ts src/lib/social/mega-ssh.test.ts src/lib/social/mega-plan.test.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

@@ -3,7 +3,8 @@ import { setResponseStatus } from "@tanstack/react-start/server";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { assertActive } from "@/lib/social/access";
 import { storeMegaBytes } from "@/lib/social/mega";
-import { clipHost, instagramTarget, pkToCode, rewriteInstagram, type ClipHost, type InstagramTarget } from "./grab-url.ts";
+import { clipHost, instagramTarget, pkToCode, rewriteInstagram, GRAB_HOSTS, type ClipHost, type InstagramTarget } from "./grab-url.ts";
+import { publicFetch } from "@/lib/security/net-guard";
 
 export { clipHost, instagramTarget, pkToCode, rewriteInstagram };
 export type { ClipHost, InstagramTarget };
@@ -201,11 +202,11 @@ async function youtube(raw: string): Promise<{ url: string; title: string; refer
 }
 
 async function pageText(url: string, ua = DESKTOP): Promise<{ html: string; finalUrl: string }> {
-  const res = await fetch(url, {
-    headers: { "user-agent": ua, accept: "text/html,application/xhtml+xml", "accept-language": "ru,en" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(12000),
-  });
+  const res = await publicFetch(
+    url,
+    { headers: { "user-agent": ua, accept: "text/html,application/xhtml+xml", "accept-language": "ru,en" }, signal: AbortSignal.timeout(12000) },
+    { allowHosts: GRAB_HOSTS, hops: 3 },
+  );
   if (!res.ok) {
     logGrab("page", res.status, url);
     throw new Error("Страница не открылась");
@@ -478,11 +479,11 @@ async function resolve(raw: string): Promise<Remote[]> {
 }
 
 async function takeBytes(url: string, referer: string): Promise<{ bytes: Uint8Array; mime: string }> {
-  const res = await fetch(url, {
-    headers: { "user-agent": DESKTOP, referer, accept: "*/*" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(50000),
-  });
+  const res = await publicFetch(
+    url,
+    { headers: { "user-agent": DESKTOP, referer, accept: "*/*" }, signal: AbortSignal.timeout(50000) },
+    { hops: 4 },
+  );
   if (!res.ok || !res.body) {
     logGrab("file", res.status, url.slice(0, 120));
     clipFail(502, "Файл не скачался");

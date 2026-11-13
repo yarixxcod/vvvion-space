@@ -1,27 +1,25 @@
 import { createHash } from "node:crypto";
 import { createChallenge, verifySolution } from "altcha-lib/v1";
 import { getSql } from "@/lib/db";
-import { env } from "@/lib/env.server";
+import { captchaKey } from "@/lib/security/captcha-key";
 
-function hmacKey(): string | null {
-  const key = env("ALTCHA_HMAC_KEY");
-  if (key && key.length >= 32) return key;
-  return "h7Wm9Q2kL4rT8vX1pN6cZ0sA3dJ5eYuB";
-}
+export { captchaKey, takeCaptchaHash } from "@/lib/security/captcha-key";
 
 export async function issueChallenge(): Promise<unknown> {
-  const key = hmacKey();
-  if (!key) return null;
-  const challenge = await createChallenge({
+  const key = captchaKey();
+  if (!key) {
+    console.error("[captcha] ALTCHA_HMAC_KEY is missing or shorter than 32 characters");
+    return null;
+  }
+  return createChallenge({
     hmacKey: key,
     maxNumber: 100_000,
     expires: new Date(Date.now() + 5 * 60_000),
   });
-  return challenge;
 }
 
 export async function verifyCaptcha(payload: string): Promise<boolean> {
-  const key = hmacKey();
+  const key = captchaKey();
   if (!key) return false;
   const raw = payload.trim();
   if (raw.length < 20 || raw.length > 8_000) return false;

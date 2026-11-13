@@ -1383,8 +1383,9 @@ export const saveMegaNode = createServerFn({ method: "POST" })
         agent_port: number;
         status: string;
         detail: string;
+        ssh_host_key: string;
       }>`
-        select host, ssh_port, ssh_user, disk_name, agent_port, status, detail
+        select host, ssh_port, ssh_user, disk_name, agent_port, status, detail, ssh_host_key
         from mega_nodes where id = ${data.id}
       `;
       const row = rows[0];
@@ -1397,20 +1398,22 @@ export const saveMegaNode = createServerFn({ method: "POST" })
         Number(row.agent_port) === data.agentPort;
       const status = same ? row.status : "new";
       const detail = same ? row.detail : "Данные обновлены. Поставьте снова.";
+      const hostKey = same ? row.ssh_host_key : "";
       try {
         if (data.password) {
           await sql`
             update mega_nodes
             set name = ${data.name}, host = ${data.host}, ssh_port = ${data.sshPort}, ssh_user = ${data.sshUser},
                 ssh_secret = ${seal(data.password)}, disk_name = ${data.diskName}, agent_port = ${data.agentPort},
-                status = ${status}, detail = ${detail}
+                status = ${status}, detail = ${detail}, ssh_host_key = ${hostKey}
             where id = ${data.id}
           `;
         } else {
           await sql`
             update mega_nodes
             set name = ${data.name}, host = ${data.host}, ssh_port = ${data.sshPort}, ssh_user = ${data.sshUser},
-                disk_name = ${data.diskName}, agent_port = ${data.agentPort}, status = ${status}, detail = ${detail}
+                disk_name = ${data.diskName}, agent_port = ${data.agentPort}, status = ${status}, detail = ${detail},
+                ssh_host_key = ${hostKey}
             where id = ${data.id}
           `;
         }
@@ -1439,7 +1442,7 @@ export const saveMegaNode = createServerFn({ method: "POST" })
     return listNodes();
   });
 
-async function secretOf(id: string): Promise<{ host: string; sshPort: number; sshUser: string; password: string; diskName: string; agentPort: number; token: string }> {
+async function secretOf(id: string): Promise<{ host: string; sshPort: number; sshUser: string; password: string; diskName: string; agentPort: number; token: string; hostKey: string }> {
   const sql = await getSql();
   const rows = await sql<{
     host: string;
@@ -1449,8 +1452,9 @@ async function secretOf(id: string): Promise<{ host: string; sshPort: number; ss
     disk_name: string;
     agent_port: number;
     agent_token: string;
+    ssh_host_key: string;
   }>`
-    select host, ssh_port, ssh_user, ssh_secret, disk_name, agent_port, agent_token
+    select host, ssh_port, ssh_user, ssh_secret, disk_name, agent_port, agent_token, ssh_host_key
     from mega_nodes where id = ${id}
   `;
   const row = rows[0];
@@ -1464,6 +1468,7 @@ async function secretOf(id: string): Promise<{ host: string; sshPort: number; ss
       diskName: row.disk_name,
       agentPort: Number(row.agent_port),
       token: openSeal(row.agent_token),
+      hostKey: row.ssh_host_key || "",
     };
   } catch {
     throw new Error("Пароль не прочитался. Добавьте сервер заново");
@@ -1491,6 +1496,7 @@ export const installMegaNode = createServerFn({ method: "POST" })
         disk: node.diskName,
         agentPort: node.agentPort,
         token: node.token,
+        hostKey: node.hostKey,
       });
       const probe = await fetch(`http://${node.host}:${node.agentPort}/health`, {
         headers: { Authorization: `Bearer ${node.token}` },
@@ -1513,6 +1519,34 @@ export const installMegaNode = createServerFn({ method: "POST" })
       }
       throw new Error(message);
     }
+    return listNodes();
+  });
+
+export const trustMegaHost = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    const row = input && typeof input === "object" ? (input as { id?: unknown; fingerprint?: unknown }) : {};
+    const id = typeof row.id === "string" ? row.id : "";
+    const fingerprint = typeof row.fingerprint === "string" ? row.fingerprint.trim() : "";
+    if (!UUID.test(id) || !/^SHA256:[A-Za-z0-9+/]{43}$/.test(fingerprint)) throw new Error("Отпечаток не разобран");
+    return { id, fingerprint };
+  })
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.userId);
+    const node = await secretOf(data.id);
+    const { peekHostKey } = await import("@/lib/social/mega-ssh.server");
+    const seen = await peekHostKey({
+      host: node.host,
+      port: node.sshPort,
+      username: node.sshUser,
+      password: node.password,
+      disk: node.diskName,
+      agentPort: node.agentPort,
+      token: node.token,
+    });
+    if (seen !== data.fingerprint) throw new Error("Отпечаток сервера уже другой. Нажмите «Поставить» ещё раз");
+    const sql = await getSql();
+    await sql`update mega_nodes set ssh_host_key = ${seen}, status = 'new', detail = 'Отпечаток подтверждён. Можно ставить скрипт' where id = ${data.id}`;
     return listNodes();
   });
 

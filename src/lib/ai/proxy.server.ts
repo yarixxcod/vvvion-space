@@ -1,4 +1,5 @@
 import { mcpUrlsOf, prepareMcp } from "@/lib/ai/mcp.server";
+import { isBlockedHost, publicFetch } from "@/lib/security/net-guard";
 import { ownedPersonaPrompt } from "@/lib/social/personas";
 import { enforceDailyLimit } from "@/lib/social/limits";
 import { finishCloudReply } from "@/lib/ai/cloud";
@@ -268,24 +269,7 @@ function sanitize(text: string, secret?: string) {
 	return out || "Провайдер вернул ошибку";
 }
 function blockedHost(hostname: string) {
-	const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
-	if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host === "0.0.0.0" || host === "::1" || host === "metadata.google.internal") return true;
-	const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-	if (!match) return false;
-	const a = Number(match[1]);
-	const b = Number(match[2]);
-	if ([
-		a,
-		b,
-		Number(match[3]),
-		Number(match[4])
-	].some((n) => n > 255)) return true;
-	if (a === 10 || a === 127 || a === 0) return true;
-	if (a === 169 && b === 254) return true;
-	if (a === 192 && b === 168) return true;
-	if (a === 172 && b >= 16 && b <= 31) return true;
-	if (a === 100 && b >= 64 && b <= 127) return true;
-	return false;
+	return isBlockedHost(hostname);
 }
 function publicBase(raw: string) {
 	let url;
@@ -748,7 +732,7 @@ async function inlineImage(url: string, signal: AbortSignal) {
 		for (let hop = 0; hop < 3; hop += 1) {
 			const parsed = new URL(current);
 			if (parsed.protocol !== "https:" || blockedHost(parsed.hostname)) return url;
-			const res = await fetch(current, { signal, redirect: "manual" });
+			const res = await publicFetch(current, { signal }, { hops: 0 });
 			if (res.status >= 300 && res.status < 400) {
 				const next = res.headers.get("location");
 				if (!next) return url;
@@ -1326,13 +1310,12 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 		try {
 		const signal = armRun(userId, track, request, 24e4);
 		armed = true;
-		const send = (imagePayload: Record<string, unknown>) => fetch(url, {
+		const send = (imagePayload: Record<string, unknown>) => publicFetch(url, {
 			method: "POST",
 			headers,
 			body: JSON.stringify(imagePayload),
-			signal,
-			redirect: "manual"
-		});
+			signal
+		}, { hops: 0 });
 		let res = await send({
 			model,
 			prompt,
@@ -1450,13 +1433,12 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 	}
 }
 async function callChat(url: string, headers: Headers, payload: Record<string, unknown>, signal: AbortSignal, secret: string) {
-	const send = (body: Record<string, unknown>) => fetch(url, {
+	const send = (body: Record<string, unknown>) => publicFetch(url, {
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),
-		signal,
-		redirect: "manual"
-	});
+		signal
+	}, { hops: 0 });
 	const fail = (response: Response) => ({
 		failed: true,
 		response
@@ -1557,12 +1539,11 @@ export async function handleModels(request: Request): Promise<Response> {
 			headers.set("authorization", `Bearer ${secret}`);
 			for (const header of extraHeaderList(body.extraHeaders)) headers.set(header.name, header.value);
 		}
-		const res = await fetch(url, {
+		const res = await publicFetch(url, {
 			method: "GET",
 			headers,
-			redirect: "manual",
 			signal: AbortSignal.timeout(2e4)
-		});
+		}, { hops: 0 });
 		if (res.status >= 300 && res.status < 400) return json(502, {
 			ok: false,
 			models: [],

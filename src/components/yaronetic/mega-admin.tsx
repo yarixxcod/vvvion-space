@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { SecretInput } from "@/components/yaronetic/secret-input";
 import { sizeLabel } from "@/components/yaronetic/upload-meter";
-import { checkMegaNode, installMegaNode, listMegaNodes, puttyMegaScript, removeMegaNode, saveMegaNode, type MegaNodePublic } from "@/lib/social/mega";
+import { checkMegaNode, installMegaNode, listMegaNodes, puttyMegaScript, removeMegaNode, saveMegaNode, trustMegaHost, type MegaNodePublic } from "@/lib/social/mega";
 
 const STATUS = { new: "Не поставлен", ready: "Работает", error: "Не отвечает" } as const;
 
@@ -106,6 +106,19 @@ export function MegaAdmin() {
               <button type="button" disabled={busy} className="press h-9 rounded-lg bg-accent px-2 text-xs font-medium text-accent-fg disabled:opacity-40" onClick={() => void run(() => installMegaNode({ data: node.id }), "Скрипт поставлен")}>
                 {node.status === "ready" ? "Поставить снова" : "Поставить"}
               </button>
+              {/SHA256:/.test(node.detail) ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="press h-9 rounded-lg border border-line px-2 text-xs disabled:opacity-40"
+                  onClick={() => {
+                    const fingerprint = /SHA256:[A-Za-z0-9+/]+/.exec(node.detail)?.[0] || "";
+                    void run(() => trustMegaHost({ data: { id: node.id, fingerprint } }), "Отпечаток сохранён");
+                  }}
+                >
+                  Это мой сервер
+                </button>
+              ) : null}
               <button type="button" disabled={busy} className="press h-9 rounded-lg border border-line px-2 text-xs disabled:opacity-40" onClick={() => void run(() => checkMegaNode({ data: node.id }), "Проверено")}>
                 Проверить
               </button>
