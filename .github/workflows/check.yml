@@ -19,5 +19,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      - run: npm run lint
-      - run: npm run build
+      - name: Lint
+        if: always()
+        run: npm run lint
+      - name: Production build
+        if: always()
+        run: npm run build
