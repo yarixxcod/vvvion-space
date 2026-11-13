@@ -258,3 +258,5 @@ body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-r
 .vv-enter{animation:vv-soft-enter var(--vv-motion-slow) var(--vv-ease-out) both}
 @media(hover:hover) and (pointer:fine){.press:hover:not(:disabled){filter:brightness(1.045)}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+html.vv-reduce-motion .vv-enter,html.vv-lowend .vv-enter{animation:none!important}
