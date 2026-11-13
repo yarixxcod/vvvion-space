@@ -27,16 +27,26 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
 
   useEffect(() => {
     const raw = handle.trim().replace(/^@/, "");
+    let active = true;
     if (raw.length < 3) {
       setFound(null);
-      return;
+      return () => {
+        active = false;
+      };
     }
     const timer = window.setTimeout(() => {
       void lookupHandle({ data: { handle: raw } })
-        .then((hit) => setFound(hit ? hit.name : null))
-        .catch(() => setFound(null));
+        .then((hit) => {
+          if (active) setFound(hit ? hit.name : null);
+        })
+        .catch(() => {
+          if (active) setFound(null);
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [handle]);
 
   return (
@@ -49,7 +59,10 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           value={handle}
           placeholder="@username"
           maxLength={21}
-          onChange={(event) => setHandle(event.target.value.toLowerCase())}
+          onChange={(event) => {
+            setHandle(event.target.value.toLowerCase());
+            setFound(null);
+          }}
         />
         <p className="mt-1 min-h-5 text-xs text-muted">{found ? `Это ${found}` : handle.trim().length >= 3 ? "Такого юзернейма нет" : ""}</p>
         <label className="mt-2 block text-xs text-faint">
