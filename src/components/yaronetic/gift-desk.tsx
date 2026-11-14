@@ -104,15 +104,16 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
       {deskState === "ready" && gifts.length === 0 ? (
         <p role="status" className="rounded-2xl border border-line bg-elev px-4 py-6 text-center text-sm text-muted">Подарки пока недоступны.</p>
       ) : null}
-      <ul className="grid gap-2 sm:grid-cols-2">
+      <ul className="grid gap-3 sm:grid-cols-2">
         {gifts.map((gift) => (
-          <li key={gift.sku} className="rounded-3xl border border-line bg-elev px-4 py-4 transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-[var(--shadow)]">
+          <li key={gift.sku} className="group flex min-h-52 flex-col rounded-3xl border border-line bg-elev px-4 py-4 transition-[border-color,box-shadow,transform] duration-200 hover:border-line-strong hover:shadow-[var(--shadow)] motion-reduce:transform-none">
+            <div className="mb-3 flex items-center justify-between gap-3"><span aria-hidden="true" className="grid size-11 place-items-center rounded-2xl border border-line bg-subtle text-xl">🎁</span><span className="text-[11px] font-medium tracking-widest text-faint uppercase">VVVION</span></div>
             <p className="font-serif text-2xl tracking-tight">{gift.title}</p>
             <p className="mt-1 text-sm text-muted">{gift.note}</p>
-            <p className="mt-3 font-serif text-xl tabular-nums">
+            <p className="mt-auto pt-4 font-serif text-xl tabular-nums">
               {gift.price.toLocaleString("ru-RU")} вуб. · {fmtRubApprox(gift.price)}
             </p>
-            <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line-strong px-3 text-sm" onClick={() => setPick(gift)}>
+            <button type="button" className="press mt-3 min-h-11 w-full rounded-2xl border border-line-strong px-3 text-sm font-medium transition-colors hover:bg-subtle" onClick={() => setPick(gift)}>
               Подарить
             </button>
           </li>
