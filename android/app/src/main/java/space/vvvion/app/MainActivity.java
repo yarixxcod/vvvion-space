@@ -38,7 +38,7 @@ import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
 
-public class MainActivity extends Activity {
+public class MainActivity extends androidx.activity.ComponentActivity {
     static final String HOME = "https://vvvion.space/";
     static final int BG = 0xFF0C0C0E;
     static final long LOADER_TIMEOUT_MS = 15000, LOADER_MIN_MS = 400, SPLASH_MAX_MS = 2500;
@@ -160,9 +160,9 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
 
         detectWebView();
-        if (Build.VERSION.SDK_INT >= 33) {   // predictive-back compatible: the app opts in (manifest) and handles back itself
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
-        }
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() { handleBack(); }
+        });
         ui.postDelayed(this::maybeWebViewHint, 6000);
         web.addJavascriptInterface(new Object() {
             @JavascriptInterface public void ready() { ui.post(MainActivity.this::onPageReady); }
@@ -680,8 +680,7 @@ public class MainActivity extends Activity {
     // 2.9.1: the bridge dispatcher (site handler + Circle sub-screen fallback) when present, else the site handler alone
     static final String BACK_JS = "(function(){try{var f=window.__vvBackDispatch||window.__vvvionHandleBack;return !!f&&f()===true}catch(e){return false}})()";
 
-    /** Android 13+ goes through OnBackInvokedCallback (predictive-back opt-in in the manifest), older versions through onBackPressed. */
-    @Override public void onBackPressed() { handleBack(); }
+    // AndroidX dispatches both legacy buttons and Android 16 predictive back to handleBack.
 
     void handleBack() {
         if (customView != null) { chrome.onHideCustomView(); return; }
@@ -712,7 +711,7 @@ public class MainActivity extends Activity {
     void fallbackBack() {
         if (web.canGoBack()) web.goBack();
         else if (MediaPlaybackService.active() && MediaPlaybackService.state.playing) moveTaskToBack(true);   // keep the music going
-        else MainActivity.super.onBackPressed();
+        else moveTaskToBack(true);
     }
 
     @Override protected void onSaveInstanceState(Bundle out) { super.onSaveInstanceState(out); web.saveState(out); }
