@@ -33,11 +33,23 @@ create trigger vvvion_user_handle_signup
 after insert on "user"
 for each row execute function vvvion_assign_handle();
 
-do $$
-declare u record;
+do $
+declare
+  u record;
+  candidate text;
+  attempt integer;
 begin
   for u in select id from "user" where id not in (select user_id from user_handles) loop
-    perform vvvion_assign_handle() from "user" where id = u.id;
+    for attempt in 1..12 loop
+      candidate := 'nova_' || substr(md5(u.id || random()::text || clock_timestamp()::text), 1, 10);
+      begin
+        insert into user_handles (user_id, handle) values (u.id, candidate)
+        on conflict (user_id) do nothing;
+        exit;
+      exception when unique_violation then
+        -- Retry a rare handle collision.
+      end;
+    end loop;
   end loop;
 end;
-$$;
+$;
