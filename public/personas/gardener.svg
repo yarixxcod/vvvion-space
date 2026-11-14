@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <rect width="80" height="80" rx="22" fill="#3a4a32"/>
-  <path d="M18 78c4-16 12-22 22-22s18 6 22 22" fill="#efc8aa"/>
-  <circle cx="40" cy="40" r="16" fill="#efc8aa"/>
-  <path d="M26 36c2-8 8-12 14-12s12 4 14 12c-4-4-9-6-14-6s-10 2-14 6z" fill="#6a4a28"/>
-  <circle cx="34" cy="40" r="1.7" fill="#1c1b19"/>
-  <circle cx="46" cy="40" r="1.7" fill="#1c1b19"/>
-  <path d="M18 34c10-2 34-2 44 0l-4 6H22z" fill="#c4a36a"/><path d="M48 18c6 2 8 8 4 12-4-2-8-2-10 0 2-6 2-10 6-12z" fill="#6a9a62"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 84 84" role="img" aria-label="gardener character portrait"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#295141"/><stop offset="1" stop-color="#12131f"/></linearGradient><radialGradient id="halo"><stop stop-color="#98d4a0" stop-opacity=".52"/><stop offset="1" stop-color="#98d4a0" stop-opacity="0"/></radialGradient><linearGradient id="coat" x2="1" y2="1"><stop stop-color="#98d4a0"/><stop offset="1" stop-color="#295141"/></linearGradient></defs><rect width="84" height="84" rx="22" fill="url(#bg)"/><circle cx="59" cy="20" r="40" fill="url(#halo)"/><path d="M11 84q3-23 20-27h22q18 5 21 27Z" fill="url(#coat)"/><path d="M36 54h12v13q-6 9-12 0Z" fill="#dbb293"/><ellipse cx="42" cy="40" rx="20" ry="25" fill="#46392c"/><ellipse cx="42" cy="45" rx="16" ry="20" fill="#dbb293"/><path d="M24 38q0-27 20-26 19 1 18 25-8-4-12-13-7 11-26 14Z" fill="#46392c"/><path d="M31 45q4-3 8 0m8 0q4-3 8 0" fill="none" stroke="#392c36" stroke-width="2" stroke-linecap="round"/><circle cx="35" cy="46" r="1.4" fill="#1c1c27"/><circle cx="50" cy="46" r="1.4" fill="#1c1c27"/><path d="M41 48l-1 5h4" fill="none" stroke="#ad776d" stroke-width="1.2" stroke-linecap="round"/><path d="M37 58q5 3 10 0" fill="none" stroke="#985b66" stroke-width="1.5" stroke-linecap="round"/><path d="M62 23q-14 1-13 15 15 0 13-15Z" fill="#98d4a0"/><path d="M51 37l-7 9" stroke="#98d4a0" stroke-width="2"/><rect x="1" y="1" width="82" height="82" rx="21" fill="none" stroke="#98d4a0" stroke-opacity=".38" stroke-width="1.5"/></svg>
