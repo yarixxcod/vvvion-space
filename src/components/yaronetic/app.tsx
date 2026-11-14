@@ -878,13 +878,13 @@ function EmptyChat({
         {suggestions.length === 0 ? (
           <p className="mt-8 text-sm text-faint">{ui(lang, "gathering")}</p>
         ) : (
-          <div className="snap-row mt-8 flex w-full gap-2 overflow-x-auto pb-1">
+          <div className="mt-8 grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
             {suggestions.slice(0, 4).map((item, index) => (
               <button
                 key={`${item.title}-${index}`}
                 type="button"
                 disabled={disabled}
-                className="press h-12 shrink-0 snap-start rounded-full border border-line bg-elev/90 px-4 text-sm font-medium hover:bg-subtle disabled:opacity-40"
+                className="press min-h-12 min-w-0 rounded-2xl border border-line bg-elev/90 px-3 py-2 text-center text-sm font-medium leading-snug break-words hover:bg-subtle disabled:opacity-40"
                 onClick={() => onPick(item.prompt)}
               >
                 {item.title}
