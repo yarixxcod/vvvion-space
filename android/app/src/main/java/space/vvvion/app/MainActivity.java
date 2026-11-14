@@ -657,10 +657,11 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
         if (req == Chooser.REQ) {
             Uri[] r = Chooser.result(this, res, data);
             if (fileCb != null) { fileCb.onReceiveValue(r); fileCb = null; }
-        } else super.onActivityResult(req, res, data);
+        }
     }
 
     Uri[] multi(int res, Intent data) {
@@ -674,6 +675,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     }
 
     @Override public void onRequestPermissionsResult(int code, String[] p, int[] r) {
+        super.onRequestPermissionsResult(code, p, r);
         if (code == 3) { emitNotificationState(); return; }
         if (code == Downloads.REQ_STORAGE) { downloads.onPermissionResult(r.length > 0 && r[0] == PackageManager.PERMISSION_GRANTED); return; }
         if (code == 2 && pendingPerm != null) {
