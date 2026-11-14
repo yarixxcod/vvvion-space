@@ -25,6 +25,7 @@ import {
   saveTtsModel,
   setBan,
   setMemberPremium,
+  grantMemberVubli,
   setRole,
   type AdminImageModel,
   type AdminModel,
@@ -262,6 +263,9 @@ export function AdminPanel() {
 
 function People({ members, onChange }: { members: MemberRow[] | null; onChange: (rows: MemberRow[]) => void }) {
   const [busy, setBusy] = useState(false);
+  const [grantTo, setGrantTo] = useState<string | null>(null);
+  const [grantAmount, setGrantAmount] = useState("");
+  const [grantReason, setGrantReason] = useState("");
 
   async function run(task: () => Promise<MemberRow[]>, ok: string) {
     if (busy) return;
@@ -311,6 +315,7 @@ function People({ members, onChange }: { members: MemberRow[] | null; onChange: 
             >
               {member.banned ? "Разблокировать" : "Заблокировать"}
             </button>
+            <button type="button" disabled={busy} className="press h-9 rounded-lg border border-line px-2 text-xs disabled:opacity-40" onClick={() => { setGrantTo(grantTo === member.id ? null : member.id); setGrantAmount(""); setGrantReason(""); }}>Начислить Вубли</button>
             <button
               type="button"
               disabled={busy}
@@ -320,6 +325,14 @@ function People({ members, onChange }: { members: MemberRow[] | null; onChange: 
               {member.premiumUntil ? "Снять Premium" : "Дать Premium"}
             </button>
           </div>
+          {grantTo === member.id ? (
+            <div className="mt-3 space-y-2 rounded-xl border border-line p-3">
+              <p className="text-xs text-muted">Начисление Вубли · {member.name}</p>
+              <input className="field w-full" aria-label="Количество Вубли" inputMode="numeric" placeholder="Количество (1–100000)" value={grantAmount} onChange={(e) => setGrantAmount(e.target.value.replace(/\\D/g, "").slice(0, 6))} />
+              <input className="field w-full" aria-label="Причина начисления" maxLength={180} placeholder="Причина начисления" value={grantReason} onChange={(e) => setGrantReason(e.target.value)} />
+              <button type="button" className="press h-9 rounded-lg bg-accent px-3 text-xs text-accent-fg disabled:opacity-40" disabled={busy || !grantReason.trim() || !Number.isSafeInteger(Number(grantAmount)) || Number(grantAmount) < 1 || Number(grantAmount) > 100000} onClick={() => void run(async () => { const rows = await grantMemberVubli({ data: { id: member.id, amount: Number(grantAmount), reason: grantReason } }); setGrantTo(null); setGrantAmount(""); setGrantReason(""); return rows; }, "Вубли начислены")}>Подтвердить начисление</button>
+            </div>
+          ) : null}
         </li>
       ))}
     </ul>
