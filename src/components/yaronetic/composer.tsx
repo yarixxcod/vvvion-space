@@ -164,6 +164,11 @@ export function Composer({
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            if (event.key === "Escape" && more) {
+              event.preventDefault();
+              setMore(false);
+              return;
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               fire();
