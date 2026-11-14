@@ -141,6 +141,7 @@ export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onC
       toast.success(txNow({ ru: "Почта подтверждена. Добро пожаловать!", en: "Email verified. Welcome!", kk: "Пошта расталды. Қош келдіңіз!" }));
       setVerifyEmail(false);
       onComplete?.();
+      window.dispatchEvent(new Event("vvvion:email-verified"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Неверный или просроченный код");
     } finally {
