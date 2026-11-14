@@ -79,8 +79,8 @@ test("the wrapped command runs without inventing a missing app env", async () =>
     process.execPath,
     "-e",
     PRINT_FLAG,
-  ], { env: { ...process.env, VITE_AUTH_ENABLED: "" } });
-  assert.equal(stdout, "");
+  ], { env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "VITE_AUTH_ENABLED")) });
+  assert.equal(stdout, "undefined");
 });
 
 test("the wrapped command sees an explicit override, not the file value", async () => {
@@ -123,6 +123,6 @@ test("the CLI still runs when invoked through a symlinked path", async () => {
     process.execPath,
     "-e",
     PRINT_FLAG,
-  ]);
+  ], { env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "VITE_AUTH_ENABLED")) });
   assert.equal(stdout, "undefined");
 });
