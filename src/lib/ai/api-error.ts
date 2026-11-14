@@ -1,5 +1,5 @@
 const SECRET = /Bearer\s+\S+/gi;
-const KEY = /\b(?:sk|xai|whsec)-[A-Za-z0-9_\-]{6,}\b/g;
+const KEY = /\b(?:sk|xai|whsec)-[A-Za-z0-9_-]{6,}\b/g;
 
 function clean(text: string, secret?: string): string {
   let out = text.replace(/\s+/g, " ").trim();
