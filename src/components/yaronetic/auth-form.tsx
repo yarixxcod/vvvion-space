@@ -172,7 +172,7 @@ export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onC
         <form className="flex flex-col gap-3" onSubmit={(event) => void verifyCode(event)}>
           <label className="flex flex-col gap-1 text-xs text-faint">
             Код из письма
-            <input className="field font-mono text-center text-xl tracking-[0.3em]" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\\D/g, "").slice(0, 6))} />
+            <input className="field font-mono text-center text-xl tracking-[0.3em]" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} />
           </label>
           <button type="submit" disabled={busy || code.length !== 6} className="press h-11 rounded-2xl bg-accent text-sm font-medium text-accent-fg disabled:opacity-40">{busy ? "Проверяем…" : "Подтвердить и продолжить"}</button>
         </form>
