@@ -12,6 +12,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
   const [handle, setHandle] = useState("");
   const [note, setNote] = useState("");
   const [found, setFound] = useState<string | null>(null);
+  const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
   const [lookupState, setLookupState] = useState<"idle" | "checking" | "found" | "missing" | "error">("idle");
   const [pick, setPick] = useState<GiftItem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,6 +41,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
 
     // Never leave a previous recipient selected while a new handle is checked.
     setFound(null);
+    setVerifiedHandle(null);
     setLookupState(raw.length < 3 ? "idle" : "checking");
     if (raw.length < 3) return;
 
@@ -48,12 +50,14 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
         .then((hit) => {
           if (active) {
             setFound(hit ? hit.name : null);
+            setVerifiedHandle(hit ? raw : null);
             setLookupState(hit ? "found" : "missing");
           }
         })
         .catch(() => {
           if (active) {
             setFound(null);
+            setVerifiedHandle(null);
             setLookupState("error");
           }
         });
@@ -127,7 +131,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
       <PurchaseSheet
         open={Boolean(pick)}
         title={pick ? `Подарок «${pick.title}»` : "Подарок"}
-        detail={found ? `Получит ${found}. Спишется с вашей карты.` : "Укажите существующий юзернейм."}
+        detail={found && verifiedHandle === handle.trim().replace(/^@/, "") ? `Получит ${found}. Спишется с вашей карты.` : "Укажите существующий юзернейм."}
         price={pick?.price ?? 0}
         balance={balance}
         busy={busy}
@@ -142,12 +146,12 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
             toast.error("Сначала подтвердите почту");
             return;
           }
-          if (!found) {
+          if (!found || !verifiedHandle || verifiedHandle !== handle.trim().replace(/^@/, "")) {
             toast.error("Сначала найдите человека по юзернейму");
             return;
           }
           setBusy(true);
-          void sendGift({ data: { sku: pick.sku, handle, note, idempotencyKey: crypto.randomUUID() } })
+          void sendGift({ data: { sku: pick.sku, handle: verifiedHandle, note, idempotencyKey: crypto.randomUUID() } })
             .then(() => {
               haptic("success");
               toast("Подарок отправлен");
