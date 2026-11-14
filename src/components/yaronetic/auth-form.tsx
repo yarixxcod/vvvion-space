@@ -5,7 +5,7 @@ import { ui } from "@/lib/i18n";
 import { txNow, useLang } from "@/lib/lang";
 import { SecretInput } from "@/components/yaronetic/secret-input";
 import { HumanCheck } from "@/components/yaronetic/human-check";
-import { confirmPasswordCode, requestPasswordCode, sendConfirmCode } from "@/lib/mail/codes";
+import { confirmMailCode, confirmPasswordCode, requestPasswordCode, sendConfirmCode } from "@/lib/mail/codes";
 
 const BEARER_KEY = "grok-auth.bearer-token";
 
@@ -46,9 +46,10 @@ async function keepSession(response: Response) {
   await authClient.getSession();
 }
 
-export function AuthForm({ locked = false }: { locked?: boolean }) {
+export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onComplete?: () => void }) {
   const [mode, setMode] = useState<"up" | "in" | "reset">("up");
   const [step, setStep] = useState<"ask" | "code">("ask");
+  const [verifyEmail, setVerifyEmail] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -97,9 +98,16 @@ export function AuthForm({ locked = false }: { locked?: boolean }) {
         });
         if (error) throw new Error(explain(error));
         await kept;
-        await sendConfirmCode().catch((err: unknown) => {
-          toast.error(err instanceof Error ? err.message : txNow({ ru: "Аккаунт создан, но код на почту не ушёл. Отправьте его из профиля.", en: "The account was created, but the email code did not go out. Send it from the profile.", kk: "Аккаунт ашылды, бірақ поштаға код кетпеді. Оны профильден жіберіңіз." }));
-        });
+        toast.success(txNow({ ru: "Аккаунт создан! Осталось подтвердить почту.", en: "Account created! Verify your email to continue.", kk: "Аккаунт ашылды! Поштаны растаңыз." }));
+        setVerifyEmail(true);
+        setCode("");
+        try {
+          await sendConfirmCode();
+          toast.success(txNow({ ru: "Код подтверждения отправлен на почту.", en: "Verification code sent to your email.", kk: "Растау коды поштаға жіберілді." }));
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "Не удалось отправить код. Нажмите «Отправить ещё раз».");
+        }
+        return;
       } else {
         const { error } = await authClient.signIn.email({
           email: login,
@@ -110,8 +118,10 @@ export function AuthForm({ locked = false }: { locked?: boolean }) {
           },
         });
         if (error) throw new Error(explain(error));
+        await authClient.getSession();
+        toast.success(txNow({ ru: "Вы вошли в аккаунт.", en: "Signed in successfully.", kk: "Аккаунтқа кірдіңіз." }));
+        onComplete?.();
       }
-      await authClient.getSession();
     } catch (err) {
       setProof("");
       setResetKey((value) => value + 1);
@@ -119,6 +129,55 @@ export function AuthForm({ locked = false }: { locked?: boolean }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function verifyCode(event: FormEvent) {
+    event.preventDefault();
+    if (busy || code.trim().length !== 6) return;
+    setBusy(true);
+    try {
+      await confirmMailCode({ data: { code: code.trim() } });
+      await authClient.getSession();
+      toast.success(txNow({ ru: "Почта подтверждена. Добро пожаловать!", en: "Email verified. Welcome!", kk: "Пошта расталды. Қош келдіңіз!" }));
+      setVerifyEmail(false);
+      onComplete?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Неверный или просроченный код");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendVerification() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await sendConfirmCode();
+      toast.success(txNow({ ru: "Новый код отправлен.", en: "A new code was sent.", kk: "Жаңа код жіберілді." }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось отправить код");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (verifyEmail) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="font-serif text-3xl tracking-tight">Подтвердите почту</h2>
+          <p className="mt-2 text-sm text-muted">Аккаунт создан. Мы отправили шестизначный код на <strong className="text-fg">{email.trim().toLowerCase()}</strong>. После подтверждения откроется персонализация.</p>
+        </div>
+        <form className="flex flex-col gap-3" onSubmit={(event) => void verifyCode(event)}>
+          <label className="flex flex-col gap-1 text-xs text-faint">
+            Код из письма
+            <input className="field font-mono text-center text-xl tracking-[0.3em]" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\\D/g, "").slice(0, 6))} />
+          </label>
+          <button type="submit" disabled={busy || code.length !== 6} className="press h-11 rounded-2xl bg-accent text-sm font-medium text-accent-fg disabled:opacity-40">{busy ? "Проверяем…" : "Подтвердить и продолжить"}</button>
+        </form>
+        <button type="button" disabled={busy} className="press h-10 text-sm text-muted disabled:opacity-40" onClick={() => void resendVerification()}>Отправить код ещё раз</button>
+      </div>
+    );
   }
 
   async function sendReset(event: FormEvent) {
