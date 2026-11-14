@@ -120,7 +120,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         holdSplash();
         getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(BG));
         getWindow().getDecorView().setBackgroundColor(BG);
-        setupFullscreen();
+        setupWindowInsets();
         ptr = new PullToRefresh(root, web);
         setupLoader();   // drawn above the WebView and the pull-to-refresh spinner
         progressBar = new View(this);
@@ -292,7 +292,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 root.addView(view, new FrameLayout.LayoutParams(-1, -1));
                 web.setVisibility(View.GONE);
                 setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR);   // let the video rotate even with the system rotation lock on
-                reapplyPadding(); applyBarColors(); hideBars();
+                reapplyPadding(); applyBarColors(); applySystemBars();
             }
             @Override public void onHideCustomView() {
                 if (customView == null) return;
@@ -301,7 +301,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
                 customView = null; web.setVisibility(View.VISIBLE);
                 if (customCb != null) { try { customCb.onCustomViewHidden(); } catch (Exception ignored) {} customCb = null; }
                 setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                reapplyPadding(); applyBarColors(); hideBars();
+                reapplyPadding(); applyBarColors(); applySystemBars();
             }
         });
         web.setDownloadListener((url, ua, cd, mt, len) -> downloads.onDownloadStart(url, ua, cd, mt, len));
@@ -343,7 +343,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         themeColor = c; themeLight = light;
         getSharedPreferences("app", Context.MODE_PRIVATE).edit().putInt("themeColor", c).putBoolean("themeLight", light).apply();
         applyBarColors();
-        if (Build.VERSION.SDK_INT < 30) hideBars();   // re-sets the legacy system-UI flags including the light-icon bits
+        if (Build.VERSION.SDK_INT < 30) applySystemBars();   // re-sets the legacy system-UI flags including the light-icon bits
     }
 
     final android.graphics.drawable.ColorDrawable winBg = new android.graphics.drawable.ColorDrawable(BG);
@@ -383,7 +383,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         return View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | (Build.VERSION.SDK_INT >= 26 ? View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
     }
 
-    void setupFullscreen() {
+    void setupWindowInsets() {
         if (Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams lp = getWindow().getAttributes();
             lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -395,78 +395,39 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         w.setNavigationBarColor(BG);
         if (Build.VERSION.SDK_INT >= 28) w.setNavigationBarDividerColor(BG);
         if (Build.VERSION.SDK_INT >= 29) { w.setStatusBarContrastEnforced(false); w.setNavigationBarContrastEnforced(false); }
-        if (Build.VERSION.SDK_INT >= 30) {
-            w.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN); // legacy flag fights the insets controller when the IME opens
-            w.setDecorFitsSystemWindows(false);
-            WindowInsetsController c = w.getInsetsController();
-            if (c != null) c.setSystemBarsAppearance(0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS);
-            root.setOnApplyWindowInsetsListener((v, ins) -> {
-                boolean imeVis = ins.isVisible(WindowInsets.Type.ime());
-                // Only the keyboard may push content, and only from the bottom. Status/nav bars never add padding.
-                int ime = imeVis ? ins.getInsets(WindowInsets.Type.ime()).bottom : 0;
-                Insets cut = ins.getInsetsIgnoringVisibility(WindowInsets.Type.displayCutout());
-                // When the IME forces the status bar visible, pad the top by its height so the
-                // page is pushed below it and the strip shows the dark root background, not a white bar.
-                int top = cut.top;
-                if (ins.isVisible(WindowInsets.Type.statusBars()))
-                    top = Math.max(top, ins.getInsets(WindowInsets.Type.statusBars()).top);
-                setRootPadding(cut.left, top, cut.right, ime);
-                applyBarColors();
-                boolean changed = (ime > 0) != (imeBottom > 0); imeBottom = ime;
-                postKeyboard(ime);
-                if (changed) reHideBars();   // the IME reveals the bars on many devices -> hide again, both on open and close
-                else if (ins.isVisible(WindowInsets.Type.statusBars())) { ui.removeCallbacks(hideBarsR); ui.postDelayed(hideBarsR, 2500); }
-                return WindowInsets.CONSUMED;
-            });
-        } else {
-            root.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
-                Rect r = new Rect();
-                root.getWindowVisibleDisplayFrame(r);
-                int h = root.getRootView().getHeight();
-                int ime = h - r.bottom; if (ime < h / 6) ime = 0;
-                int cut = 0;
-                if (Build.VERSION.SDK_INT >= 28 && root.getRootWindowInsets() != null && root.getRootWindowInsets().getDisplayCutout() != null)
-                    cut = root.getRootWindowInsets().getDisplayCutout().getSafeInsetTop();
-                int topPad = cut;
-                if (ime > 0) {
-                    int sb = 0, resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
-                    if (resId > 0) sb = getResources().getDimensionPixelSize(resId);
-                    topPad = Math.max(cut, sb);   // keyboard open: keep the status-bar strip dark
-                }
-                if (ime != imeBottom || cut != cutTop) {
-                    boolean wasOpen = imeBottom > 0; imeBottom = ime; cutTop = cut;
-                    postKeyboard(ime);
-                    setRootPadding(0, topPad, 0, ime);   // top = cutout / status bar, bottom = keyboard only
-                    applyBarColors();
-                    if (wasOpen != (ime > 0)) reHideBars();
-                }
-            });
-            getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(vis -> {
-                if ((vis & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0) { ui.removeCallbacks(hideBarsR); ui.postDelayed(hideBarsR, 600); }
-            });
-        }
-        hideBars();
+        w.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(w, false);
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root, (v, ins) -> {
+            androidx.core.graphics.Insets safe = ins.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+            int ime = ins.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())
+                ? ins.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom : 0;
+            // Fit the native view once. React's viewport is already the remaining usable area.
+            setRootPadding(safe.left, safe.top, safe.right, Math.max(safe.bottom, ime));
+            imeBottom = ime;
+            postKeyboard(ime);
+            applyBarColors();
+            return androidx.core.view.WindowInsetsCompat.CONSUMED;
+        });
+        androidx.core.view.ViewCompat.requestApplyInsets(root);
+        applySystemBars();
     }
 
-    final Runnable hideBarsR = this::hideBars;
-    void reHideBars() { ui.removeCallbacks(hideBarsR); ui.post(hideBarsR); ui.postDelayed(hideBarsR, 350); }
+    final Runnable systemBarsR = this::applySystemBars;
+    void refreshSystemBars() { ui.removeCallbacks(systemBarsR); ui.post(systemBarsR); ui.postDelayed(systemBarsR, 350); }
 
-    void hideBars() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController c = getWindow().getInsetsController();
-            if (c != null) {
-                c.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-            }
-        } else {
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | lightFlags());
-        }
+    /** Only fullscreen video hides system controls. Chat always respects status/navigation bars. */
+    void applySystemBars() {
+        androidx.core.view.WindowInsetsControllerCompat controller =
+            androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (customView != null) {
+            controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+            controller.setSystemBarsBehavior(androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        } else controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars());
     }
 
-    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) hideBars(); }
+    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) applySystemBars(); }
 
     // ---------- tablet support (2.9.2) ----------
     /** Physical device class: the shorter side of the whole display is >= 600 dp. Independent of rotation and of split-screen, so it is stable for the process. */
@@ -496,7 +457,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
     @Override public void onConfigurationChanged(android.content.res.Configuration nc) {
         super.onConfigurationChanged(nc);
         if (web != null && trustedPage) web.evaluateJavascript("window.__vvScreen&&window.__vvScreen(" + screenJson() + ")", null);
-        hideBars();
+        applySystemBars();
     }
 
     // ---------- launch loader (copy of the site's .vv-loader, bundled in assets/loader) ----------
@@ -729,7 +690,7 @@ public class MainActivity extends androidx.activity.ComponentActivity {
         CookieManager.getInstance().flush();
     }
     @Override protected void onResume() {
-        super.onResume(); resumed = true; web.onResume(); webPaused = false; applyBarColors(); hideBars(); if (updater != null) updater.onResume();
+        super.onResume(); resumed = true; web.onResume(); webPaused = false; applyBarColors(); applySystemBars(); if (updater != null) updater.onResume();
         emitNotificationState();
         NativePlayer.onAppResumed();
         Widgets.refreshOnResume(this);
