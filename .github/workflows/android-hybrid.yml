@@ -1,0 +1,48 @@
+name: Android hybrid debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [uiux-polish-3.0.1]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-hybrid.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-hybrid.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check Android source tree
+        run: |
+          test -f settings.gradle
+          test -f app/build.gradle
+          test -f gradle/wrapper/gradle-wrapper.jar
+          test -f gradlew
+      - name: Build unsigned-for-release debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vvvion-space-3.0.1-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
