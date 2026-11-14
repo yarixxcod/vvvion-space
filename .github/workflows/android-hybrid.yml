@@ -1,0 +1,97 @@
+name: Android hybrid APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [uiux-polish-3.0.1]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-hybrid.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/android-hybrid.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify source tree
+        shell: bash
+        run: |
+          test -f settings.gradle
+          test -f app/build.gradle
+          test -f gradle/wrapper/gradle-wrapper.jar
+          test -f gradlew
+      - name: Assemble debug APK
+        shell: bash
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vvvion-space-3.0.1-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Check release signing configuration
+        if: github.event_name == 'workflow_dispatch'
+        id: signing
+        env:
+          VV_KEYSTORE_B64: ${{ secrets.VV_KEYSTORE_B64 }}
+          VV_STORE_PASS: ${{ secrets.VV_STORE_PASS }}
+          VV_KEY_ALIAS: ${{ secrets.VV_KEY_ALIAS }}
+          VV_KEY_PASS: ${{ secrets.VV_KEY_PASS }}
+        shell: bash
+        run: |
+          if [[ -n "$VV_KEYSTORE_B64" && -n "$VV_STORE_PASS" && -n "$VV_KEY_ALIAS" && -n "$VV_KEY_PASS" ]]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo 'Release signing secrets incomplete; debug artifact only.'
+          fi
+      - name: Prepare release keystore
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          VV_KEYSTORE_B64: ${{ secrets.VV_KEYSTORE_B64 }}
+        shell: bash
+        run: |
+          umask 077
+          printf '%s' "$VV_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/vvvion-release.keystore"
+          test -s "$RUNNER_TEMP/vvvion-release.keystore"
+      - name: Assemble signed release APK
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          VV_KEYSTORE: ${{ runner.temp }}/vvvion-release.keystore
+          VV_STORE_PASS: ${{ secrets.VV_STORE_PASS }}
+          VV_KEY_ALIAS: ${{ secrets.VV_KEY_ALIAS }}
+          VV_KEY_PASS: ${{ secrets.VV_KEY_PASS }}
+        shell: bash
+        run: ./gradlew --no-daemon :app:assembleRelease
+      - name: Upload signed release APK
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vvvion-space-3.0.1-signed-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove temporary signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/vvvion-release.keystore"

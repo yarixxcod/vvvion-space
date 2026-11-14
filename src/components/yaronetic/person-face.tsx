@@ -56,16 +56,16 @@ export function PersonFace({
   size?: number;
   userId?: string | null;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const { admin, premium } = useFaceMarks(userId);
   const letter = (name.trim()[0] || "?").toUpperCase();
   const face =
-    !image || failed ? (
+    !image || image === failedSrc ? (
       <span className="person-letter" style={{ width: size, height: size, fontSize: Math.max(11, Math.round(size * 0.46)) }} aria-hidden="true">
         {letter}
       </span>
     ) : (
-      <img src={image} alt="" className="person-photo" style={{ width: size, height: size }} onError={() => setFailed(true)} />
+      <img src={image} alt="" className="person-photo" style={{ width: size, height: size }} onError={() => setFailedSrc(image)} />
     );
   if (!admin && !premium) return face;
   const tiny = size < 26;

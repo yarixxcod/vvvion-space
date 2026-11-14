@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PurchaseSheet } from "@/components/yaronetic/purchase-sheet";
 import { fmtRubApprox } from "@/lib/pay/format";
@@ -12,13 +12,24 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
   const [handle, setHandle] = useState("");
   const [note, setNote] = useState("");
   const [found, setFound] = useState<string | null>(null);
+  const [verifiedHandle, setVerifiedHandle] = useState<string | null>(null);
+  const [lookupState, setLookupState] = useState<"idle" | "checking" | "found" | "missing" | "error">("idle");
   const [pick, setPick] = useState<GiftItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
+  const [deskState, setDeskState] = useState<"loading" | "ready" | "error">("loading");
 
   async function load() {
-    const desk = await getGiftDesk();
-    setGifts(desk.gifts);
-    setInbox(desk.inbox);
+    setDeskState("loading");
+    try {
+      const desk = await getGiftDesk();
+      setGifts(desk.gifts);
+      setInbox(desk.inbox);
+      setDeskState("ready");
+    } catch (error) {
+      setDeskState("error");
+      throw error;
+    }
   }
 
   useEffect(() => {
@@ -27,16 +38,36 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
 
   useEffect(() => {
     const raw = handle.trim().replace(/^@/, "");
-    if (raw.length < 3) {
-      setFound(null);
-      return;
-    }
+    let active = true;
+
+    // Never leave a previous recipient selected while a new handle is checked.
+    setFound(null);
+    setVerifiedHandle(null);
+    setLookupState(raw.length < 3 ? "idle" : "checking");
+    if (raw.length < 3) return;
+
     const timer = window.setTimeout(() => {
       void lookupHandle({ data: { handle: raw } })
-        .then((hit) => setFound(hit ? hit.name : null))
-        .catch(() => setFound(null));
+        .then((hit) => {
+          if (active) {
+            setFound(hit ? hit.name : null);
+            setVerifiedHandle(hit ? raw : null);
+            setLookupState(hit ? "found" : "missing");
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setFound(null);
+            setVerifiedHandle(null);
+            setLookupState("error");
+          }
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [handle]);
 
   return (
@@ -48,24 +79,41 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           className="field mt-3"
           value={handle}
           placeholder="@username"
+          aria-label="Юзернейм получателя"
+          aria-describedby="gift-recipient-status"
           maxLength={21}
           onChange={(event) => setHandle(event.target.value.toLowerCase())}
         />
-        <p className="mt-1 min-h-5 text-xs text-muted">{found ? `Это ${found}` : handle.trim().length >= 3 ? "Такого юзернейма нет" : ""}</p>
+        <p id="gift-recipient-status" role="status" aria-live="polite" className="mt-1 min-h-5 text-xs text-muted">{lookupState === "checking" ? "Проверяем юзернейм…" : lookupState === "found" && found ? `Это ${found}` : lookupState === "missing" ? "Такого юзернейма нет" : lookupState === "error" ? "Не удалось проверить юзернейм. Попробуйте ещё раз." : ""}</p>
         <label className="mt-2 block text-xs text-faint">
           Записка, необязательно
           <input className="field mt-1" value={note} maxLength={80} onChange={(event) => setNote(event.target.value)} />
         </label>
       </section>
-      <ul className="grid gap-2 sm:grid-cols-2">
+      {deskState === "loading" && gifts.length === 0 ? (
+        <div role="status" className="grid gap-2 sm:grid-cols-2" aria-label="Загружаем подарки">
+          {[0, 1, 2, 3].map((item) => <div key={item} className="h-36 animate-pulse rounded-3xl border border-line bg-subtle motion-reduce:animate-none" />)}
+        </div>
+      ) : null}
+      {deskState === "error" ? (
+        <div role="alert" className="rounded-2xl border border-line bg-elev p-4 text-sm">
+          <p>Не удалось загрузить подарки. Проверьте соединение.</p>
+          <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4" onClick={() => void load().catch(() => undefined)}>Повторить</button>
+        </div>
+      ) : null}
+      {deskState === "ready" && gifts.length === 0 ? (
+        <p role="status" className="rounded-2xl border border-line bg-elev px-4 py-6 text-center text-sm text-muted">Подарки пока недоступны.</p>
+      ) : null}
+      <ul className="grid gap-3 sm:grid-cols-2">
         {gifts.map((gift) => (
-          <li key={gift.sku} className="rounded-3xl border border-line bg-elev px-4 py-4">
+          <li key={gift.sku} className="group flex min-h-52 flex-col rounded-3xl border border-line bg-elev px-4 py-4 transition-[border-color,box-shadow,transform] duration-200 hover:border-line-strong hover:shadow-[var(--shadow)] motion-reduce:transform-none">
+            <div className="mb-3 flex items-center justify-between gap-3"><span aria-hidden="true" className="grid size-11 place-items-center rounded-2xl border border-line bg-subtle text-xl">🎁</span><span className="text-[11px] font-medium tracking-widest text-faint uppercase">VVVION</span></div>
             <p className="font-serif text-2xl tracking-tight">{gift.title}</p>
             <p className="mt-1 text-sm text-muted">{gift.note}</p>
-            <p className="mt-3 font-serif text-xl tabular-nums">
+            <p className="mt-auto pt-4 font-serif text-xl tabular-nums">
               {gift.price.toLocaleString("ru-RU")} вуб. · {fmtRubApprox(gift.price)}
             </p>
-            <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line-strong px-3 text-sm" onClick={() => setPick(gift)}>
+            <button type="button" className="press mt-3 min-h-11 w-full rounded-2xl border border-line-strong px-3 text-sm font-medium transition-colors hover:bg-subtle" onClick={() => setPick(gift)}>
               Подарить
             </button>
           </li>
@@ -76,10 +124,13 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           <p className="text-xs tracking-[0.22em] text-faint">ВАМ ПОДАРИЛИ</p>
           <ul className="mt-2 space-y-2">
             {inbox.map((item) => (
-              <li key={item.id} className="text-sm">
-                <span className="font-medium">{item.title}</span>
-                <span className="text-muted"> · {item.fromHandle ? `@${item.fromHandle}` : item.fromName}</span>
-                {item.note ? <span className="mt-0.5 block text-xs text-faint">{item.note}</span> : null}
+              <li key={item.id} className="flex gap-3 rounded-2xl border border-line bg-elev p-3 text-sm">
+                <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-subtle">🎁</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{item.title}</p>
+                  <p className="break-words text-xs text-muted">{item.fromHandle ? `@${item.fromHandle}` : item.fromName}</p>
+                  {item.note ? <p className="mt-1 break-words text-xs text-faint">{item.note}</p> : null}
+                </div>
               </li>
             ))}
           </ul>
@@ -88,27 +139,29 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
       <PurchaseSheet
         open={Boolean(pick)}
         title={pick ? `Подарок «${pick.title}»` : "Подарок"}
-        detail={found ? `Получит ${found}. Спишется с вашей карты.` : "Укажите существующий юзернейм."}
+        detail={found && verifiedHandle === handle.trim().replace(/^@/, "") ? `Получит ${found}. Спишется с вашей карты.` : "Укажите существующий юзернейм."}
         price={pick?.price ?? 0}
         balance={balance}
         busy={busy}
-        onClose={() => setPick(null)}
+        onClose={() => { if (!sending.current) setPick(null); }}
         onTopup={(missing) => {
+          if (sending.current) return;
           setPick(null);
           onNeed(missing);
         }}
         onConfirm={() => {
-          if (!pick || busy) return;
+          if (!pick || sending.current) return;
           if (!verified) {
             toast.error("Сначала подтвердите почту");
             return;
           }
-          if (!found) {
+          if (!found || !verifiedHandle || verifiedHandle !== handle.trim().replace(/^@/, "")) {
             toast.error("Сначала найдите человека по юзернейму");
             return;
           }
+          sending.current = true;
           setBusy(true);
-          void sendGift({ data: { sku: pick.sku, handle, note, idempotencyKey: crypto.randomUUID() } })
+          void sendGift({ data: { sku: pick.sku, handle: verifiedHandle, note, idempotencyKey: crypto.randomUUID() } })
             .then(() => {
               haptic("success");
               toast("Подарок отправлен");
@@ -121,7 +174,10 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
               haptic("error");
               toast.error(err instanceof Error ? err.message : "Не отправилось");
             })
-            .finally(() => setBusy(false));
+            .finally(() => {
+              sending.current = false;
+              setBusy(false);
+            });
         }}
       />
     </div>

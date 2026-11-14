@@ -45,6 +45,10 @@ export function ModelMenu({
   }, []);
 
   useEffect(() => {
+    if (open) setQuery("");
+  }, [open]);
+
+  useEffect(() => {
     if (!open || narrow) return;
     function onDoc(event: PointerEvent) {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
@@ -56,11 +60,16 @@ export function ModelMenu({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        root.current?.querySelector<HTMLElement>("button")?.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
+    const search = listRef.current?.querySelector<HTMLInputElement>("input[aria-label='Найти модель']");
     const picked = listRef.current?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ?? listRef.current?.querySelector<HTMLElement>("[role='option']");
-    picked?.focus();
+    (search ?? picked)?.focus();
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
@@ -105,7 +114,16 @@ export function ModelMenu({
           placeholder="Найти модель"
           className="mb-1 h-10 w-full rounded-xl border border-line-strong bg-bg px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           aria-label="Найти модель"
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              listRef.current?.querySelector<HTMLElement>("[role='option']")?.focus();
+            }
+          }}
         />
+      ) : null}
+      {shown.length === 0 ? (
+        <p className="px-3 py-4 text-center text-sm text-muted" role="status">Модели не найдены</p>
       ) : null}
       {shown.map((item) => {
         const selected = item.value === current.value;
@@ -184,7 +202,7 @@ export function ModelMenu({
         <ChevronDown className={cn("size-4 shrink-0 text-muted transition", open && "rotate-180")} />
       </button>
       {open && !narrow ? (
-        <div className="absolute bottom-full left-0 z-30 mb-1 max-h-80 w-max min-w-[16rem] max-w-[80vw] overflow-y-auto rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
+        <div className="vv-enter absolute bottom-full left-0 z-30 mb-1 max-h-80 w-max min-w-[16rem] max-w-[80vw] overflow-y-auto rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
           {list}
         </div>
       ) : null}
@@ -192,7 +210,7 @@ export function ModelMenu({
         ? createPortal(
             <div className="fixed inset-0 z-[80] flex items-end bg-black/45" onClick={() => setOpen(false)}>
               <div
-                className="w-full rounded-t-3xl border border-line bg-elev px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
+                className="vv-enter w-full rounded-t-3xl border border-line bg-elev px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
                 onClick={(event) => event.stopPropagation()}
               >
                 <div

@@ -1,0 +1,13 @@
+.gradle/
+**/build/
+.idea/
+*.iml
+local.properties
+*.log
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+signing.properties
+app/google-services.json

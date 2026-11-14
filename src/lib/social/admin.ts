@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getSql } from "@/lib/db";
+import { getSql, withTransaction } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { assertAdmin, loadAccess, type Access } from "@/lib/social/access";
 import { grantPremium, revokePremium } from "@/lib/social/premium";
@@ -338,6 +338,49 @@ export const listMembers = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<MemberRow[]> => {
     await assertAdmin(context.userId);
+    return readMembers();
+  });
+
+/** Admin-only wallet adjustment. A unique ledger entry is written in the same transaction. */
+export const grantMemberVubli = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => {
+    if (!input || typeof input !== "object") throw new Error("Некорректные данные");
+    const raw = input as { id?: unknown; amount?: unknown; reason?: unknown };
+    const amount = Number(raw.amount);
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 100_000) {
+      throw new Error("Можно начислить от 1 до 100 000 Вубли");
+    }
+    const reason = typeof raw.reason === "string" ? raw.reason.trim().slice(0, 180) : "";
+    if (!reason) throw new Error("Укажите причину начисления");
+    return { id: asId(raw.id), amount, reason };
+  })
+  .handler(async ({ context, data }): Promise<MemberRow[]> => {
+    await assertAdmin(context.userId);
+    await withTransaction(async (sql) => {
+      const target = await sql<{ id: string }>`select id from "user" where id = ${data.id}`;
+      if (!target.length) throw new Error("Участник не найден");
+      await sql`
+        insert into wallets (user_id, balance, last_grant_at)
+        values (${data.id}, 0, now()) on conflict (user_id) do nothing
+      `;
+      const updated = await sql<{ balance: number }>`
+        update wallets set balance = balance + ${data.amount}, earned = earned + ${data.amount}
+        where user_id = ${data.id} and balance <= 2147483647 - ${data.amount}
+          and earned <= 2147483647 - ${data.amount}
+        returning balance
+      `;
+      if (!updated.length) throw new Error("Превышен допустимый баланс");
+      const entryId = crypto.randomUUID();
+      await sql`
+        insert into wallet_ledger
+          (id, user_id, kind, bucket, amount, balance_after, ref_type, ref_id, idem_key, meta)
+        values
+          (${entryId}, ${data.id}, 'adjust', 'earned', ${data.amount}, ${updated[0].balance},
+           'admin_grant', ${context.userId}, ${entryId},
+           jsonb_build_object('reason', ${data.reason}, 'admin_id', ${context.userId}))
+      `;
+    });
     return readMembers();
   });
 

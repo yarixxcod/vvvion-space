@@ -66,9 +66,19 @@ export function Composer({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "0px";
-    const cap = Math.min(200, window.innerHeight * 0.3);
-    el.style.height = `${Math.min(el.scrollHeight, cap)}px`;
+    const resize = () => {
+      el.style.height = "0px";
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const cap = Math.min(200, viewportHeight * 0.3);
+      el.style.height = `${Math.min(el.scrollHeight, cap)}px`;
+    };
+    resize();
+    window.visualViewport?.addEventListener("resize", resize);
+    window.addEventListener("resize", resize);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", resize);
+      window.removeEventListener("resize", resize);
+    };
   }, [value]);
 
   function fire() {
@@ -85,7 +95,7 @@ export function Composer({
 
   return (
     <form
-      className="rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] focus-within:border-accent"
+      className="rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent"
       onSubmit={(event) => {
         event.preventDefault();
         fire();
@@ -154,6 +164,11 @@ export function Composer({
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            if (event.key === "Escape" && more) {
+              event.preventDefault();
+              setMore(false);
+              return;
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               fire();
@@ -427,11 +442,18 @@ function ToolRow({
 
 function MoreSheet({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   const [node, setNode] = useState<HTMLElement | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const startY = useRef(0);
   const startX = useRef(0);
   const startT = useRef(0);
   const dragging = useRef(false);
   useEffect(() => setNode(document.body), []);
+  useEffect(() => {
+    if (!node) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    sheetRef.current?.querySelector<HTMLElement>("button")?.focus();
+    return () => previous?.focus();
+  }, [node]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -443,10 +465,11 @@ function MoreSheet({ onClose, children }: { onClose: () => void; children: React
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-end bg-black/50 lg:hidden" onClick={onClose}>
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label="Ещё"
-        className="relative max-h-[min(80dvh,32rem)] w-full overflow-y-auto rounded-t-3xl border-t border-line bg-elev px-2 pt-2 pb-[max(0.85rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
+        className="vv-enter relative max-h-[min(80dvh,32rem)] w-full overflow-y-auto rounded-t-3xl border-t border-line bg-elev px-2 pt-2 pb-[max(0.85rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div
