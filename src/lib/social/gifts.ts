@@ -33,7 +33,6 @@ export const getGiftDesk = createServerFn({ method: "GET" })
       left join shop_prices p on p.sku = g.sku
       where g.to_id = ${context.userId} and g.sold_at is null
       order by g.created_at desc
-      limit 30
     `;
     return {
       gifts: gifts.map((item) => ({ ...item, price: Number(item.price) })),
