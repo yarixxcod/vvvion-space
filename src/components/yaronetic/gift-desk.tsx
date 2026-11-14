@@ -6,6 +6,45 @@ import { getGiftDesk, sendGift, type GiftInboxItem, type GiftItem } from "@/lib/
 import { lookupHandle } from "@/lib/social/handles";
 import { haptic } from "@/lib/haptic";
 
+const GIFT_ART: Record<string, { glyph: string; from: string; to: string }> = {
+  rose: { glyph: "🌹", from: "#7533a5", to: "#1b1438" },
+  coffee: { glyph: "☕", from: "#8c5b45", to: "#241628" },
+  chocolate: { glyph: "🍫", from: "#90546d", to: "#241326" },
+  star: { glyph: "🌟", from: "#a47b32", to: "#21152e" },
+  heart: { glyph: "💜", from: "#9b52c9", to: "#261344" },
+  teddy: { glyph: "🧸", from: "#aa7796", to: "#2c1c38" },
+  bouquet: { glyph: "💐", from: "#b458aa", to: "#291735" },
+  butterfly: { glyph: "🦋", from: "#5779cf", to: "#1b1744" },
+  moon: { glyph: "🌙", from: "#6378c5", to: "#10182e" },
+  crystal: { glyph: "🔮", from: "#7463d6", to: "#20143c" },
+  planet: { glyph: "🪐", from: "#6964b8", to: "#17163a" },
+  rocket: { glyph: "🚀", from: "#7254c9", to: "#19143a" },
+  ring: { glyph: "💍", from: "#a67bc9", to: "#24183b" },
+  cat: { glyph: "🐈", from: "#7b5fc0", to: "#20152e" },
+  music: { glyph: "🎼", from: "#8c5ca8", to: "#21162f" },
+  trophy: { glyph: "🏆", from: "#a98b42", to: "#251b28" },
+  crown: { glyph: "👑", from: "#a17b3e", to: "#25182f" },
+  diamond: { glyph: "💎", from: "#5d93c6", to: "#151e40" },
+  phoenix: { glyph: "🔥", from: "#b54c81", to: "#2c132c" },
+  galaxy: { glyph: "🌌", from: "#7457b8", to: "#10152e" },
+  comet: { glyph: "☄️", from: "#9366bc", to: "#171535" },
+  castle: { glyph: "🏰", from: "#7c76bb", to: "#191735" },
+  dragon: { glyph: "🐉", from: "#9e578d", to: "#25132e" },
+  universe: { glyph: "✨", from: "#6c63d5", to: "#12112e" },
+};
+
+function GiftArt({ sku, compact = false }: { sku: string; compact?: boolean }) {
+  const art = GIFT_ART[sku.replace(/^gift:/, "")] ?? { glyph: "🎁", from: "#6951a1", to: "#1c1734" };
+  return (
+    <span aria-hidden="true" className={`relative grid shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/10 shadow-inner ${compact ? "size-12 text-2xl" : "size-20 text-4xl"}`}
+      style={{ background: `radial-gradient(circle at 30% 22%, ${art.from}, ${art.to} 76%)` }}>
+      <span className="absolute left-2 top-1 text-xs text-white/60">✦</span>
+      <span className="drop-shadow-[0_5px_9px_rgba(0,0,0,.35)]">{art.glyph}</span>
+      <span className="absolute bottom-1 right-2 text-xs text-white/40">✧</span>
+    </span>
+  );
+}
+
 export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: number; verified: boolean; onDone: () => void; onNeed: (missing: number) => void }) {
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [inbox, setInbox] = useState<GiftInboxItem[]>([]);
@@ -107,7 +146,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
       <ul className="grid gap-3 sm:grid-cols-2">
         {gifts.map((gift) => (
           <li key={gift.sku} className="group flex min-h-52 flex-col rounded-3xl border border-line bg-elev px-4 py-4 transition-[border-color,box-shadow,transform] duration-200 hover:border-line-strong hover:shadow-[var(--shadow)] motion-reduce:transform-none">
-            <div className="mb-3 flex items-center justify-between gap-3"><span aria-hidden="true" className="grid size-11 place-items-center rounded-2xl border border-line bg-subtle text-xl">🎁</span><span className="text-[11px] font-medium tracking-widest text-faint uppercase">VVVION</span></div>
+            <div className="mb-3 flex items-center justify-between gap-3"><GiftArt sku={gift.sku} /><span className="text-[11px] font-medium tracking-widest text-faint uppercase">VVVION</span></div>
             <p className="font-serif text-2xl tracking-tight">{gift.title}</p>
             <p className="mt-1 text-sm text-muted">{gift.note}</p>
             <p className="mt-auto pt-4 font-serif text-xl tabular-nums">
@@ -125,7 +164,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           <ul className="mt-2 space-y-2">
             {inbox.map((item) => (
               <li key={item.id} className="flex gap-3 rounded-2xl border border-line bg-elev p-3 text-sm">
-                <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-subtle">🎁</span>
+                <GiftArt sku={item.sku} compact />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{item.title}</p>
                   <p className="break-words text-xs text-muted">{item.fromHandle ? `@${item.fromHandle}` : item.fromName}</p>
