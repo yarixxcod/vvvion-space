@@ -631,8 +631,10 @@ export function App({
         </main>
       </div>
       </div>
-      {studio.needAccount ? <AccountGate /> : null}
-      {circle ? (
+      {studio.needAccount && !(circle && !user) ? <AccountGate /> : null}
+      {circle && !isPending && !user ? (
+        <SignInSheet onClose={closeCircle} />
+      ) : circle ? (
         <>
           <button type="button" className="fixed inset-0 z-30 bg-black/45 xl:hidden" aria-label={ui(lang, "closeCircle")} onClick={closeCircle} />
           <aside role="dialog" aria-modal="true" aria-label={ui(lang, "circle")} data-circle className="fixed inset-0 z-40 flex w-full flex-col bg-elev md:inset-y-0 md:right-0 md:left-auto md:w-[min(100%,52rem)] md:border-l md:border-line md:shadow-[var(--shadow)] xl:inset-0 xl:w-full xl:border-0">
@@ -842,17 +844,7 @@ function MobileModel({ studio, fieldId = "model-mobile", plain = false }: { stud
 
 function AccountGate() {
   const lang = useLang();
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  useEffect(() => setNode(document.body), []);
-  if (!node) return null;
-  return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label={ui(lang, "needAccount")}>
-      <div className="max-h-[min(100dvh-1.5rem,40rem)] w-full max-w-md overflow-y-auto rounded-3xl border border-line bg-elev p-4 shadow-[var(--shadow)]">
-        <AuthForm locked />
-      </div>
-    </div>,
-    node,
-  );
+  return <SignInSheet locked onClose={() => undefined} label={ui(lang, "needAccount")} />;
 }
 
 function EmptyChat({
@@ -878,7 +870,7 @@ function EmptyChat({
         {suggestions.length === 0 ? (
           <p className="mt-8 text-sm text-faint">{ui(lang, "gathering")}</p>
         ) : (
-          <div className="snap-row mt-8 flex w-full gap-2 overflow-x-auto pb-1">
+          <div className="mt-8 flex w-full min-w-0 gap-2 overflow-x-auto pr-6 pb-2 pl-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {suggestions.slice(0, 4).map((item, index) => (
               <button
                 key={`${item.title}-${index}`}
@@ -1023,11 +1015,13 @@ function KeysSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function SignInSheet({ onClose }: { onClose: () => void }) {
+function SignInSheet({ onClose, locked = false, label }: { onClose: () => void; locked?: boolean; label?: string }) {
   const lang = useLang();
   return (
-    <SheetFrame label={ui(lang, "signIn")} onClose={onClose}>
-      <AuthForm />
+    <SheetFrame label={label || ui(lang, "signIn")} onClose={locked ? () => undefined : onClose}>
+      <div className="max-h-[min(100dvh-2.5rem,40rem)] overflow-y-auto px-1 pb-1">
+        <AuthForm locked={locked} />
+      </div>
     </SheetFrame>
   );
 }

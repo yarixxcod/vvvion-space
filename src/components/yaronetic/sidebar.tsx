@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { Download, FileJson, MoreHorizontal, Pencil, Pin, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -328,6 +329,17 @@ export function Sidebar({
             ))
           )}
         </div>
+        <div className="shrink-0 border-t border-line p-3">
+          <button
+            type="button"
+            disabled={chats.length === 0}
+            className="press flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-line text-sm text-danger disabled:opacity-40"
+            onClick={() => setPendingAll(true)}
+          >
+            <Trash2 className="size-4" />
+            {ui(lang, "deleteAll")}
+          </button>
+        </div>
       </aside>
 
       <AlertDialog.Root
@@ -498,34 +510,84 @@ function HistoryItem({
           </button>
           <button
             type="button"
+            data-no-swipe
             className="press inline-flex size-8 items-center justify-center rounded-lg text-faint hover:bg-bg hover:text-fg"
             aria-label="Ещё"
             aria-expanded={menu}
-            onClick={() => setMenu((value) => !value)}
+            onClick={(event) => {
+              event.stopPropagation();
+              setMenu(true);
+            }}
           >
             <MoreHorizontal className="size-3.5" />
           </button>
-          {menu ? (
-            <div className="absolute top-10 right-1 z-20 w-44 rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
-              <button type="button" className="press flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm" onClick={() => { setMenu(false); onStartEdit(); }}>
-                <Pencil className="size-3.5" /> {ui(lang, "rename")}
-              </button>
-              <button type="button" className="press flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm" onClick={() => { setMenu(false); exportChat(chat, "md"); }}>
-                <Download className="size-3.5" /> {ui(lang, "downloadMd")}
-              </button>
-              <button type="button" className="press flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm" onClick={() => { setMenu(false); exportChat(chat, "json"); }}>
-                <FileJson className="size-3.5" /> {ui(lang, "downloadJson")}
-              </button>
-              <button type="button" className="press flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm" onClick={() => { setMenu(false); onPin(); }}>
-                <Pin className="size-3.5" /> {pinned ? (lang === "en" ? "Unpin" : "Открепить") : lang === "en" ? "Pin" : "Закрепить"}
-              </button>
-              <button type="button" className="press flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm text-danger" onClick={() => { setMenu(false); onAskDelete(); }}>
-                <Trash2 className="size-3.5" /> {ui(lang, "delete")}
-              </button>
-            </div>
-          ) : null}
+          {menu ? <ChatMenu lang={lang} pinned={pinned} onClose={() => setMenu(false)} onStartEdit={onStartEdit} onPin={onPin} onAskDelete={onAskDelete} chat={chat} /> : null}
         </div>
       )}
     </li>
+  );
+}
+
+function ChatMenu({
+  chat,
+  lang,
+  pinned,
+  onClose,
+  onStartEdit,
+  onPin,
+  onAskDelete,
+}: {
+  chat: Chat;
+  lang: Lang;
+  pinned: boolean;
+  onClose: () => void;
+  onStartEdit: () => void;
+  onPin: () => void;
+  onAskDelete: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (typeof document === "undefined") return null;
+  const pinLabel = pinned ? (lang === "en" ? "Unpin" : "Открепить") : lang === "en" ? "Pin" : "Закрепить";
+  const rows: { label: string; icon: ReactNode; danger?: boolean; run: () => void }[] = [
+    { label: ui(lang, "rename"), icon: <Pencil className="size-4" />, run: onStartEdit },
+    { label: ui(lang, "downloadMd"), icon: <Download className="size-4" />, run: () => exportChat(chat, "md") },
+    { label: ui(lang, "downloadJson"), icon: <FileJson className="size-4" />, run: () => exportChat(chat, "json") },
+    { label: pinLabel, icon: <Pin className="size-4" />, run: onPin },
+    { label: ui(lang, "delete"), icon: <Trash2 className="size-4" />, danger: true, run: onAskDelete },
+  ];
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 sm:items-center sm:p-4" role="presentation" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={chat.title}
+        className="w-full max-w-md rounded-t-3xl border border-line bg-elev px-3 pt-2 pb-[max(0.85rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)] sm:rounded-3xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+        <p className="truncate px-2 pb-2 text-sm font-medium">{chat.title}</p>
+        {rows.map((row) => (
+          <button
+            key={row.label}
+            type="button"
+            className={cn("press flex min-h-12 w-full items-center gap-3 rounded-2xl px-2 text-left text-sm", row.danger && "text-danger")}
+            onClick={() => {
+              onClose();
+              row.run();
+            }}
+          >
+            {row.icon}
+            {row.label}
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body,
   );
 }

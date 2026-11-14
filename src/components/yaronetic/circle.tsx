@@ -57,18 +57,15 @@ export function Circle({
 
   if (!user) {
     return (
-      <div className="h-full overflow-y-auto p-4">
-        {onClose ? (
+      <div className="flex h-full items-end bg-black/55 sm:items-center sm:justify-center sm:p-4">
+        <div className="max-h-full w-full max-w-md overflow-y-auto rounded-t-3xl border border-line bg-elev px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)] sm:rounded-3xl sm:pb-4">
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
           <div className="mb-3 flex items-center justify-between gap-2">
             <Wordmark />
-            <ToChat onClick={onClose} />
+            {onClose ? <ToChat onClick={onClose} /> : null}
           </div>
-        ) : (
-          <div className="mb-3">
-            <Wordmark />
-          </div>
-        )}
-        <AuthForm />
+          <AuthForm />
+        </div>
       </div>
     );
   }

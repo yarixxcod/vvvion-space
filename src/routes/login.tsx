@@ -30,9 +30,10 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
   return (
-    <main className="grid min-h-dvh place-items-center bg-bg px-6 py-10 text-fg">
-      <div className="w-full max-w-sm rounded-3xl border border-line bg-elev p-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
+    <main className="flex min-h-dvh items-end justify-center bg-bg sm:items-center sm:p-4">
+      <div className="w-full max-w-md rounded-t-3xl border border-line bg-elev px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)] sm:rounded-3xl sm:pb-4">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+        <div className="mb-4 flex items-center justify-between gap-3 px-1">
           <Wordmark large />
           <LangSwitch compact />
         </div>
