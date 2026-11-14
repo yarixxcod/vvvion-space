@@ -31,6 +31,7 @@ import { haptic } from "@/lib/haptic";
 import { getTelegramLink, startTelegramLink, stopTelegramLink, type TelegramLinkState } from "@/lib/social/telegram";
 import { getAchievements, type AchievementItem } from "@/lib/social/achievements";
 import { PushSettingsCard } from "@/components/yaronetic/push-settings";
+import { GiftCollectionCard } from "@/components/yaronetic/gift-desk";
 
 function authText(error: { message?: string; code?: string } | null | undefined, fallback: string) {
   const blob = `${error?.code ?? ""} ${error?.message ?? ""}`;
@@ -391,6 +392,7 @@ function ProfileSheet({
           </form>
           <HandleCard />
 
+          <GiftCollectionCard />
           <FactsCard />
           <AchievementsCard />
           <SoundCard />
