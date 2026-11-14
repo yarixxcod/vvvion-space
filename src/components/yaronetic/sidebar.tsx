@@ -184,7 +184,7 @@ export function Sidebar({
           "z-40 min-w-0 shrink-0 flex-col overflow-x-hidden border-r border-line bg-elev pb-[var(--player-dock,0px)]",
           overlay ? "w-[min(100%,18.5rem)]" : "w-72 xl:w-[18.5rem]",
           open ? "flex" : "hidden",
-          open && overlay && "fixed inset-y-0 left-0 pt-[env(safe-area-inset-top)]",
+          open && overlay && "fixed inset-y-0 left-0 pt-[env(safe-area-inset-top)] shadow-[var(--shadow)]",
         )}
       >
         <div className="flex items-center gap-2 p-3">
@@ -253,7 +253,10 @@ export function Sidebar({
               type="button"
               className="press absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-2xl text-muted"
               aria-label={lang === "en" ? "Clear search" : lang === "kk" ? "Іздеуді тазарту" : "Очистить поиск"}
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+                document.getElementById("history-search")?.focus();
+              }}
             >
               <X className="size-4" />
             </button>
