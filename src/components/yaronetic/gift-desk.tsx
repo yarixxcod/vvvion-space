@@ -15,11 +15,19 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
   const [lookupState, setLookupState] = useState<"idle" | "checking" | "found" | "missing" | "error">("idle");
   const [pick, setPick] = useState<GiftItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deskState, setDeskState] = useState<"loading" | "ready" | "error">("loading");
 
   async function load() {
-    const desk = await getGiftDesk();
-    setGifts(desk.gifts);
-    setInbox(desk.inbox);
+    setDeskState("loading");
+    try {
+      const desk = await getGiftDesk();
+      setGifts(desk.gifts);
+      setInbox(desk.inbox);
+      setDeskState("ready");
+    } catch (error) {
+      setDeskState("error");
+      throw error;
+    }
   }
 
   useEffect(() => {
@@ -77,9 +85,20 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           <input className="field mt-1" value={note} maxLength={80} onChange={(event) => setNote(event.target.value)} />
         </label>
       </section>
+      {deskState === "loading" && gifts.length === 0 ? (
+        <div role="status" className="grid gap-2 sm:grid-cols-2" aria-label="Загружаем подарки">
+          {[0, 1, 2, 3].map((item) => <div key={item} className="h-36 animate-pulse rounded-3xl border border-line bg-subtle" />)}
+        </div>
+      ) : null}
+      {deskState === "error" ? (
+        <div role="alert" className="rounded-2xl border border-line bg-elev p-4 text-sm">
+          <p>Не удалось загрузить подарки. Проверьте соединение.</p>
+          <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4" onClick={() => void load().catch(() => undefined)}>Повторить</button>
+        </div>
+      ) : null}
       <ul className="grid gap-2 sm:grid-cols-2">
         {gifts.map((gift) => (
-          <li key={gift.sku} className="rounded-3xl border border-line bg-elev px-4 py-4">
+          <li key={gift.sku} className="rounded-3xl border border-line bg-elev px-4 py-4 transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-[var(--shadow)]">
             <p className="font-serif text-2xl tracking-tight">{gift.title}</p>
             <p className="mt-1 text-sm text-muted">{gift.note}</p>
             <p className="mt-3 font-serif text-xl tabular-nums">
