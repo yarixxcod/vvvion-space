@@ -173,6 +173,20 @@ export async function installAgent(target: SshTarget): Promise<void> {
     const systemd = lines.find((line) => line.endsWith("systemctl") || line.includes("systemctl"));
     if (!python) throw new Error("no-python");
     if (!systemd) throw new Error("no-systemd");
+    // Reuse a compatible agent instead of overwriting its code or files.
+    // An existing installation with a different token must be explicitly migrated.
+    const existing = await exec(conn, "test -f /opt/vvvion-mega/agent.py && echo present || true");
+    if (existing.out.trim() === "present") {
+      const health = await exec(conn,
+        `curl -fsS --max-time 5 -H 'Authorization: Bearer ${target.token}' http://127.0.0.1:${target.agentPort}/health || true`);
+      try {
+        const status = JSON.parse(health.out.trim()) as { ok?: boolean };
+        if (status.ok === true) return;
+      } catch {
+        // Not our agent, or not running with these credentials.
+      }
+      throw new Error("На сервере уже установлен Мегадиск с другими настройками. Автоматическая перезапись остановлена: сначала сохраните старые файлы и подтвердите перенос.");
+    }
     const ready = await exec(conn, `mkdir -p /opt/vvvion-mega /var/lib/vvvion-mega/${target.disk}`);
     if (ready.code !== 0) throw new Error(ready.err || "Каталог на сервере не создался");
     const unit = unitText(target.disk, target.agentPort, target.token, python);
