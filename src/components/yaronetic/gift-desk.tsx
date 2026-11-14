@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PurchaseSheet } from "@/components/yaronetic/purchase-sheet";
 import { fmtRubApprox } from "@/lib/pay/format";
@@ -16,6 +16,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
   const [lookupState, setLookupState] = useState<"idle" | "checking" | "found" | "missing" | "error">("idle");
   const [pick, setPick] = useState<GiftItem | null>(null);
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false);
   const [deskState, setDeskState] = useState<"loading" | "ready" | "error">("loading");
 
   async function load() {
@@ -91,7 +92,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
       </section>
       {deskState === "loading" && gifts.length === 0 ? (
         <div role="status" className="grid gap-2 sm:grid-cols-2" aria-label="Загружаем подарки">
-          {[0, 1, 2, 3].map((item) => <div key={item} className="h-36 animate-pulse rounded-3xl border border-line bg-subtle" />)}
+          {[0, 1, 2, 3].map((item) => <div key={item} className="h-36 animate-pulse rounded-3xl border border-line bg-subtle motion-reduce:animate-none" />)}
         </div>
       ) : null}
       {deskState === "error" ? (
@@ -138,13 +139,14 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
         price={pick?.price ?? 0}
         balance={balance}
         busy={busy}
-        onClose={() => setPick(null)}
+        onClose={() => { if (!sending.current) setPick(null); }}
         onTopup={(missing) => {
+          if (sending.current) return;
           setPick(null);
           onNeed(missing);
         }}
         onConfirm={() => {
-          if (!pick || busy) return;
+          if (!pick || sending.current) return;
           if (!verified) {
             toast.error("Сначала подтвердите почту");
             return;
@@ -153,6 +155,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
             toast.error("Сначала найдите человека по юзернейму");
             return;
           }
+          sending.current = true;
           setBusy(true);
           void sendGift({ data: { sku: pick.sku, handle: verifiedHandle, note, idempotencyKey: crypto.randomUUID() } })
             .then(() => {
@@ -167,7 +170,10 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
               haptic("error");
               toast.error(err instanceof Error ? err.message : "Не отправилось");
             })
-            .finally(() => setBusy(false));
+            .finally(() => {
+              sending.current = false;
+              setBusy(false);
+            });
         }}
       />
     </div>
