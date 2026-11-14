@@ -260,3 +260,31 @@ body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-r
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 
 html.vv-reduce-motion .vv-enter,html.vv-lowend .vv-enter{animation:none!important}
+
+
+/* VVVion atmospheric wallpapers: low contrast behind chat content, no remote images. */
+html[data-paper="cosmos"] .chat-paper, .paper-swatch[data-paper="cosmos"] {
+  background-color:#0c0d20;
+  background-image:radial-gradient(circle at 16% 19%,#e0d8ff 0 1px,transparent 2px),radial-gradient(circle at 77% 36%,#b9a9ff 0 1px,transparent 2px),radial-gradient(circle at 55% 78%,#b8a5ff 0 1px,transparent 2px),radial-gradient(ellipse at 80% 90%,#4b367c 0%,transparent 52%),radial-gradient(ellipse at 10% 10%,#25275d 0%,transparent 65%),linear-gradient(155deg,#0c0d20,#141026);
+  background-size:auto;
+}
+html[data-paper="aurora"] .chat-paper, .paper-swatch[data-paper="aurora"] {
+  background-color:#071a25;
+  background-image:radial-gradient(ellipse 70% 48% at 72% 5%,#168d8173,transparent 75%),radial-gradient(ellipse 55% 75% at 25% 10%,#286d8673,transparent 75%),linear-gradient(155deg,#081c2b,#0b1728 60%,#09101d);
+}
+html[data-paper="ocean"] .chat-paper, .paper-swatch[data-paper="ocean"] {
+  background-color:#061b2c;
+  background-image:radial-gradient(ellipse at 80% 85%,#11648966,transparent 60%),radial-gradient(ellipse at 0% 15%,#0b476b88,transparent 56%),repeating-radial-gradient(ellipse at 75% 130%,transparent 0 42px,#3e9bb015 43px 44px,transparent 45px 90px),linear-gradient(#071929,#061321);
+}
+html[data-paper="dusk"] .chat-paper, .paper-swatch[data-paper="dusk"] {
+  background-color:#292039;
+  background-image:radial-gradient(ellipse at 80% 85%,#b75c7966,transparent 62%),radial-gradient(ellipse at 12% 8%,#73558d99,transparent 68%),linear-gradient(155deg,#302444,#2b1e37 70%,#372331);
+}
+html[data-paper="graphite"] .chat-paper, .paper-swatch[data-paper="graphite"] {
+  background-color:#15151e;
+  background-image:linear-gradient(150deg,transparent 20%,#b3a6e312 20.2%,transparent 20.5% 69%,#b3a6e312 69.2%,transparent 69.5%),radial-gradient(ellipse at 85% 90%,#59517244,transparent 65%),linear-gradient(145deg,#181821,#101018);
+}
+html.light[data-paper="cosmos"] .chat-paper,html.light[data-paper="aurora"] .chat-paper,html.light[data-paper="ocean"] .chat-paper,html.light[data-paper="dusk"] .chat-paper,html.light[data-paper="graphite"] .chat-paper {
+  background-blend-mode:screen,normal,normal,normal,normal;
+}
+.paper-swatch[data-paper="cosmos"],.paper-swatch[data-paper="aurora"],.paper-swatch[data-paper="ocean"],.paper-swatch[data-paper="dusk"],.paper-swatch[data-paper="graphite"] { min-height:4.4rem; }
