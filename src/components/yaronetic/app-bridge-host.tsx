@@ -63,7 +63,7 @@ export function AppBridgeHost() {
     const applyKb = (open: boolean, height = 0) => {
       root.classList.toggle("vv-kb-open", open);
       const px = open ? `${Math.round(height)}px` : "0px";
-      root.style.setProperty("--kb", px);
+      root.style.setProperty("--kb", isApp() && appHas("keyboard") ? "0px" : px);
       root.style.setProperty("--vv-kb", px);
     };
     const onKeyboard = (event: Event) => {

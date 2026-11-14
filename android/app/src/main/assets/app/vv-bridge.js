@@ -434,7 +434,8 @@
   /* ---------- keyboard: called by native on every change (coalesced) ---------- */
   window.__vvKb = function (h, vis) {
     try {
-      H.style.setProperty('--vv-kb', h + 'px'); H.style.setProperty('--kb', h + 'px');
+      // The native host has already resized the WebView for IME; do not subtract its height twice.
+      H.style.setProperty('--vv-kb', h + 'px'); H.style.setProperty('--kb', '0px');
       H.classList.toggle('vv-kb-open', !!vis);
       window.dispatchEvent(new CustomEvent('vvvion-app-keyboard', { detail: { height: h, visible: !!vis, open: !!vis } }));
     } catch (e) {}

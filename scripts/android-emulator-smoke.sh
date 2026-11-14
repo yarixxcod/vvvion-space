@@ -18,7 +18,27 @@ for attempt in {1..20}; do
   sleep 2
 done
 grep -q 'version.*3.0.2.*forgedRejected.*true' emulator-evidence/bridge.txt
+adb shell uiautomator dump /sdcard/window.xml >/dev/null
+adb pull /sdcard/window.xml emulator-evidence/portrait.xml >/dev/null
 adb exec-out screencap -p > emulator-evidence/portrait.png
+# Focus a real web input; exercise native IME resizing without sending a message.
+adb shell settings put secure show_ime_with_hard_keyboard 1
+python3 - <<'PYINPUT' > emulator-evidence/input-tap.txt
+import re, xml.etree.ElementTree as ET
+nodes = ET.parse('emulator-evidence/portrait.xml').getroot().iter('node')
+field = next((n for n in nodes if n.get('class') == 'android.widget.EditText' and n.get('enabled') == 'true'), None)
+if field is None:
+    raise SystemExit('No enabled input in the rendered chat screen')
+x1,y1,x2,y2 = map(int,re.findall(r'\d+',field.get('bounds')))
+print((x1+x2)//2,(y1+y2)//2)
+PYINPUT
+read -r INPUT_X INPUT_Y < emulator-evidence/input-tap.txt
+adb shell input tap "$INPUT_X" "$INPUT_Y"
+sleep 2
+adb shell dumpsys input_method > emulator-evidence/keyboard.txt
+grep -Eq 'mInputShown=true|mIsInputViewShown=true|isInputShown=true' emulator-evidence/keyboard.txt
+adb exec-out screencap -p > emulator-evidence/keyboard.png
+adb shell input keyevent KEYCODE_BACK
 adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 1
 sleep 2
