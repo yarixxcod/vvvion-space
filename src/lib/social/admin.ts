@@ -378,7 +378,7 @@ export const grantMemberVubli = createServerFn({ method: "POST" })
         values
           (${entryId}, ${data.id}, 'adjust', 'earned', ${data.amount}, ${updated[0].balance},
            'admin_grant', ${context.userId}, ${entryId},
-           jsonb_build_object('reason', ${data.reason}, 'admin_id', ${context.userId}))
+           jsonb_build_object('reason', ${data.reason}::text, 'admin_id', ${context.userId}::text))
       `;
     });
     return readMembers();
