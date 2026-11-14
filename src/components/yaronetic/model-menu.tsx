@@ -67,8 +67,9 @@ export function ModelMenu({
       }
     };
     window.addEventListener("keydown", onKey);
+    const search = listRef.current?.querySelector<HTMLInputElement>("input[aria-label='Найти модель']");
     const picked = listRef.current?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ?? listRef.current?.querySelector<HTMLElement>("[role='option']");
-    picked?.focus();
+    (search ?? picked)?.focus();
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
@@ -113,6 +114,12 @@ export function ModelMenu({
           placeholder="Найти модель"
           className="mb-1 h-10 w-full rounded-xl border border-line-strong bg-bg px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           aria-label="Найти модель"
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              listRef.current?.querySelector<HTMLElement>("[role='option']")?.focus();
+            }
+          }}
         />
       ) : null}
       {shown.length === 0 ? (
