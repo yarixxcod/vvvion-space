@@ -45,6 +45,10 @@ export function ModelMenu({
   }, []);
 
   useEffect(() => {
+    if (open) setQuery("");
+  }, [open]);
+
+  useEffect(() => {
     if (!open || narrow) return;
     function onDoc(event: PointerEvent) {
       if (!root.current?.contains(event.target as Node)) setOpen(false);
@@ -56,7 +60,11 @@ export function ModelMenu({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        root.current?.querySelector<HTMLElement>("button")?.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     const picked = listRef.current?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ?? listRef.current?.querySelector<HTMLElement>("[role='option']");
@@ -106,6 +114,9 @@ export function ModelMenu({
           className="mb-1 h-10 w-full rounded-xl border border-line-strong bg-bg px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
           aria-label="Найти модель"
         />
+      ) : null}
+      {shown.length === 0 ? (
+        <p className="px-3 py-4 text-center text-sm text-muted" role="status">Модели не найдены</p>
       ) : null}
       {shown.map((item) => {
         const selected = item.value === current.value;
