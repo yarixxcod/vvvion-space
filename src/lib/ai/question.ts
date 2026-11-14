@@ -43,6 +43,7 @@ const ID_RE = /^[a-z0-9_-]{1,32}$/i;
 
 function clip(value: unknown, max: number) {
   if (typeof value !== "string") return "";
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   return value.replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 

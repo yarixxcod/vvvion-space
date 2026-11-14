@@ -1,0 +1,50 @@
+plugins { id 'com.android.application' }
+// Push (FCM) is compiled in only when app/google-services.json is present. Without it the build is push-free and identical in behaviour otherwise.
+def fcm = file('google-services.json').exists()
+android {
+    namespace 'space.vvvion.app'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'space.vvvion.app'
+        minSdk 24
+        targetSdk 36
+        versionCode 18
+        versionName '3.0.2'
+        manifestPlaceholders = [pushService: fcm ? '.PushService' : '.PushServiceStub']
+    }
+    signingConfigs {
+        release {
+            if (System.getenv('VV_KEYSTORE')) storeFile file(System.getenv('VV_KEYSTORE'))
+            storePassword System.getenv('VV_STORE_PASS')
+            keyAlias System.getenv('VV_KEY_ALIAS')
+            keyPassword System.getenv('VV_KEY_PASS')
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (System.getenv('VV_KEYSTORE')) signingConfig signingConfigs.release
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    sourceSets { if (fcm) main.java.srcDir 'src/fcm/java' }
+    androidResources { noCompress += ['woff2','woff','ttf','js','css','svg','png','jpg','ico'] }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+    implementation 'androidx.core:core:1.15.0'
+    implementation 'androidx.annotation:annotation:1.9.1'
+    // 3.0.0: native music player (ExoPlayer + MediaSession service)
+    implementation 'androidx.media3:media3-exoplayer:1.8.0'
+    implementation 'androidx.media3:media3-session:1.8.0'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.8.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    if (fcm) {
+        implementation platform('com.google.firebase:firebase-bom:33.7.0')
+        implementation 'com.google.firebase:firebase-messaging'
+    }
+}
+if (fcm) apply plugin: 'com.google.gms.google-services'

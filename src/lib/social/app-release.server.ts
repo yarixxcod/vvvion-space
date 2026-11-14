@@ -278,6 +278,7 @@ function cleanVersion(value: unknown): string {
 }
 
 function cleanNotes(value: unknown): string {
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   const text = typeof value === "string" ? value.replace(/\u0000/g, "").trim() : "";
   if (text.length > 2000) throw new Error("Текст обновления слишком длинный");
   return text;

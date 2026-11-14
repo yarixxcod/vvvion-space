@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { appNotify, initAppBridge, isApp } from "@/lib/app-bridge";
+import { appHas, appNotify, initAppBridge, isApp } from "@/lib/app-bridge";
 import { destinationFor, parseSitePath, type AppSearch } from "@/lib/app-nav";
 import { getBearerToken } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -72,7 +72,7 @@ export function AppBridgeHost() {
     };
     const viewport = window.visualViewport;
     const onViewport = () => {
-      if (!viewport) return;
+      if (!viewport || (isApp() && appHas("keyboard"))) return;
       const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
       applyKb(inset > 150, inset);
     };

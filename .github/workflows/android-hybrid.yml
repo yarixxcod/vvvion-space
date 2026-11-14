@@ -4,94 +4,108 @@ on:
   workflow_dispatch:
   push:
     branches: [uiux-polish-3.0.1]
-    paths:
-      - 'android/**'
-      - '.github/workflows/android-hybrid.yml'
+    paths: ['android/**', 'src/**', 'public/**', 'scripts/**', 'package*.json', 'vite.config.ts', 'eslint.config.mjs', '.github/workflows/android-hybrid.yml']
   pull_request:
-    paths:
-      - 'android/**'
-      - '.github/workflows/android-hybrid.yml'
+    branches: [uiux-polish-3.0.1]
 
 permissions:
   contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-android:
+    if: github.ref == 'refs/heads/uiux-polish-3.0.1' || github.base_ref == 'uiux-polish-3.0.1'
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: android
+    env:
+      DATABASE_URL: ''
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: Build and package web resources from this commit
+        run: npm run build:web && npm run android:assets
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - name: Verify source tree
-        shell: bash
-        run: |
-          test -f settings.gradle
-          test -f app/build.gradle
-          test -f gradle/wrapper/gradle-wrapper.jar
-          test -f gradlew
-      - name: Assemble debug APK
-        shell: bash
-        run: |
-          chmod +x ./gradlew
-          ./gradlew --no-daemon :app:assembleDebug
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: vvvion-space-3.0.1-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
-      - name: Check release signing configuration
-        if: github.event_name == 'workflow_dispatch'
-        id: signing
+      - name: Configure optional Firebase and signing
+        id: config
         env:
+          VV_FIREBASE_JSON: ${{ secrets.VV_FIREBASE_JSON }}
           VV_KEYSTORE_B64: ${{ secrets.VV_KEYSTORE_B64 }}
           VV_STORE_PASS: ${{ secrets.VV_STORE_PASS }}
           VV_KEY_ALIAS: ${{ secrets.VV_KEY_ALIAS }}
           VV_KEY_PASS: ${{ secrets.VV_KEY_PASS }}
         shell: bash
         run: |
-          if [[ -n "$VV_KEYSTORE_B64" && -n "$VV_STORE_PASS" && -n "$VV_KEY_ALIAS" && -n "$VV_KEY_PASS" ]]; then
-            echo 'enabled=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'enabled=false' >> "$GITHUB_OUTPUT"
-            echo 'Release signing secrets incomplete; debug artifact only.'
-          fi
-      - name: Prepare release keystore
-        if: steps.signing.outputs.enabled == 'true'
-        env:
-          VV_KEYSTORE_B64: ${{ secrets.VV_KEYSTORE_B64 }}
-        shell: bash
-        run: |
           umask 077
-          printf '%s' "$VV_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/vvvion-release.keystore"
-          test -s "$RUNNER_TEMP/vvvion-release.keystore"
-      - name: Assemble signed release APK
-        if: steps.signing.outputs.enabled == 'true'
+          if [[ -n "$VV_FIREBASE_JSON" ]]; then
+            printf '%s' "$VV_FIREBASE_JSON" > android/app/google-services.json
+          fi
+          if [[ -n "$VV_KEYSTORE_B64" && -n "$VV_STORE_PASS" && -n "$VV_KEY_ALIAS" && -n "$VV_KEY_PASS" ]]; then
+            printf '%s' "$VV_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/vvvion-release.keystore"
+            echo 'signed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'signed=false' >> "$GITHUB_OUTPUT"
+            echo 'Release signing is not configured; a debug APK will be available.'
+          fi
+      - name: Android tests, lint and debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Verify release code and resource shrinking without publishing
+        if: steps.config.outputs.signed != 'true'
+        working-directory: android
+        run: ./gradlew --no-daemon :app:assembleRelease
+      - name: Build signed release APK and AAB
+        if: steps.config.outputs.signed == 'true'
+        working-directory: android
         env:
           VV_KEYSTORE: ${{ runner.temp }}/vvvion-release.keystore
           VV_STORE_PASS: ${{ secrets.VV_STORE_PASS }}
           VV_KEY_ALIAS: ${{ secrets.VV_KEY_ALIAS }}
           VV_KEY_PASS: ${{ secrets.VV_KEY_PASS }}
+        run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
+      - name: Name and verify installable APKs
         shell: bash
-        run: ./gradlew --no-daemon :app:assembleRelease
-      - name: Upload signed release APK
-        if: steps.signing.outputs.enabled == 'true'
+        env:
+          SIGNED: ${{ steps.config.outputs.signed }}
+        run: |
+          VERSION=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle)
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/debug/*.apk "artifacts/vvvion-space-${VERSION}-debug.apk"
+          if [[ "$SIGNED" == true ]]; then
+            cp android/app/build/outputs/apk/release/*.apk "artifacts/vvvion-space-${VERSION}-release.apk"
+            cp android/app/build/outputs/bundle/release/*.aab "artifacts/vvvion-space-${VERSION}-release.aab"
+          fi
+          for apk in artifacts/*.apk; do
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          done
+          sha256sum artifacts/* > artifacts/SHA256SUMS.txt
+      - name: Upload APKs and checksums
         uses: actions/upload-artifact@v4
         with:
-          name: vvvion-space-3.0.1-signed-release-apk
-          path: android/app/build/outputs/apk/release/*.apk
+          name: vvvion-space-android-${{ github.run_number }}
+          path: artifacts/*
           if-no-files-found: error
-          retention-days: 14
-      - name: Remove temporary signing key
+          retention-days: 30
+      - name: Upload Android reports
         if: always()
-        shell: bash
-        run: rm -f "$RUNNER_TEMP/vvvion-release.keystore"
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports-${{ github.run_number }}
+          path: android/app/build/reports/
+          if-no-files-found: ignore
+      - name: Remove temporary secrets
+        if: always()
+        run: rm -f "$RUNNER_TEMP/vvvion-release.keystore" android/app/google-services.json

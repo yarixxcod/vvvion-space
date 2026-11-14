@@ -1309,6 +1309,7 @@ function nodeInput(input: unknown): {
   const raw = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
   const id = typeof raw.id === "string" && UUID.test(raw.id) ? raw.id : null;
   if (typeof raw.id === "string" && raw.id && !id) throw new Error("Сервер не найден");
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   const name = typeof raw.name === "string" ? raw.name.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 40) : "";
   const host = typeof raw.host === "string" ? raw.host.trim().toLowerCase() : "";
   const sshUser = typeof raw.sshUser === "string" ? raw.sshUser.trim().toLowerCase() : "root";

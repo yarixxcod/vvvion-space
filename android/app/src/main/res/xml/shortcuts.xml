@@ -1,0 +1,22 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="new_chat" android:enabled="true" android:icon="@drawable/ic_sc_chat"
+        android:shortcutShortLabel="@string/sc_chat_short" android:shortcutLongLabel="@string/sc_chat_long">
+        <intent android:action="android.intent.action.VIEW" android:data="https://vvvion.space/?new=1"
+            android:targetPackage="space.vvvion.app" android:targetClass="space.vvvion.app.MainActivity"/>
+    </shortcut>
+    <shortcut android:shortcutId="messages" android:enabled="true" android:icon="@drawable/ic_sc_messages"
+        android:shortcutShortLabel="@string/sc_messages_short" android:shortcutLongLabel="@string/sc_messages_long">
+        <intent android:action="android.intent.action.VIEW" android:data="https://vvvion.space/c/messages"
+            android:targetPackage="space.vvvion.app" android:targetClass="space.vvvion.app.MainActivity"/>
+    </shortcut>
+    <shortcut android:shortcutId="player" android:enabled="true" android:icon="@drawable/ic_sc_play"
+        android:shortcutShortLabel="@string/sc_play_short" android:shortcutLongLabel="@string/sc_play_long">
+        <intent android:action="android.intent.action.VIEW" android:data="https://vvvion.space/c/play"
+            android:targetPackage="space.vvvion.app" android:targetClass="space.vvvion.app.MainActivity"/>
+    </shortcut>
+    <shortcut android:shortcutId="disk" android:enabled="true" android:icon="@drawable/ic_sc_disk"
+        android:shortcutShortLabel="@string/sc_disk_short" android:shortcutLongLabel="@string/sc_disk_long">
+        <intent android:action="android.intent.action.VIEW" android:data="https://vvvion.space/c/disk"
+            android:targetPackage="space.vvvion.app" android:targetClass="space.vvvion.app.MainActivity"/>
+    </shortcut>
+</shortcuts>

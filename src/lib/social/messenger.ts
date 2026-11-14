@@ -85,7 +85,7 @@ function previewLine(body: string | null): string {
 }
 
 function cleanName(value: string) {
-  return value.replace(/[^\p{L}\p{N}._ ()\-]+/gu, "").trim().slice(0, 80) || "файл";
+  return value.replace(/[^\p{L}\p{N}._ ()-]+/gu, "").trim().slice(0, 80) || "файл";
 }
 
 function decodeFile(raw: string, mime: string): { b64: string; size: number } {

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+/* Tokens and components copied from vvvion.space styles.css (:root, .ambient/.orb, .vv-loader, .wordmark) */
+@font-face{font-family:"Syne";font-weight:800;font-display:block;src:url(../www/fonts/135207cb36d8.woff2) format("woff2")}
+@font-face{font-family:"Instrument Serif";font-style:italic;font-weight:400;font-display:block;src:url(../www/fonts/3b04c06b849d.woff2) format("woff2")}
+@font-face{font-family:"Instrument Serif";font-style:normal;font-weight:400;font-display:swap;src:url(../www/fonts/08fcefbb2a51.woff2) format("woff2")}
+@font-face{font-family:"Outfit";font-weight:340 600;font-display:swap;src:url(../www/fonts/3acf346c6124.woff2) format("woff2")}
+:root{--bg:#0c0c0e;--elev:#141417;--fg:#f4f2ee;--muted:#b0ada6;--faint:#8a877f;--line:#2e2e34;--accent:#c4b5e8;--accent-fg:#1b1526;--orb-a:#a892d638;--orb-b:#7896c429;
+ --font-sans:"Outfit",ui-sans-serif,system-ui,sans-serif;--font-serif:"Instrument Serif",Georgia,serif;--font-display:"Syne","Outfit",ui-sans-serif,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--font-sans);-webkit-tap-highlight-color:transparent;overflow:hidden;-webkit-user-select:none;user-select:none}
+.ambient{position:fixed;inset:0;overflow:hidden;pointer-events:none}
+.orb{position:absolute;border-radius:999px;filter:blur(70px);animation:32s ease-in-out infinite alternate drift}
+.orb-a{background:var(--orb-a);width:42vw;min-width:280px;height:42vw;min-height:280px;top:-8%;left:-6%}
+.orb-b{background:var(--orb-b);width:36vw;min-width:240px;height:36vw;min-height:240px;bottom:-10%;right:-8%;animation-duration:38s;animation-direction:alternate-reverse}
+@keyframes drift{0%{transform:translate(0)}to{transform:translate(3%,4%)}}
+.stage{position:relative;height:100%;display:grid;place-items:center}
+.col{display:flex;flex-direction:column;align-items:center;gap:1.6rem;text-align:center;padding:2rem;max-width:24rem}
+.vv-loader{place-items:center;width:3.25rem;height:3.25rem;display:inline-grid;position:relative}
+.vv-loader i{border:1.5px solid color-mix(in oklab,var(--accent) 72%,transparent);border-radius:999px;position:absolute;inset:0;animation:1.6s ease-in-out infinite vv-orbit}
+.vv-loader i:nth-of-type(2){opacity:.75;animation-delay:-.35s;inset:18%}
+.vv-loader i:nth-of-type(3){background:color-mix(in oklab,var(--accent) 70%,transparent);border:0;inset:36%;animation-delay:-.7s}
+@keyframes vv-orbit{0%,to{opacity:.4;transform:scale(.82)}50%{opacity:1;transform:scale(1)}}
+.wordmark{color:var(--fg);font-family:var(--font-display);letter-spacing:.2em;white-space:nowrap;align-items:baseline;gap:.32em;margin:0;font-size:clamp(.95rem,3vw,1.2rem);font-weight:800;line-height:1;display:inline-flex;opacity:.9}
+.wordmark-bang{color:var(--accent);font-family:var(--font-serif);letter-spacing:0;font-size:1.45em;font-style:italic;font-weight:400;line-height:.7}
+.err{display:none}
+body.error .load{display:none} body.error .err{display:flex}
+.err h1{font-family:var(--font-serif);font-weight:400;font-size:2.4rem;margin:0;line-height:1.1}
+.err p{color:var(--muted);margin:0;line-height:1.45}
+.err button{height:2.75rem;border-radius:1rem;border:0;background:var(--accent);color:var(--accent-fg);padding:0 1.4rem;font:500 1rem var(--font-sans)}
+.err button:active{transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){.orb{animation:none}}
+</style>
+</head>
+<body>
+<div class="ambient" aria-hidden="true"><div class="orb orb-a"></div><div class="orb orb-b"></div></div>
+<div class="stage">
+  <div class="col load">
+    <span class="vv-loader" role="status"><i></i><i></i><i></i></span>
+    <p class="wordmark"><span>VVVION</span><span class="wordmark-bang">!</span><span>SPACE</span></p>
+  </div>
+  <div class="col err">
+    <h1>Связи нет</h1>
+    <p id="msg">vvvion.space откроется, как только сеть вернётся.</p>
+    <button type="button" onclick="try{VVApp.retry()}catch(e){location.reload()}">Повторить</button>
+  </div>
+</div>
+<script>
+function vvState(s,m){document.body.classList.toggle('error',s==='error');if(m)document.getElementById('msg').textContent=m;}
+if(location.hash==='#error')vvState('error');
+try{if(window.VVApp&&VVApp.state()==='error')vvState('error',VVApp.message()||null)}catch(e){}
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="14dp" android:gravity="center_vertical" android:background="@drawable/widget_bg">
+    <TextView android:id="@+id/w_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Сейчас играет" android:textSize="11sp" android:textColor="#FFC4B5E8" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/w_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Ничего не играет" android:textSize="16sp" android:textColor="#FFF4F2EE" android:maxLines="1" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:layout_marginTop="2dp"/>
+    <TextView android:id="@+id/w_artist" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Включи музыку в VVVion Space" android:textSize="12sp" android:textColor="#FFB0ADA6" android:maxLines="1" android:ellipsize="end" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
+        <ImageButton android:id="@+id/w_prev" android:layout_width="36dp" android:layout_height="36dp" android:src="@drawable/ic_w_prev" android:background="@drawable/widget_btn" android:padding="8dp" android:scaleType="fitCenter" android:contentDescription="w_prev" android:layout_marginEnd="10dp"/>
+        <ImageButton android:id="@+id/w_play" android:layout_width="44dp" android:layout_height="44dp" android:src="@drawable/ic_w_play" android:background="@drawable/widget_btn_main" android:padding="10dp" android:scaleType="fitCenter" android:contentDescription="w_play" android:layout_marginEnd="10dp"/>
+        <ImageButton android:id="@+id/w_next" android:layout_width="36dp" android:layout_height="36dp" android:src="@drawable/ic_w_next" android:background="@drawable/widget_btn" android:padding="8dp" android:scaleType="fitCenter" android:contentDescription="w_next" android:layout_marginEnd="10dp"/>
+    </LinearLayout>
+</LinearLayout>

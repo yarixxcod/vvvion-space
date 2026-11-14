@@ -150,7 +150,7 @@ function syncsafe(bytes: Uint8Array, at: number): number {
 }
 
 function readId3(bytes: Uint8Array): MusicTags | null {
-  let view = bytes;
+  const view = bytes;
   if (!(view[0] === 0x49 && view[1] === 0x44 && view[2] === 0x33)) {
     if (view.length >= 128 && view[view.length - 128] === 0x54 && view[view.length - 127] === 0x41 && view[view.length - 126] === 0x47) {
       return readId3v1(view.subarray(view.length - 128));

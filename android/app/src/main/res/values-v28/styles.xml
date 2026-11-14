@@ -1,0 +1,17 @@
+<resources>
+    <color name="bg">#0c0c0e</color>
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:windowBackground">@drawable/splash</item>
+        <item name="android:colorPrimary">@color/bg</item>
+        <item name="android:colorPrimaryDark">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:colorBackgroundFloating">@color/bg</item>
+        <item name="android:windowBackgroundFallback">@color/bg</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
+</resources>

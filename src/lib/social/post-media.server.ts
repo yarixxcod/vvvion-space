@@ -49,7 +49,7 @@ function limitOf(kind: Kind): number {
 }
 
 function cleanName(value: string): string {
-  return value.replace(/[^\p{L}\p{N}._ ()\-]+/gu, "").trim().slice(0, 80) || "файл";
+  return value.replace(/[^\p{L}\p{N}._ ()-]+/gu, "").trim().slice(0, 80) || "файл";
 }
 
 function magicOk(bytes: Buffer, mime: string): boolean {
@@ -115,6 +115,7 @@ export async function handlePostPublish(request: Request): Promise<Response> {
     return json(400, { message: "Запись не дошла" });
   }
   const body = typeof form.get("body") === "string" ? (form.get("body") as string) : "";
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   const text = body.replace(/\u0000/g, "").replace(/\r\n/g, "\n").trim();
   if (text.length > 500) return json(400, { message: "Не больше 500 символов" });
   const parentRaw = typeof form.get("parentId") === "string" ? (form.get("parentId") as string).trim() : "";

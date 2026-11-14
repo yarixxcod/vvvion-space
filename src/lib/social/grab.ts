@@ -527,7 +527,7 @@ function sniff(bytes: Uint8Array): string {
 }
 
 function fileName(title: string, mime: string): string {
-  const clean = title.replace(/[^\p{L}\p{N}._ ()\-]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  const clean = title.replace(/[^\p{L}\p{N}._ ()-]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60);
   const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : mime.includes("gif") ? "gif" : mime.startsWith("image/") ? "jpg" : mime.includes("webm") ? "webm" : mime.startsWith("audio/") ? "m4a" : "mp4";
   return `${clean || "Файл"}.${ext}`;
 }

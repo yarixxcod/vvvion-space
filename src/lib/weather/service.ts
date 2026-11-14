@@ -8,6 +8,7 @@ const MAX_CITIES = 8;
 
 function cleanCity(value: unknown): string {
   if (typeof value !== "string") throw new Error("Напишите название города");
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   const city = value.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
   if (!/^[\p{L}\p{N}][\p{L}\p{N} .,'-]{1,59}$/u.test(city)) throw new Error("Такое название города не подойдёт");
   return city;

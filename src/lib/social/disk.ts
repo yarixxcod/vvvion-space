@@ -53,7 +53,7 @@ export function newId(): string {
 }
 
 export function diskName(value: string): string {
-  const name = value.replace(/[^\p{L}\p{N}._ ()\-]+/gu, "").trim().slice(0, 80);
+  const name = value.replace(/[^\p{L}\p{N}._ ()-]+/gu, "").trim().slice(0, 80);
   if (!name || name === "." || name === "..") throw new Error("Так не назвать");
   return name;
 }

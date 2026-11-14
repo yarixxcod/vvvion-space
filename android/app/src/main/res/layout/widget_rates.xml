@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="14dp" android:gravity="center_vertical" android:background="@drawable/widget_bg">
+    <TextView android:id="@+id/w_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Курс тенге ₸" android:textSize="11sp" android:textColor="#FFC4B5E8" android:maxLines="1" android:ellipsize="end" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="USD" android:textSize="14sp" android:textColor="#FFB0ADA6" android:fontFamily="sans-serif-medium"/>
+        <TextView android:id="@+id/w_usd" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="444,0" android:textSize="17sp" android:textColor="#FFF4F2EE" android:maxLines="1" android:fontFamily="sans-serif-medium"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="EUR" android:textSize="14sp" android:textColor="#FFB0ADA6" android:fontFamily="sans-serif-medium"/>
+        <TextView android:id="@+id/w_eur" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="491,4" android:textSize="17sp" android:textColor="#FFF4F2EE" android:maxLines="1" android:fontFamily="sans-serif-medium"/>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="RUB" android:textSize="14sp" android:textColor="#FFB0ADA6" android:fontFamily="sans-serif-medium"/>
+        <TextView android:id="@+id/w_rub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="5,36" android:textSize="17sp" android:textColor="#FFF4F2EE" android:maxLines="1" android:fontFamily="sans-serif-medium"/>
+    </LinearLayout>
+    <TextView android:id="@+id/w_upd" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="обновлено 20:31" android:textSize="10sp" android:textColor="#FF9A958C" android:maxLines="1" android:ellipsize="end" android:layout_marginTop="6dp"/>
+</LinearLayout>

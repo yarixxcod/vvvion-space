@@ -17,3 +17,16 @@ attachments/*firebase-adminsdk*.json
 **/firebase-admin.json
 .vercel
 .env*
+
+# Android build outputs and private configuration
+android/.gradle/
+android/**/build/
+android/local.properties
+android/app/google-services.json
+android/app/src/main/assets/www/
+android/app/src/main/assets/index.txt
+*.keystore
+*.jks
+*.p12
+
+attachments/google-services.json

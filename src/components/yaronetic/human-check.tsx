@@ -4,6 +4,7 @@ import "altcha/altcha.css";
 import { useLang } from "@/lib/lang";
 
 declare module "react" {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- React custom-element JSX type augmentation.
   namespace JSX {
     interface IntrinsicElements {
       "altcha-widget": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>;

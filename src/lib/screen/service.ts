@@ -15,6 +15,7 @@ export type ScreenVideo = {
 
 function clip(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   return value.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 

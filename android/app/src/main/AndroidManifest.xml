@@ -1,0 +1,84 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Background music: foreground service of type mediaPlayback + visible media notification -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <!-- Notifications in the shade (Android 13+ runtime permission) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Downloads to the public Downloads folder: needed only on Android 9 and older -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
+    <!-- 2.9.2: phones and tablets of every size; no restriction in the Play/Store filters -->
+    <supports-screens android:smallScreens="true" android:normalScreens="true" android:largeScreens="true" android:xlargeScreens="true" android:resizeable="true" android:anyDensity="true"/>
+    <!-- system camera / recorder used by the file chooser (no CAMERA permission: capture goes through the camera app) -->
+    <queries>
+        <intent><action android:name="android.media.action.IMAGE_CAPTURE"/></intent>
+        <intent><action android:name="android.media.action.VIDEO_CAPTURE"/></intent>
+        <intent><action android:name="android.provider.MediaStore.RECORD_SOUND"/></intent>
+    </queries>
+    <application android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/AppTheme" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true" android:hardwareAccelerated="true"
+        android:enableOnBackInvokedCallback="true">
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="messages"/>
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_bell"/>
+        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/accent"/>
+        <activity android:name=".MainActivity" android:exported="true" android:resizeableActivity="true" android:launchMode="singleTask" android:label="@string/app_name"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|uiMode|density"
+            android:windowSoftInputMode="adjustResize|stateHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts"/>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="vvvion.space"/>
+            </intent-filter>
+            <!-- explicit app links for the Circle: /messages/<id>, /c/<section>, /r/<invite> (same host, verified through assetlinks.json) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="vvvion.space"/>
+                <data android:pathPrefix="/messages"/>
+                <data android:pathPrefix="/c"/>
+                <data android:pathPrefix="/r"/>
+            </intent-filter>
+        </activity>
+        <!-- content:// URIs for the system camera to write into (cacheDir/captures only) -->
+        <provider android:name=".CaptureProvider" android:authorities="${applicationId}.captures" android:exported="false" android:grantUriPermissions="true"/>
+        <service android:name=".MediaPlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
+        <!-- 3.0.0: native player (Media3 MediaSessionService). Not exported: only this app binds to it; the system media controls use the platform session. -->
+        <service android:name=".NativePlayerService" android:exported="false" android:foregroundServiceType="mediaPlayback">
+            <intent-filter><action android:name="androidx.media3.session.MediaSessionService"/></intent-filter>
+        </service>
+        <!-- 3.0.0-beta3: home-screen widgets -->
+        <receiver android:name=".WeatherWidget" android:exported="true" android:label="@string/wn_weather">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_weather"/>
+        </receiver>
+        <receiver android:name=".RatesWidget" android:exported="true" android:label="@string/wn_rates">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_rates"/>
+        </receiver>
+        <receiver android:name=".BalanceWidget" android:exported="true" android:label="@string/wn_balance">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_balance"/>
+        </receiver>
+        <receiver android:name=".PlayerWidget" android:exported="true" android:label="@string/wn_player">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE"/></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_player"/>
+        </receiver>
+        <receiver android:name=".WidgetActions" android:exported="false"/>
+        <!-- Resolves to the real FCM service when app/google-services.json exists, otherwise to an inert stub -->
+        <service android:name="${pushService}" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT"/></intent-filter>
+        </service>
+    </application>
+</manifest>

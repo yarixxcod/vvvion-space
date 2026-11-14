@@ -30,6 +30,7 @@ const DAY = 86_400_000;
 export function validPushToken(token: unknown): token is string {
   if (typeof token !== "string") return false;
   if (token.length < 100 || token.length > 4096) return false;
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   if (/[\s\u0000-\u001f]/.test(token)) return false;
   return true;
 }
@@ -44,6 +45,7 @@ export function validPushPath(url: unknown): url is string {
 }
 
 export function clipText(value: string, max: number) {
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   return value.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 

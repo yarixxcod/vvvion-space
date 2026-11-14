@@ -1,0 +1,7 @@
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
+-keep class space.vvvion.app.FcmInit { *; }
+-keep class space.vvvion.app.PushService { *; }
+-dontwarn com.google.firebase.**
+-dontwarn org.checkerframework.**
+-dontwarn javax.annotation.**
+-dontwarn com.google.errorprone.annotations.**

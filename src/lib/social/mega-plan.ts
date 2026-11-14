@@ -30,7 +30,7 @@ export function sshUserOk(value: string): boolean {
 }
 
 export function entryName(value: string): string {
-  const name = value.replace(/[^\p{L}\p{N}._ ()\-]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  const name = value.replace(/[^\p{L}\p{N}._ ()-]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 80);
   if (!name || name === "." || name === "..") throw new Error("Так не назвать");
   return name;
 }

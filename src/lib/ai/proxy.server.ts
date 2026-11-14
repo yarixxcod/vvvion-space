@@ -44,13 +44,13 @@ type ModelsBody = { kind?: unknown; baseUrl?: unknown; apiKey?: unknown; extraHe
 type CatalogProvider = { baseUrl: string; apiKey: string; model: string };
 type CatalogChat = { prompt: string; providers: CatalogProvider[] };
 
-var BUILTIN_BASE = "https://api.x.ai/v1";
-var BUILTIN_IMAGE_MODEL = "grok-imagine-image";
-var WINDOW_MS = 6e5;
-var buckets = /* @__PURE__ */ new Map();
-var STOP_TTL = 15 * 60 * 1000;
-var chatStops = /* @__PURE__ */ new Map();
-var chatRuns = /* @__PURE__ */ new Map();
+const BUILTIN_BASE = "https://api.x.ai/v1";
+const BUILTIN_IMAGE_MODEL = "grok-imagine-image";
+const WINDOW_MS = 6e5;
+const buckets = /* @__PURE__ */ new Map();
+const STOP_TTL = 15 * 60 * 1000;
+const chatStops = /* @__PURE__ */ new Map();
+const chatRuns = /* @__PURE__ */ new Map();
 function chatRunKey(userId: string, chatId: string) {
 	return `${userId}:${chatId}`;
 }
@@ -264,8 +264,8 @@ function sanitize(text: string, secret?: string) {
 	let out = text.replace(/\s+/g, " ").trim().slice(0, 700);
 	if (secret && secret.length > 6) out = out.split(secret).join("•••");
 	out = out.replace(/Bearer\s+\S+/gi, "Bearer •••");
-	out = out.replace(/\bsk-[A-Za-z0-9_\-]{6,}\b/g, "sk-•••");
-	out = out.replace(/\bxai-[A-Za-z0-9_\-]{6,}\b/g, "xai-•••");
+	out = out.replace(/\bsk-[A-Za-z0-9_-]{6,}\b/g, "sk-•••");
+	out = out.replace(/\bxai-[A-Za-z0-9_-]{6,}\b/g, "xai-•••");
 	return out || "Провайдер вернул ошибку";
 }
 function blockedHost(hostname: string) {
@@ -315,7 +315,7 @@ function joinParsed(base: any,  path: any) {
 	base.hash = "";
 	return base.toString();
 }
-var HOP = /* @__PURE__ */ new Set([
+const HOP = /* @__PURE__ */ new Set([
 	"host",
 	"connection",
 	"content-length",
@@ -488,7 +488,7 @@ function normalizeSse(upstream: ReadableStream<Uint8Array>, secret: string | und
 								push("usage", { usage });
 								if (usage.total_tokens) onUsage?.(usage.total_tokens);
 							}
-						} catch {}
+						} catch { /* Best-effort operation; caller continues. */ }
 					}
 				}
 				const rest = gate.flush();
@@ -637,7 +637,7 @@ function hostOf(url: string): string {
 function logUpstream(status: number, url: string, raw: string, secret?: string) {
 	let body = raw.replace(/\s+/g, " ").trim();
 	if (secret && secret.length > 6) body = body.split(secret).join("•••");
-	body = body.replace(/Bearer\s+\S+/gi, "Bearer •••").replace(/\b(?:sk|xai|whsec)-[A-Za-z0-9_\-]{6,}\b/g, "•••").slice(0, 300);
+	body = body.replace(/Bearer\s+\S+/gi, "Bearer •••").replace(/\b(?:sk|xai|whsec)-[A-Za-z0-9_-]{6,}\b/g, "•••").slice(0, 300);
 	console.error("[ai] upstream", status, hostOf(url), body);
 }
 function told(status: number, url: string, raw: string, secret?: string): string {

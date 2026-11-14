@@ -10,11 +10,13 @@ export default tseslint.config(
   {
     ignores: [
       "dist/**",
+      "android/app/src/main/assets/**",
       ".output/**",
       ".vercel/**",
       ".nitro/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
+      "src/lib/vendor/**",
     ],
   },
   js.configs.recommended,
