@@ -6,7 +6,7 @@ import { findUserByHandle, normalizeHandle, readHandle } from "@/lib/social/hand
 import { isUniqueViolation } from "@/lib/social/sql-error";
 
 export type GiftItem = { sku: string; title: string; note: string; price: number };
-export type GiftInboxItem = { id: string; title: string; note: string; createdAt: string; fromHandle: string | null; fromName: string };
+export type GiftInboxItem = { id: string; sku: string; title: string; note: string; createdAt: string; fromHandle: string | null; fromName: string };
 
 async function verified(userId: string): Promise<boolean> {
   const sql = await getSql();
@@ -25,8 +25,8 @@ export const getGiftDesk = createServerFn({ method: "GET" })
       where section = 'gifts' and enabled = true
       order by price, title
     `;
-    const inbox = await sql<{ id: string; title: string; note: string; created_at: string; from_handle: string | null; from_name: string }>`
-      select g.id, g.title, g.note, g.created_at::text as created_at, h.handle as from_handle, u.name as from_name
+    const inbox = await sql<{ id: string; sku: string; title: string; note: string; created_at: string; from_handle: string | null; from_name: string }>`
+      select g.id, g.sku, g.title, g.note, g.created_at::text as created_at, h.handle as from_handle, u.name as from_name
       from gift_receipts g
       join "user" u on u.id = g.from_id
       left join user_handles h on h.user_id = g.from_id
@@ -38,6 +38,7 @@ export const getGiftDesk = createServerFn({ method: "GET" })
       gifts: gifts.map((item) => ({ ...item, price: Number(item.price) })),
       inbox: inbox.map((item) => ({
         id: item.id,
+        sku: item.sku,
         title: item.title,
         note: item.note,
         createdAt: item.created_at,
