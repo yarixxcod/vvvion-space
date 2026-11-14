@@ -124,10 +124,13 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           <p className="text-xs tracking-[0.22em] text-faint">ВАМ ПОДАРИЛИ</p>
           <ul className="mt-2 space-y-2">
             {inbox.map((item) => (
-              <li key={item.id} className="text-sm">
-                <span className="font-medium">{item.title}</span>
-                <span className="text-muted"> · {item.fromHandle ? `@${item.fromHandle}` : item.fromName}</span>
-                {item.note ? <span className="mt-0.5 block text-xs text-faint">{item.note}</span> : null}
+              <li key={item.id} className="flex gap-3 rounded-2xl border border-line bg-elev p-3 text-sm">
+                <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-subtle">🎁</span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{item.title}</p>
+                  <p className="break-words text-xs text-muted">{item.fromHandle ? `@${item.fromHandle}` : item.fromName}</p>
+                  {item.note ? <p className="mt-1 break-words text-xs text-faint">{item.note}</p> : null}
+                </div>
               </li>
             ))}
           </ul>
