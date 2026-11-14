@@ -230,3 +230,45 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
     </div>
   );
 }
+
+/** Inventory displayed in the actual profile sheet, not in settings. */
+export function GiftCollectionCard() {
+  const [items, setItems] = useState<GiftInboxItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const refresh = () => getGiftDesk().then((desk) => setItems(desk.inbox));
+  useEffect(() => {
+    void refresh().catch(() => toast.error("Не удалось загрузить подарки")).finally(() => setLoading(false));
+  }, []);
+  return (
+    <section className="mt-4 rounded-3xl border border-line bg-elev p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-serif text-xl">Мои подарки</h3>
+        <span className="rounded-full bg-subtle px-3 py-1 text-xs text-muted">{items.length}</span>
+      </div>
+      <p className="mt-1 text-xs text-muted">Подарки, которые вам отправили. Можно оставить на память или продать за вубли.</p>
+      {loading ? <p className="mt-3 text-sm text-muted">Загружаем коллекцию…</p> : items.length === 0 ? <p className="mt-3 text-sm text-faint">Пока подарков нет.</p> : (
+        <ul className="mt-3 grid grid-cols-2 gap-2">
+          {items.map((item) => (
+            <li key={item.id} className="flex min-w-0 flex-col items-center rounded-2xl border border-line bg-bg p-3 text-center">
+              <GiftArt sku={item.sku} />
+              <p className="mt-2 w-full truncate text-sm font-medium" title={item.title}>{item.title}</p>
+              <p className="w-full truncate text-xs text-muted">{item.fromHandle ? `@${item.fromHandle}` : item.fromName}</p>
+              <button type="button" disabled={busyId !== null} className="press mt-3 min-h-9 w-full rounded-xl border border-line px-2 text-xs disabled:opacity-40"
+                onClick={() => {
+                  if (!window.confirm(`Продать «${item.title}» за ${item.resaleValue} вублей? Отменить нельзя.`)) return;
+                  setBusyId(item.id);
+                  void sellReceivedGift({ data: { id: item.id } })
+                    .then(({ amount }) => { toast.success(`Продано за ${amount} вублей`); return refresh(); })
+                    .catch((err: unknown) => toast.error(err instanceof Error ? err.message : "Продажа не удалась"))
+                    .finally(() => setBusyId(null));
+                }}>
+                {busyId === item.id ? "Продаём…" : `Продать · ${item.resaleValue} вуб.`}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
