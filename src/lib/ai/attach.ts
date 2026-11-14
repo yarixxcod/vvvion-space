@@ -5,7 +5,7 @@ export const CHAT_FILE_MAX = 200 * 1024 * 1024;
 export const CHAT_FILE_COUNT = 8;
 
 function safeName(name: string) {
-  return name.replace(/[^\p{L}\p{N}._ ()\-]+/gu, "").trim().slice(0, 80) || "файл";
+  return name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "").trim().slice(0, 80) || "файл";
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
