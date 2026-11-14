@@ -33,7 +33,7 @@ create trigger vvvion_user_handle_signup
 after insert on "user"
 for each row execute function vvvion_assign_handle();
 
-do $
+do $backfill$
 declare
   u record;
   candidate text;
@@ -52,4 +52,4 @@ begin
     end loop;
   end loop;
 end;
-$;
+$backfill$;
