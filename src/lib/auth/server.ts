@@ -106,7 +106,7 @@ const LOCAL_DEV_ORIGINS: string[] = [
   "http://127.0.0.1:8080",
   "http://[::1]:8080",
 ];
-const PRODUCT_HOSTS = ["vvvion.space", "vvvion-space.grok.me"];
+const PRODUCT_HOSTS = ["vvvion.space", "www.vvvion.space", "vvvion-space.grok.me", "vvvion-space-ngfg.vercel.app"];
 const PRODUCT_ORIGINS = PRODUCT_HOSTS.map((host) => `https://${host}`);
 
 function hostOf(url: string | undefined): string | undefined {
