@@ -25,7 +25,7 @@ cd android
 
 `build:web` compiles without executing database migrations. Android build requires Java 17, Android SDK 36 and Build Tools 35.0.0. Generated assets, build outputs and private configuration are ignored. Android Studio may create ignored `local.properties` for the SDK path. No production database credentials are needed.
 
-Workflow: `.github/workflows/android-hybrid.yml`, limited to `uiux-polish-3.0.1`. Each run checks TypeScript, lint and tests, compiles web resources, runs native unit tests and Android lint, builds debug, verifies APK signatures and uploads named APKs/checksums and reports. Without signing credentials it also compiles an unsigned release to exercise R8, but does not distribute that file as an installable release.
+Workflow: `.github/workflows/android-hybrid.yml`, limited to `uiux-polish-3.0.1`. Each run checks TypeScript, lint and tests, compiles web resources, runs native unit tests and Android lint, builds debug, verifies APK signatures and uploads named APKs/checksums and reports. A second job installs the actual APK on an Android 16 emulator and checks launch, rotation, Home/relaunch and a fresh offline launch; it retains screenshots and crash logs. Without signing credentials it also compiles an unsigned release to exercise R8, but does not distribute that file as an installable release.
 
 ## Signing and push configuration
 

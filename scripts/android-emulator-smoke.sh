@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p emulator-evidence
+adb install -r artifacts/*-debug.apk
+adb logcat -c
+adb shell am start -W -n space.vvvion.app/.MainActivity > emulator-evidence/launch.txt
+# Wait for the native loader/site rather than capturing the initial system splash.
+for attempt in {1..12}; do
+  adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/window.xml emulator-evidence/portrait.xml >/dev/null 2>&1 || true
+  if [[ -f emulator-evidence/portrait.xml ]] && grep -q 'android.webkit.WebView' emulator-evidence/portrait.xml; then break; fi
+  sleep 2
+done
+grep -q 'space.vvvion.app' emulator-evidence/portrait.xml
+adb exec-out screencap -p > emulator-evidence/portrait.png
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1
+sleep 2
+adb shell dumpsys activity activities > emulator-evidence/landscape-activity.txt
+grep -q 'space.vvvion.app/.MainActivity' emulator-evidence/landscape-activity.txt
+adb exec-out screencap -p > emulator-evidence/landscape.png
+# Home/relaunch must preserve the existing activity rather than crash the renderer.
+adb shell input keyevent KEYCODE_HOME
+adb shell am start -W -n space.vvvion.app/.MainActivity > emulator-evidence/relaunch.txt
+sleep 2
+adb shell dumpsys activity activities > emulator-evidence/relaunch-activity.txt
+grep -q 'space.vvvion.app/.MainActivity' emulator-evidence/relaunch-activity.txt
+# A fresh offline launch must reach the native recovery screen, without a blank browser error page.
+adb shell svc wifi disable
+adb shell svc data disable
+adb shell am force-stop space.vvvion.app
+adb shell am start -W -n space.vvvion.app/.MainActivity > emulator-evidence/offline-launch.txt
+for attempt in {1..12}; do
+  adb shell uiautomator dump /sdcard/offline.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/offline.xml emulator-evidence/offline.xml >/dev/null 2>&1 || true
+  if [[ -f emulator-evidence/offline.xml ]] && grep -q 'Нет подключения к интернету' emulator-evidence/offline.xml; then break; fi
+  sleep 2
+done
+grep -q 'Нет подключения к интернету' emulator-evidence/offline.xml
+adb exec-out screencap -p > emulator-evidence/offline.png
+adb shell svc wifi enable
+adb shell svc data enable
+adb logcat -d -b crash > emulator-evidence/crash.txt
+if grep -q 'Process: space.vvvion.app' emulator-evidence/crash.txt; then
+  echo 'VVVion crashed during emulator smoke test'
+  exit 1
+fi
+adb logcat -d -s VVWeb > emulator-evidence/web-console.txt
