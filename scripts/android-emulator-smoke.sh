@@ -12,6 +12,12 @@ for attempt in {1..12}; do
   sleep 2
 done
 grep -q 'space.vvvion.app' emulator-evidence/portrait.xml
+for attempt in {1..20}; do
+  adb logcat -d -s VVBridge > emulator-evidence/bridge.txt
+  if grep -q 'version.*3.0.2.*forgedRejected.*true' emulator-evidence/bridge.txt; then break; fi
+  sleep 2
+done
+grep -q 'version.*3.0.2.*forgedRejected.*true' emulator-evidence/bridge.txt
 adb exec-out screencap -p > emulator-evidence/portrait.png
 adb shell settings put system accelerometer_rotation 0
 adb shell settings put system user_rotation 1
