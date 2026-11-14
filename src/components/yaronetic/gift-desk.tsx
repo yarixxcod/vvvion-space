@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PurchaseSheet } from "@/components/yaronetic/purchase-sheet";
 import { fmtRubApprox } from "@/lib/pay/format";
-import { getGiftDesk, sendGift, type GiftInboxItem, type GiftItem } from "@/lib/social/gifts";
+import { getGiftDesk, sellReceivedGift, sendGift, type GiftInboxItem, type GiftItem } from "@/lib/social/gifts";
 import { lookupHandle } from "@/lib/social/handles";
 import { haptic } from "@/lib/haptic";
 
@@ -169,6 +169,14 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
                   <p className="font-medium">{item.title}</p>
                   <p className="break-words text-xs text-muted">{item.fromHandle ? `@${item.fromHandle}` : item.fromName}</p>
                   {item.note ? <p className="mt-1 break-words text-xs text-faint">{item.note}</p> : null}
+                  <button type="button" disabled={busy} className="press mt-2 min-h-9 rounded-xl border border-line px-3 text-xs disabled:opacity-40" onClick={() => {
+                    if (!window.confirm(`Продать «${item.title}» за ${item.resaleValue} вублей? Отменить продажу нельзя.`)) return;
+                    setBusy(true);
+                    void sellReceivedGift({ data: { id: item.id } })
+                      .then(({ amount }) => { toast.success(`Продано за ${amount} вублей`); onDone(); return load(); })
+                      .catch((err: unknown) => toast.error(err instanceof Error ? err.message : "Не удалось продать подарок"))
+                      .finally(() => setBusy(false));
+                  }}>Продать · {item.resaleValue.toLocaleString("ru-RU")} вуб.</button>
                 </div>
               </li>
             ))}
