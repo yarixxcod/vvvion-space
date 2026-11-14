@@ -100,6 +100,9 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4" onClick={() => void load().catch(() => undefined)}>Повторить</button>
         </div>
       ) : null}
+      {deskState === "ready" && gifts.length === 0 ? (
+        <p role="status" className="rounded-2xl border border-line bg-elev px-4 py-6 text-center text-sm text-muted">Подарки пока недоступны.</p>
+      ) : null}
       <ul className="grid gap-2 sm:grid-cols-2">
         {gifts.map((gift) => (
           <li key={gift.sku} className="rounded-3xl border border-line bg-elev px-4 py-4 transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-[var(--shadow)]">
