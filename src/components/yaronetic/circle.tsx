@@ -57,18 +57,19 @@ export function Circle({
 
   if (!user) {
     return (
-      <div className="h-full overflow-y-auto p-4">
-        {onClose ? (
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <Wordmark />
-            <ToChat onClick={onClose} />
-          </div>
-        ) : (
-          <div className="mb-3">
-            <Wordmark />
-          </div>
-        )}
-        <AuthForm />
+      <div className="relative h-full">
+        <div className="flex items-center justify-between p-4">
+          <Wordmark />
+          {onClose ? <ToChat onClick={onClose} /> : null}
+        </div>
+        {typeof document !== "undefined" ? createPortal(
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 sm:items-center sm:p-4" role="presentation" onClick={onClose}>
+            <div role="dialog" aria-modal="true" aria-label="Регистрация или вход" className="max-h-[min(90dvh,44rem)] w-full max-w-md overflow-y-auto rounded-t-3xl border border-line bg-elev px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shadow-[var(--shadow)] sm:rounded-3xl sm:p-5" onClick={(event) => event.stopPropagation()}>
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+              <AuthForm />
+            </div>
+          </div>, document.body,
+        ) : null}
       </div>
     );
   }
