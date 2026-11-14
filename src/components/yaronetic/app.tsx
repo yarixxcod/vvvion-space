@@ -192,6 +192,18 @@ export function App({
   }, [user]);
 
   useEffect(() => {
+    if (!user) return;
+    const onVerified = () => {
+      void getInterests().then((profile) => {
+        setInterests(profile);
+        if (!profile.known) setAskInterests(true);
+      }).catch(() => toast.error("Не удалось загрузить персонализацию"));
+    };
+    window.addEventListener("vvvion:email-verified", onVerified);
+    return () => window.removeEventListener("vvvion:email-verified", onVerified);
+  }, [user]);
+
+  useEffect(() => {
     if (!user || isPending) return;
     let code = "";
     try {
