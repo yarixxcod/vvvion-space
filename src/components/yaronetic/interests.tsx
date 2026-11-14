@@ -75,9 +75,9 @@ export function InterestSurvey({
   if (!open || !node) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/55 p-3 sm:items-center" role="dialog" aria-modal="true" aria-label="Интересы">
-      <div className="flex max-h-[min(100dvh-1.5rem,40rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line bg-elev shadow-[var(--shadow)]">
-        <div className="flex items-center justify-between px-5 pt-5">
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Интересы">
+      <div className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl sm:max-h-[min(90dvh,42rem)] sm:rounded-3xl border border-line bg-elev shadow-[var(--shadow)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-5">
           <div className="flex items-center gap-2">
             {canDismiss ? <BackButton onClick={() => void finish(true)} label="Назад" /> : null}
             <div className="flex gap-1.5" aria-hidden="true">
@@ -85,16 +85,16 @@ export function InterestSurvey({
               <span className={cn("h-1.5 w-6 rounded-full", step === 2 ? "bg-accent" : "bg-line")} />
             </div>
           </div>
-          <button type="button" className={cn("press h-10 px-2 text-sm text-muted", canDismiss && "hidden md:inline-flex")} onClick={() => void finish(true)}>
-            {canDismiss ? "Закрыть" : "Пропустить"}
+          <button type="button" className={cn("press h-10 px-2 text-sm text-muted", canDismiss && "hidden md:inline-flex")} disabled={busy} onClick={() => void finish(true)}>
+            {canDismiss ? "Закрыть" : "Пропустить настройку"}
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-3">
           {step === 1 ? (
             <>
               <h2 className="font-serif text-3xl tracking-tight">Что вам близко?</h2>
               <p className="mt-2 text-sm text-muted">
-                Отметьте несколько тем. На пустом чате, когда вы вошли, вместо общих вопросов будут ваши.
+                Выберите интересные вам темы. Это изменит только примеры вопросов на главной странице — не ответы ИИ, не язык чата и не настройки приватности.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {TOPICS.map((topic) => {
@@ -122,7 +122,7 @@ export function InterestSurvey({
           ) : (
             <>
               <h2 className="font-serif text-3xl tracking-tight">Как отвечать?</h2>
-              <p className="mt-2 text-sm text-muted">Это тон быстрых вопросов. Сам чат по-прежнему отвечает на вашем языке.</p>
+              <p className="mt-2 text-sm text-muted">Выберите стиль готовых примеров вопросов. Это не меняет характер ответов модели: в самом чате вы по-прежнему управляете ответом своим запросом.</p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 {TONES.map((item) => (
                   <button
@@ -141,7 +141,7 @@ export function InterestSurvey({
               </div>
               {preview ? (
                 <div className="mt-4 rounded-2xl border border-line bg-bg/40 px-4 py-3">
-                  <p className="text-xs text-faint">Так будет выглядеть карточка</p>
+                  <p className="text-xs text-faint">Пример вопроса на главной</p>
                   <p className="mt-1 text-sm font-medium">{preview.title}</p>
                   <p className="mt-1 line-clamp-3 text-xs text-muted">{preview.prompt}</p>
                 </div>
@@ -149,7 +149,7 @@ export function InterestSurvey({
             </>
           )}
         </div>
-        <div className="flex gap-2 border-t border-line px-5 py-4">
+        <div className="flex shrink-0 gap-2 border-t border-line bg-elev px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {step === 2 ? (
             <button type="button" className="press h-11 rounded-2xl border border-line px-4 text-sm" onClick={() => setStep(1)}>
               Назад
