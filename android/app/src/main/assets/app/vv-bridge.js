@@ -15,6 +15,9 @@
     /* 3.0.0-beta3: a touch app has no keyboard focus ring; the site's light accent :focus-visible ring showed as a light square around round buttons (play/pause) after programmatic focus */
     + 'html.vv-app button:focus-visible,html.vv-app a:focus-visible,html.vv-app [role=button]:focus-visible,html.vv-app [role=tab]:focus-visible,html.vv-app summary:focus-visible{outline:none!important}'
     + 'html,body{overscroll-behavior:none}'
+    /* Also protect installed apps while the server still runs an older keyboard bridge. */
+    + 'html.vv-app.vv-kb-open .app-root{height:100dvh!important;max-height:100dvh!important}'
+    + 'html.vv-app.vv-kb-open aside[data-circle]{bottom:0!important}'
     + 'button,a,[role=button]{-webkit-user-select:none;user-select:none}'
     /* no 300 ms / double-tap-zoom heuristics on anything tappable: a tap is a tap, a drag is a scroll */
     + 'a,button,[role=button],[role=tab],[role=menuitem],[role=switch],summary,label,input,select,textarea{touch-action:manipulation}'

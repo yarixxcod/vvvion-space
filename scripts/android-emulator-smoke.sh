@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p emulator-evidence
+collect_evidence() {
+  adb logcat -d -b crash > emulator-evidence/crash.txt 2>&1 || true
+  adb logcat -d -s VVWeb VVBridge > emulator-evidence/web-console.txt 2>&1 || true
+  adb exec-out screencap -p > emulator-evidence/final.png 2>/dev/null || true
+  adb shell dumpsys activity activities > emulator-evidence/final-activity.txt 2>&1 || true
+}
+trap collect_evidence EXIT
+# Android's first immersive-mode tutorial is a system overlay, not app content.
+adb shell settings put secure immersive_mode_confirmations confirmed
 adb install -r artifacts/*-debug.apk
 adb logcat -c
 adb shell am start -W -n space.vvvion.app/.MainActivity > emulator-evidence/launch.txt
