@@ -66,9 +66,19 @@ export function Composer({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "0px";
-    const cap = Math.min(200, window.innerHeight * 0.3);
-    el.style.height = `${Math.min(el.scrollHeight, cap)}px`;
+    const resize = () => {
+      el.style.height = "0px";
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const cap = Math.min(200, viewportHeight * 0.3);
+      el.style.height = `${Math.min(el.scrollHeight, cap)}px`;
+    };
+    resize();
+    window.visualViewport?.addEventListener("resize", resize);
+    window.addEventListener("resize", resize);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", resize);
+      window.removeEventListener("resize", resize);
+    };
   }, [value]);
 
   function fire() {
@@ -85,7 +95,7 @@ export function Composer({
 
   return (
     <form
-      className="rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] focus-within:border-accent"
+      className="rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent"
       onSubmit={(event) => {
         event.preventDefault();
         fire();
