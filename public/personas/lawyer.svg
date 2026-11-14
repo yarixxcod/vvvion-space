@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-  <rect width="80" height="80" rx="22" fill="#2a2e3a"/>
-  <path d="M18 78c4-16 12-22 22-22s18 6 22 22" fill="#e6c2a6"/>
-  <circle cx="40" cy="40" r="16" fill="#e6c2a6"/>
-  <path d="M22 34c2-14 12-20 18-20s16 6 18 20c-4-6-10-8-18-8s-14 2-18 8z" fill="#1a1c22"/>
-  <circle cx="34" cy="40" r="1.7" fill="#1c1b19"/>
-  <circle cx="46" cy="40" r="1.7" fill="#1c1b19"/>
-  <path d="M28 58h24l4 12H24z" fill="#1c1b19"/><path d="M36 58h8v6h-8z" fill="#f4f2ee"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 84 84" role="img" aria-label="lawyer character portrait"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#343b57"/><stop offset="1" stop-color="#12131f"/></linearGradient><radialGradient id="halo"><stop stop-color="#a5b8e7" stop-opacity=".52"/><stop offset="1" stop-color="#a5b8e7" stop-opacity="0"/></radialGradient><linearGradient id="coat" x2="1" y2="1"><stop stop-color="#a5b8e7"/><stop offset="1" stop-color="#343b57"/></linearGradient></defs><rect width="84" height="84" rx="22" fill="url(#bg)"/><circle cx="59" cy="20" r="40" fill="url(#halo)"/><path d="M11 84q3-23 20-27h22q18 5 21 27Z" fill="url(#coat)"/><path d="M36 54h12v13q-6 9-12 0Z" fill="#e1b7a0"/><ellipse cx="42" cy="40" rx="20" ry="25" fill="#2d2d35"/><ellipse cx="42" cy="45" rx="16" ry="20" fill="#e1b7a0"/><path d="M24 38q0-27 20-26 19 1 18 25-8-4-12-13-7 11-26 14Z" fill="#2d2d35"/><path d="M31 45q4-3 8 0m8 0q4-3 8 0" fill="none" stroke="#392c36" stroke-width="2" stroke-linecap="round"/><circle cx="35" cy="46" r="1.4" fill="#1c1c27"/><circle cx="50" cy="46" r="1.4" fill="#1c1c27"/><path d="M41 48l-1 5h4" fill="none" stroke="#ad776d" stroke-width="1.2" stroke-linecap="round"/><path d="M37 58q5 3 10 0" fill="none" stroke="#985b66" stroke-width="1.5" stroke-linecap="round"/><path d="M39 67h7l-2 7-2 5-4-5Z" fill="#a5b8e7"/><rect x="1" y="1" width="82" height="82" rx="21" fill="none" stroke="#a5b8e7" stroke-opacity=".38" stroke-width="1.5"/></svg>
