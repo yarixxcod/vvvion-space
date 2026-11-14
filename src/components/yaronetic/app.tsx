@@ -1027,7 +1027,7 @@ function SignInSheet({ onClose }: { onClose: () => void }) {
   const lang = useLang();
   return (
     <SheetFrame label={ui(lang, "signIn")} onClose={onClose}>
-      <AuthForm />
+      <AuthForm onComplete={onClose} />
     </SheetFrame>
   );
 }
