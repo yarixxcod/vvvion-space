@@ -184,7 +184,7 @@ export function Sidebar({
           "z-40 min-w-0 shrink-0 flex-col overflow-x-hidden border-r border-line bg-elev pb-[var(--player-dock,0px)]",
           overlay ? "w-[min(100%,18.5rem)]" : "w-72 xl:w-[18.5rem]",
           open ? "flex" : "hidden",
-          open && overlay && "fixed inset-y-0 left-0",
+          open && overlay && "fixed inset-y-0 left-0 pt-[env(safe-area-inset-top)]",
         )}
       >
         <div className="flex items-center gap-2 p-3">
@@ -245,8 +245,19 @@ export function Sidebar({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={ui(lang, "searchHistory")}
-            className="h-11 w-full rounded-2xl border border-line bg-bg pr-3 pl-9 text-sm outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+            aria-label={ui(lang, "searchHistory")}
+            className={cn("h-11 w-full rounded-2xl border border-line bg-bg pl-9 text-sm outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-[var(--accent)]", query ? "pr-11" : "pr-3")}
           />
+          {query ? (
+            <button
+              type="button"
+              className="press absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-2xl text-muted"
+              aria-label={lang === "en" ? "Clear search" : lang === "kk" ? "Іздеуді тазарту" : "Очистить поиск"}
+              onClick={() => setQuery("")}
+            >
+              <X className="size-4" />
+            </button>
+          ) : null}
         </label>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {pinnedChats.length > 0 ? (
