@@ -3,7 +3,7 @@ name: Android hybrid APK
 on:
   workflow_dispatch:
   push:
-    branches: [uiux-polish-3.0.1]
+    branches: [android-hybrid-3.0.1]
     paths:
       - 'android/**'
       - '.github/workflows/android-hybrid.yml'
