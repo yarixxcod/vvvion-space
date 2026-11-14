@@ -46,7 +46,13 @@ export function usePassingMood(kind: keyof typeof PASSING): FaceMood {
     const set = PASSING[kind] ?? PASSING.idle;
     setIndex(0);
     if (set.length < 2) return;
-    const timer = window.setInterval(() => setIndex((value) => (value + 1) % set.length), 1600);
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      document.documentElement.classList.contains("vv-reduce-motion") ||
+      document.documentElement.classList.contains("vv-lowend");
+    if (reduced) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setIndex((value) => (value + 1) % set.length);
+    }, 1600);
     return () => window.clearInterval(timer);
   }, [kind]);
   const set = PASSING[kind] ?? PASSING.idle;
