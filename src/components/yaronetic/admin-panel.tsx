@@ -328,7 +328,7 @@ function People({ members, onChange }: { members: MemberRow[] | null; onChange: 
           {grantTo === member.id ? (
             <div className="mt-3 space-y-2 rounded-xl border border-line p-3">
               <p className="text-xs text-muted">Начисление Вубли · {member.name}</p>
-              <input className="field w-full" aria-label="Количество Вубли" inputMode="numeric" placeholder="Количество (1–100000)" value={grantAmount} onChange={(e) => setGrantAmount(e.target.value.replace(/\\D/g, "").slice(0, 6))} />
+              <input className="field w-full" aria-label="Количество Вубли" inputMode="numeric" placeholder="Количество (1–100000)" value={grantAmount} onChange={(e) => setGrantAmount(e.target.value.replace(/\D/g, "").slice(0, 6))} />
               <input className="field w-full" aria-label="Причина начисления" maxLength={180} placeholder="Причина начисления" value={grantReason} onChange={(e) => setGrantReason(e.target.value)} />
               <button type="button" className="press h-9 rounded-lg bg-accent px-3 text-xs text-accent-fg disabled:opacity-40" disabled={busy || !grantReason.trim() || !Number.isSafeInteger(Number(grantAmount)) || Number(grantAmount) < 1 || Number(grantAmount) > 100000} onClick={() => void run(async () => { const rows = await grantMemberVubli({ data: { id: member.id, amount: Number(grantAmount), reason: grantReason } }); setGrantTo(null); setGrantAmount(""); setGrantReason(""); return rows; }, "Вубли начислены")}>Подтвердить начисление</button>
             </div>
