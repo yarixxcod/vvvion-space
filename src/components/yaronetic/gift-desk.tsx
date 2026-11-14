@@ -12,6 +12,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
   const [handle, setHandle] = useState("");
   const [note, setNote] = useState("");
   const [found, setFound] = useState<string | null>(null);
+  const [lookupState, setLookupState] = useState<"idle" | "checking" | "found" | "missing" | "error">("idle");
   const [pick, setPick] = useState<GiftItem | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,15 +32,22 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
 
     // Never leave a previous recipient selected while a new handle is checked.
     setFound(null);
+    setLookupState(raw.length < 3 ? "idle" : "checking");
     if (raw.length < 3) return;
 
     const timer = window.setTimeout(() => {
       void lookupHandle({ data: { handle: raw } })
         .then((hit) => {
-          if (active) setFound(hit ? hit.name : null);
+          if (active) {
+            setFound(hit ? hit.name : null);
+            setLookupState(hit ? "found" : "missing");
+          }
         })
         .catch(() => {
-          if (active) setFound(null);
+          if (active) {
+            setFound(null);
+            setLookupState("error");
+          }
         });
     }, 250);
 
@@ -58,10 +66,12 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           className="field mt-3"
           value={handle}
           placeholder="@username"
+          aria-label="Юзернейм получателя"
+          aria-describedby="gift-recipient-status"
           maxLength={21}
           onChange={(event) => setHandle(event.target.value.toLowerCase())}
         />
-        <p className="mt-1 min-h-5 text-xs text-muted">{found ? `Это ${found}` : handle.trim().length >= 3 ? "Такого юзернейма нет" : ""}</p>
+        <p id="gift-recipient-status" role="status" aria-live="polite" className="mt-1 min-h-5 text-xs text-muted">{lookupState === "checking" ? "Проверяем юзернейм…" : lookupState === "found" && found ? `Это ${found}` : lookupState === "missing" ? "Такого юзернейма нет" : lookupState === "error" ? "Не удалось проверить юзернейм. Попробуйте ещё раз." : ""}</p>
         <label className="mt-2 block text-xs text-faint">
           Записка, необязательно
           <input className="field mt-1" value={note} maxLength={80} onChange={(event) => setNote(event.target.value)} />
