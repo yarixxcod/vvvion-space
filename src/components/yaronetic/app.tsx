@@ -21,6 +21,7 @@ import { GUEST_QUESTION_LIMIT } from "@/lib/ai/guest-limit";
 import { personalSuggestions, topicLabel } from "@/lib/ai/interest-topics";
 import { suggestionsFor } from "@/lib/ai/defaults";
 import { getInterests, type InterestProfile } from "@/lib/ai/interests";
+import { getMailStatus } from "@/lib/mail/codes";
 import { publishChat } from "@/lib/ai/share";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { installClickFallback } from "@/lib/click-fallback";
@@ -176,11 +177,11 @@ export function App({
       return;
     }
     let cancelled = false;
-    void getInterests()
-      .then((profile) => {
+    void Promise.all([getInterests(), getMailStatus()])
+      .then(([profile, mail]) => {
         if (cancelled) return;
         setInterests(profile);
-        if (!profile.known) setAskInterests(true);
+        if (!profile.known && mail.verified) setAskInterests(true);
       })
       .catch(() => {
         if (!cancelled) setInterests({ known: true, topics: [], tone: "clear", skipped: true });
