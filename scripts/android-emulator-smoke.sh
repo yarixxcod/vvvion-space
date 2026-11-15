@@ -10,6 +10,31 @@ collect_evidence() {
 trap collect_evidence EXIT
 # Android's first immersive-mode tutorial is a system overlay, not app content.
 adb shell settings put secure immersive_mode_confirmations confirmed
+# A boot-completed property can precede launcher/System UI readiness on hosted API 36 devices.
+adb shell input keyevent KEYCODE_HOME
+sleep 15
+recover_system_overlay() {
+  adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || return 0
+  adb pull /sdcard/window.xml emulator-evidence/system-window.xml >/dev/null 2>&1 || return 0
+  python3 - <<'PYSYSTEM' > emulator-evidence/system-tap.txt
+import re, xml.etree.ElementTree as ET
+nodes = list(ET.parse('emulator-evidence/system-window.xml').getroot().iter('node'))
+title = next((n.get('text', '') for n in nodes if n.get('resource-id') == 'android:id/alertTitle'), '')
+# Never dismiss an ANR from VVVion or an unknown app. Keep evidence of infrastructure failures.
+if title in ("Quickstep isn't responding", "System UI isn't responding"):
+    button = next((n for n in nodes if n.get('resource-id') == 'android:id/aerr_wait'), None)
+    if button is not None:
+        x1,y1,x2,y2 = map(int,re.findall(r'\d+',button.get('bounds')))
+        print((x1+x2)//2, (y1+y2)//2)
+PYSYSTEM
+  if [[ -s emulator-evidence/system-tap.txt ]]; then
+    cp emulator-evidence/system-window.xml "emulator-evidence/system-anr-${attempt:-boot}.xml"
+    read -r SYSTEM_X SYSTEM_Y < emulator-evidence/system-tap.txt
+    adb shell input tap "$SYSTEM_X" "$SYSTEM_Y"
+    sleep 3
+  fi
+}
+recover_system_overlay
 adb install -r artifacts/*-debug.apk
 # Pregrant this declared runtime permission in the disposable CI device so its first-run dialog does not cover the chat.
 adb shell pm grant space.vvvion.app android.permission.POST_NOTIFICATIONS
@@ -17,6 +42,7 @@ adb logcat -c
 adb shell am start -W -n space.vvvion.app/.MainActivity > emulator-evidence/launch.txt
 # Wait for the native loader/site rather than capturing the initial system splash.
 for attempt in {1..12}; do
+  recover_system_overlay
   adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
   adb pull /sdcard/window.xml emulator-evidence/portrait.xml >/dev/null 2>&1 || true
   if [[ -f emulator-evidence/portrait.xml ]] && grep -q 'android.webkit.WebView' emulator-evidence/portrait.xml; then break; fi
