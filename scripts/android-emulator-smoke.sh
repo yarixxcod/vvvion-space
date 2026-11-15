@@ -45,12 +45,13 @@ print((x1+x2)//2,(y1+y2)//2)
 PYINPUT
 read -r INPUT_X INPUT_Y < emulator-evidence/input-tap.txt
 adb shell input tap "$INPUT_X" "$INPUT_Y"
-for attempt in {1..10}; do
+for attempt in {1..20}; do
   adb shell dumpsys input_method > emulator-evidence/keyboard.txt
-  if grep -Eq 'mInputShown=true|mIsInputViewShown=true|isInputShown=true' emulator-evidence/keyboard.txt; then break; fi
+  if grep -Eq 'mIsInputViewShown=true' emulator-evidence/keyboard.txt; then break; fi
   sleep 1
 done
-grep -Eq 'mInputShown=true|mIsInputViewShown=true|isInputShown=true' emulator-evidence/keyboard.txt
+grep -Eq 'mIsInputViewShown=true' emulator-evidence/keyboard.txt
+sleep 1
 adb exec-out screencap -p > emulator-evidence/keyboard.png
 adb shell input keyevent KEYCODE_BACK
 adb shell settings put system accelerometer_rotation 0
@@ -73,10 +74,11 @@ adb shell am start -W -n space.vvvion.app/.MainActivity > emulator-evidence/offl
 for attempt in {1..12}; do
   adb shell uiautomator dump /sdcard/offline.xml >/dev/null 2>&1 || true
   adb pull /sdcard/offline.xml emulator-evidence/offline.xml >/dev/null 2>&1 || true
-  if [[ -f emulator-evidence/offline.xml ]] && grep -q 'Нет подключения к интернету' emulator-evidence/offline.xml; then break; fi
+  if [[ -f emulator-evidence/offline.xml ]] && grep -Eq 'Нет подключения к интернету|Связи нет' emulator-evidence/offline.xml; then break; fi
   sleep 2
 done
-grep -q 'Нет подключения к интернету' emulator-evidence/offline.xml
+grep -Eq 'Нет подключения к интернету|Связи нет' emulator-evidence/offline.xml
+grep -q 'Повторить' emulator-evidence/offline.xml
 adb exec-out screencap -p > emulator-evidence/offline.png
 adb shell svc wifi enable
 adb shell svc data enable
