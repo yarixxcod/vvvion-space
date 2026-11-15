@@ -49,7 +49,7 @@ export function ScreenClip({ id }: { id: string }) {
     <>
       <button type="button" className="relative mt-1.5 block w-full overflow-hidden rounded-2xl bg-black text-left" onClick={() => setOpen(true)}>
         {video.thumb && !bad ? (
-          <img src={video.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} className="aspect-video w-full bg-subtle object-cover" />
+          <img src={video.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} className="mx-auto max-h-[min(70dvh,640px)] w-auto max-w-full bg-black object-contain" />
         ) : (
           <span className="grid aspect-video w-full place-items-center bg-subtle font-serif text-3xl text-muted">{LABEL[video.provider]}</span>
         )}

@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { ChevronLeft, Download } from "lucide-react";
 import { toast } from "sonner";
+import { FileVideo } from "@/components/yaronetic/fit-video";
 import { getBearerToken } from "@/lib/auth/client";
 import { useTx } from "@/lib/lang";
 import type { Grabbed } from "@/lib/social/grab";
@@ -144,7 +145,7 @@ export function Grabber({ onBack }: { onBack: () => void }) {
           return (
             <div key={file.id} className="mt-4 rounded-[1.6rem] border border-line bg-elev p-4">
               {file.mime.startsWith("image/") ? <img src={src} alt="" className="max-h-[28rem] w-full rounded-2xl bg-black object-contain" /> : null}
-              {file.mime.startsWith("video/") ? <video src={src} controls playsInline preload="metadata" className="max-h-[28rem] w-full rounded-2xl bg-black" /> : null}
+              {file.mime.startsWith("video/") ? <FileVideo src={src} name={file.name} /> : null}
               {file.mime.startsWith("audio/") ? <audio src={src} controls className="w-full" /> : null}
               <p className="mt-3 truncate font-serif text-2xl tracking-tight">{file.name.replace(/\.(mp4|jpe?g|png|webp|gif|webm|m4a)$/i, "")}</p>
               <p className="mt-1 text-xs text-faint">

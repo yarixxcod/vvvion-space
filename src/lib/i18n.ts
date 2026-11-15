@@ -277,7 +277,7 @@ const ABOUT: Record<Lang, { title: string; description: string; lead: string; bl
         title: "Круг",
         paragraphs: [
           "Сообщения, группы, лента, погода, новости, курсы и VPN живут в одном круге. У раздела свой адрес: его можно отправить, и откроется именно он.",
-          "Читальня принимает EPUB, FB2, TXT и PDF до 25 МБ. Смотрельня показывает ролики YouTube, Rutube и VK.",
+          "Читальня принимает EPUB, FB2, TXT и PDF до 20 МБ, в том числе с картинками. Смотрельня показывает ролики YouTube, Rutube и VK.",
         ],
       },
       {
@@ -354,7 +354,7 @@ const ABOUT: Record<Lang, { title: string; description: string; lead: string; bl
         title: "Circle",
         paragraphs: [
           "Messages, groups, the feed, weather, news, rates and VPN live in one circle. Each section has an address: send it and that section opens.",
-          "The shelf takes EPUB, FB2, TXT and PDF up to 25 MB. The player shows YouTube, Rutube and VK.",
+          "The shelf takes EPUB, FB2, TXT and PDF up to 20 MB, including books with pictures. The player shows YouTube, Rutube and VK.",
         ],
       },
       {
@@ -431,7 +431,7 @@ const ABOUT: Record<Lang, { title: string; description: string; lead: string; bl
         title: "Шеңбер",
         paragraphs: [
           "Хабарлама, топ, таспа, ауа райы, жаңалық, бағам және VPN бір шеңберде. Әр бөлімнің мекенжайы бар: жіберсеңіз, сол бөлім ашылады.",
-          "Сөре EPUB, FB2, TXT және 25 МБ-қа дейінгі PDF алады. Ойнатқыш YouTube, Rutube және VK көрсетеді.",
+          "Сөре EPUB, FB2, TXT және 20 МБ-қа дейінгі PDF алады, суреттері бар кітаптарды да. Ойнатқыш YouTube, Rutube және VK көрсетеді.",
         ],
       },
       {

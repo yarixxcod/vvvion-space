@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileText, Folder, FolderPlus, Music2, Pencil, Share2, Trash2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
+import { FileVideo } from "@/components/yaronetic/fit-video";
 import { toast } from "sonner";
 import { ArtistNames } from "@/components/yaronetic/artist-card";
 import { FileBar } from "@/components/yaronetic/file-bar";
@@ -119,7 +120,7 @@ function MegaPreview({
       </div>
       <div className="mt-3 flex min-h-0 flex-1 items-center justify-center overflow-auto">
         {kind === "image" ? <img src={src} alt={entry.name} className="max-h-full max-w-full object-contain" /> : null}
-        {kind === "video" ? <video src={src} controls playsInline className="max-h-full max-w-full bg-black" /> : null}
+        {kind === "video" ? <FileVideo src={src} name={entry.name} stage /> : null}
         {kind === "audio" && !isMusicFile(entry.name, entry.mime) ? <audio controls autoPlay src={src} className="w-full max-w-xl" /> : null}
         {kind === "audio" && isMusicFile(entry.name, entry.mime) ? (
           <button type="button" className="press rounded-3xl bg-white px-5 py-3 text-sm font-medium text-black" onClick={() => openAlbum([{ src, name: entry.name, bytes: entry.bytes }])}>

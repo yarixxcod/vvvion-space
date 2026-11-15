@@ -2,13 +2,18 @@ import { unzipSync } from "fflate";
 import type { ParsedBook } from "@/lib/books/types";
 import { countWords, decodeText, escapeHtml, fileTitle, pdfTitle, splitPlainChapters } from "@/lib/books/text";
 
-const MAX_BYTES = 25 * 1024 * 1024;
+const MAX_BYTES = 20 * 1024 * 1024;
 const MAX_COVER = 500_000;
+const MAX_INLINE = 1_600_000;
 
 export function parseBookFile(file: File): Promise<ParsedBook> {
-  if (file.size > MAX_BYTES) return Promise.reject(new Error("Книга больше 25 МБ"));
+  if (file.size > MAX_BYTES) return Promise.reject(new Error("Книга больше 20 МБ"));
   if (file.size < 16) return Promise.reject(new Error("Файл пустой"));
-  return file.arrayBuffer().then((buffer) => parseBookBytes(new Uint8Array(buffer), file.name));
+  return file.arrayBuffer().then((buffer) => openBook(new Uint8Array(buffer), file.name));
+}
+
+export async function openBook(bytes: Uint8Array, name: string): Promise<ParsedBook> {
+  return hydrateBookImages(bytes, parseBookBytes(bytes, name));
 }
 
 export function parseBookBytes(bytes: Uint8Array, name: string): ParsedBook {
@@ -88,8 +93,8 @@ function parsePdf(bytes: Uint8Array, name: string): ParsedBook {
 }
 
 function parseFb2(bytes: Uint8Array, name: string): ParsedBook {
-  const xml = xmlString(bytes);
-  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  const packed = splitFb2(xmlString(bytes));
+  const doc = new DOMParser().parseFromString(packed.xml, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("FB2 не разобрать");
   const title = textOf(first(doc, "book-title")) || fileTitle(name);
   const author = [...byLocal(doc, "author")]
@@ -103,76 +108,92 @@ function parseFb2(bytes: Uint8Array, name: string): ParsedBook {
     .filter(Boolean)
     .join(", ");
   const language = textOf(first(doc, "lang"));
-  const cover = fb2Cover(doc);
+  const cover = fb2Cover(packed, doc);
   const annotation = first(doc, "annotation");
   const chapters = [];
   if (annotation) {
-    const html = renderBlocks(annotation);
+    const html = renderBlocks(annotation, packed.images);
     if (html.trim()) chapters.push({ title: "О книге", html });
   }
   const bodies = byLocal(doc, "body").filter((node) => node.getAttribute("name") !== "notes");
   for (const body of bodies) {
     const sections = [...body.children].filter((node) => localName(node) === "section");
     if (sections.length === 0) {
-      const html = renderBlocks(body);
+      const html = renderBlocks(body, packed.images);
       if (html.trim()) chapters.push({ title: "Текст", html });
     } else {
-      for (const section of sections) walkSection(section, chapters, "Часть");
+      for (const section of sections) walkSection(section, chapters, "Часть", packed.images);
     }
   }
   if (!chapters.length) throw new Error("В книге не нашлось текста");
   return finish({ title, author, language, format: "fb2", cover, chapters, words: 0 });
 }
 
-function walkSection(section: Element, chapters: { title: string; html: string }[], fallback: string) {
+type Fb2Pack = { xml: string; images: Map<string, string> };
+
+function splitFb2(xml: string): Fb2Pack {
+  const images = new Map<string, string>();
+  const stripped = xml.replace(/<binary\b([^>]*)>([\s\S]*?)<\/binary>/gi, (_all, attrs: string, body: string) => {
+    const id = /\bid\s*=\s*["']([^"']+)["']/i.exec(attrs)?.[1] || "";
+    const type = (/\bcontent-type\s*=\s*["']([^"']+)["']/i.exec(attrs)?.[1] || "image/jpeg").split(";")[0] || "image/jpeg";
+    const data = body.replace(/\s/g, "");
+    if (id && type.startsWith("image/") && data) images.set(id, data.length <= 2_200_000 ? `data:${type};base64,${data}` : `fb2:${id}`);
+    return "";
+  });
+  return { xml: stripped, images };
+}
+
+function walkSection(section: Element, chapters: { title: string; html: string }[], fallback: string, images: Map<string, string>) {
   const titleNode = [...section.children].find((node) => localName(node) === "title");
   const title = titleNode ? plain(titleNode) : fallback;
-  const body = renderBlocks(section);
+  const body = renderBlocks(section, images);
   const html = body.trim() ? `<h1>${escapeHtml(title || fallback)}</h1>${body}` : "";
   if (html.trim()) chapters.push({ title: title || fallback, html });
   const nested = [...section.children].filter((node) => localName(node) === "section");
-  nested.forEach((child, index) => walkSection(child, chapters, `${title || fallback} · ${index + 1}`));
+  nested.forEach((child, index) => walkSection(child, chapters, `${title || fallback} · ${index + 1}`, images));
 }
 
-function fb2Cover(doc: Document): string {
+function fb2Cover(packed: Fb2Pack, doc: Document): string {
   const page = first(doc, "coverpage");
   const image = page ? first(page, "image") : null;
   const href = image ? hrefOf(image).replace(/^#/, "") : "";
-  if (!href) return "";
-  const binary = byLocal(doc, "binary").find((node) => node.getAttribute("id") === href);
-  if (!binary) return "";
-  const type = binary.getAttribute("content-type") || "image/jpeg";
-  if (!type.startsWith("image/")) return "";
-  const data = (binary.textContent || "").replace(/\s/g, "");
-  if (!data || data.length > MAX_COVER) return "";
-  return `data:${type};base64,${data}`;
+  const src = href ? packed.images.get(href) || "" : "";
+  return src.startsWith("data:image/") || src.startsWith("fb2:") ? src : "";
 }
 
-function renderBlocks(el: Element): string {
+function renderBlocks(el: Element, images: Map<string, string>): string {
   let html = "";
   for (const child of el.children) {
     const name = localName(child);
-    if (name === "title" || name === "section" || name === "binary" || name === "image") continue;
+    if (name === "title" || name === "section" || name === "binary") continue;
+    if (name === "image") {
+      html += fb2Image(child, images);
+      continue;
+    }
     if (name === "p" || name === "subtitle" || name === "text-author" || name === "v") {
-      const inner = inline(child);
+      const inner = inline(child, images);
       if (inner.trim()) html += `<p>${inner}</p>`;
     } else if (name === "empty-line") {
       html += "<br>";
     } else {
-      html += renderBlocks(child);
+      html += renderBlocks(child, images);
     }
   }
   return html;
 }
 
-function inline(el: Element): string {
+function inline(el: Element, images: Map<string, string>): string {
   let out = "";
   for (const node of el.childNodes) {
     if (node.nodeType === Node.TEXT_NODE) out += escapeHtml(node.textContent || "");
     else if (node.nodeType === Node.ELEMENT_NODE) {
       const child = node as Element;
       const name = localName(child);
-      const inner = inline(child);
+      if (name === "image") {
+        out += fb2Image(child, images);
+        continue;
+      }
+      const inner = inline(child, images);
       if (name === "emphasis" || name === "strong" || name === "style") out += `<em>${inner}</em>`;
       else if (name === "a") {
         const href = hrefOf(child);
@@ -181,6 +202,14 @@ function inline(el: Element): string {
     }
   }
   return out;
+}
+
+function fb2Image(el: Element, images: Map<string, string>): string {
+  const id = hrefOf(el).replace(/^#/, "");
+  const src = id ? images.get(id) : "";
+  if (!src) return "";
+  if (src.startsWith("fb2:")) return `<img data-book-src="${escapeHtml(src)}" alt="">`;
+  return `<img src="${src}" alt="">`;
 }
 
 function parseEpub(bytes: Uint8Array, name: string): ParsedBook {
@@ -213,7 +242,8 @@ function parseEpubArchive(files: Record<string, Uint8Array>, name: string): Pars
   const manifest = takeManifest(doc);
   const coverHref = epubCoverHref(doc, manifest);
   const coverKey = coverHref ? findKey(files, resolvePath(base, coverHref), coverHref) : undefined;
-  const cover = coverKey && files[coverKey] ? dataUrl(files[coverKey], guessType(coverKey)) : "";
+  const coverBytes = coverKey ? files[coverKey] : undefined;
+  const cover = coverBytes ? dataUrl(coverBytes, guessType(coverKey || ""), 8_000_000) || (coverKey ? `ref:${coverKey}` : "") : "";
   const linear = spineItems(doc, manifest, false);
   const withHidden = linear.length ? linear : spineItems(doc, manifest, true);
   let chapters = loadChapters(files, withHidden, base, name);
@@ -545,13 +575,19 @@ function emitNode(node: Node, chapterPath: string, files: Record<string, Uint8Ar
 function imageTag(el: Element, chapterPath: string, files: Record<string, Uint8Array>): string {
   const src = el.getAttribute("src") || hrefOf(el);
   if (!src || /^\s*javascript:/i.test(src)) return "";
-  if (/^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[a-z0-9+/=]+$/i.test(src) && src.length <= MAX_COVER) {
+  if (/^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[a-z0-9+/=]+$/i.test(src) && src.length <= 2_200_000) {
     return `<img src="${src}" alt="">`;
   }
   const key = findKey(files, resolvePath(chapterPath, src), src);
   const bytes = key ? files[key] : undefined;
-  const url = bytes ? dataUrl(bytes, guessType(key || src)) : "";
-  return url ? `<img src="${url}" alt="">` : "";
+  if (!bytes) return "";
+  const type = guessType(key || src);
+  if (bytes.length <= MAX_INLINE) {
+    const url = dataUrl(bytes, type, MAX_INLINE);
+    return url ? `<img src="${url}" alt="">` : "";
+  }
+  if (bytes.length > 12_000_000 || !key) return "";
+  return `<img data-book-src="${escapeHtml(key)}" alt="">`;
 }
 
 function plainParagraphs(source: string): string {
@@ -621,8 +657,8 @@ function finish(book: ParsedBook): ParsedBook {
   return { ...book, title: book.title.slice(0, 180), author: book.author.slice(0, 180), words };
 }
 
-function dataUrl(bytes: Uint8Array, type: string): string {
-  if (!bytes.length || bytes.length > MAX_COVER || !type.startsWith("image/")) return "";
+function dataUrl(bytes: Uint8Array, type: string, limit = MAX_INLINE): string {
+  if (!bytes.length || bytes.length > limit || !type.startsWith("image/") || type === "image/svg+xml") return "";
   let binary = "";
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
@@ -703,4 +739,126 @@ function hrefOf(el: Element): string {
     el.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
     ""
   );
+}
+
+export async function hydrateBookImages(bytes: Uint8Array, book: ParsedBook): Promise<ParsedBook> {
+  const html = book.chapters.map((chapter) => chapter.html).join("\n");
+  const needsZip = book.cover.startsWith("ref:") || /data-book-src="(?!fb2:)/.test(html);
+  const needsFb2 = book.cover.startsWith("fb2:") || html.includes('data-book-src="fb2:');
+  let files: Record<string, Uint8Array> | null = null;
+  if (needsZip) {
+    try {
+      files = unzip(bytes);
+    } catch {
+      files = null;
+    }
+  }
+  const fb2xml = needsFb2 ? xmlString(bytes) : "";
+  let cover = book.cover.startsWith("ref:") || book.cover.startsWith("fb2:") ? "" : book.cover;
+  if (book.cover.startsWith("ref:") && files) {
+    const key = book.cover.slice(4);
+    const raw = files[key];
+    cover = raw ? await shrinkBytes(raw, guessType(key)) : "";
+  } else if (book.cover.startsWith("fb2:")) {
+    const raw = fb2Bytes(fb2xml, book.cover.slice(4));
+    cover = raw ? await shrinkBytes(raw, "image/jpeg") : "";
+  } else if (cover.startsWith("data:image/")) {
+    cover = await shrinkDataUrl(cover);
+  }
+  if (!cover.startsWith("data:image/") || cover.length > 650_000) cover = "";
+  const chapters = [];
+  for (const chapter of book.chapters) {
+    let next = await replacePictures(chapter.html, async (src) => shrinkDataUrl(src));
+    next = await replacePictureRefs(next, async (id) => {
+      const raw = id.startsWith("fb2:") ? fb2Bytes(fb2xml, id.slice(4)) : files?.[id];
+      return raw ? shrinkBytes(raw, guessType(id)) : "";
+    });
+    next = next.replace(/<img(?![^>]*\ssrc=)[^>]*>/g, "");
+    if (textLen(next) > 0 || next.includes("<img")) chapters.push({ ...chapter, html: next });
+  }
+  return finish({ ...book, cover, chapters: chapters.length ? chapters : book.chapters, words: 0 });
+}
+
+async function replacePictures(html: string, map: (src: string) => Promise<string>): Promise<string> {
+  const found = [...html.matchAll(/src="(data:image\/[^"]+)"/g)];
+  let next = html;
+  for (const match of found) {
+    const src = match[1] || "";
+    const small = await map(src);
+    const token = `src="${src}"`;
+    next = small ? next.replace(token, `src="${small}"`) : next.replace(token, "");
+  }
+  return next;
+}
+
+async function replacePictureRefs(html: string, map: (id: string) => Promise<string>): Promise<string> {
+  const found = [...html.matchAll(/data-book-src="([^"]+)"/g)];
+  let next = html;
+  for (const match of found) {
+    const id = match[1] || "";
+    const src = await map(id);
+    next = next.replace(match[0], src ? `src="${src}"` : "");
+  }
+  return next;
+}
+
+function fb2Bytes(xml: string, id: string): Uint8Array | null {
+  const safe = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const any = xml.match(new RegExp(`<binary\\b([^>]*\\bid\\s*=\\s*["']${safe}["'][^>]*)>([\\s\\S]*?)</binary>`, "i"));
+  if (!any?.[2]) return null;
+  return decodeB64(any[2]);
+}
+
+function decodeB64(data: string): Uint8Array | null {
+  try {
+    const clean = data.replace(/\s/g, "");
+    const bin = atob(clean);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+async function shrinkDataUrl(src: string): Promise<string> {
+  if (!src.startsWith("data:image/") || src.length < 180_000) return src;
+  if (typeof createImageBitmap !== "function") return src.length <= 650_000 ? src : "";
+  try {
+    const blob = await (await fetch(src)).blob();
+    const next = await bitmapUrl(blob);
+    if (next && next.length < src.length) return next;
+    return src.length <= 650_000 ? src : "";
+  } catch {
+    return src.length <= 650_000 ? src : "";
+  }
+}
+
+async function shrinkBytes(bytes: Uint8Array, type: string): Promise<string> {
+  const mime = type.startsWith("image/") && type !== "image/svg+xml" ? type : "image/jpeg";
+  if (typeof createImageBitmap !== "function") return dataUrl(bytes, mime, MAX_COVER);
+  try {
+    const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    return (await bitmapUrl(new Blob([copy], { type: mime }))) || dataUrl(bytes, mime, MAX_COVER);
+  } catch {
+    return dataUrl(bytes, mime, MAX_COVER);
+  }
+}
+
+async function bitmapUrl(blob: Blob): Promise<string> {
+  const bmp = await createImageBitmap(blob);
+  const edge = Math.max(bmp.width, bmp.height) || 1;
+  const scale = Math.min(1, 1280 / edge);
+  const w = Math.max(1, Math.round(bmp.width * scale));
+  const h = Math.max(1, Math.round(bmp.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(bmp, 0, 0, w, h);
+  bmp.close();
+  return canvas.toDataURL("image/jpeg", 0.74);
 }

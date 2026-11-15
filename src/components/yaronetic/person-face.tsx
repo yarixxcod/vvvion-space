@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { openPersonCard } from "@/components/yaronetic/person-card";
 import { listFaceMarks } from "@/lib/social/premium";
 
 type Marks = { admins: Set<string>; premiums: Set<string> };
@@ -50,11 +51,13 @@ export function PersonFace({
   image,
   size = 36,
   userId,
+  pressable = true,
 }: {
   name: string;
   image?: string | null;
   size?: number;
   userId?: string | null;
+  pressable?: boolean;
 }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const { admin, premium } = useFaceMarks(userId);
@@ -67,9 +70,36 @@ export function PersonFace({
     ) : (
       <img src={image} alt="" className="person-photo" style={{ width: size, height: size }} onError={() => setFailedSrc(image)} />
     );
+  const body = mark(face, admin, premium, size);
+  if (!pressable || !userId) return body;
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      className="inline-flex cursor-pointer rounded-full"
+      aria-label={`Профиль ${name}`}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        openPersonCard(userId);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        openPersonCard(userId);
+      }}
+    >
+      {body}
+    </span>
+  );
+}
+
+function mark(face: ReactNode, admin: boolean, premium: boolean, size: number) {
   if (!admin && !premium) return face;
   const tiny = size < 26;
-  const mark = Math.max(11, Math.round(size * 0.42));
+  const badge = Math.max(11, Math.round(size * 0.42));
   const title = admin && premium ? "Администратор, Premium" : admin ? "Администратор" : "Premium";
   return (
     <span
@@ -83,15 +113,15 @@ export function PersonFace({
     >
       {face}
       {admin && !tiny ? (
-        <span className="person-admin-check" style={{ width: mark, height: mark }} aria-label="Администратор">
-          <svg viewBox="0 0 16 16" width={Math.max(8, mark - 6)} height={Math.max(8, mark - 6)} aria-hidden="true">
+        <span className="person-admin-check" style={{ width: badge, height: badge }} aria-label="Администратор">
+          <svg viewBox="0 0 16 16" width={Math.max(8, badge - 6)} height={Math.max(8, badge - 6)} aria-hidden="true">
             <path d="M3.2 8.2 6.3 11.2 12.8 4.6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </span>
       ) : null}
       {premium && !tiny ? (
-        <span className="person-premium-gem" style={{ width: mark, height: mark }} aria-label="Premium">
-          <svg viewBox="0 0 16 16" width={Math.max(8, mark - 6)} height={Math.max(8, mark - 6)} aria-hidden="true">
+        <span className="person-premium-gem" style={{ width: badge, height: badge }} aria-label="Premium">
+          <svg viewBox="0 0 16 16" width={Math.max(8, badge - 6)} height={Math.max(8, badge - 6)} aria-hidden="true">
             <path d="M8 1.6 13.2 6.4 8 14.4 2.8 6.4Z" fill="currentColor" />
           </svg>
         </span>

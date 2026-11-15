@@ -35,7 +35,7 @@ import {
   type RoomMessage,
   type RoomSummary,
 } from "@/lib/social/messenger";
-import { FileVideo } from "@/components/yaronetic/post-media";
+import { FileVideo } from "@/components/yaronetic/fit-video";
 import { MusicCard } from "@/components/yaronetic/music-dock";
 import { ScreenClip } from "@/components/yaronetic/screen-clip";
 import { HoldHint } from "@/components/yaronetic/hold-hint";

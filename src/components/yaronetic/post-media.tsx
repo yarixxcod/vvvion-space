@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { FileArchive, FileText, Heart, Play, X } from "lucide-react";
+import { FileArchive, FileText, Heart, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
+import { FileVideo } from "@/components/yaronetic/fit-video";
 import type { FeedFile } from "@/lib/social/feed";
 import { pushBackLayer } from "@/lib/app-back";
 import { cn } from "@/lib/utils";
@@ -10,37 +11,6 @@ function sizeLabel(bytes: number) {
   if (bytes < 1024) return `${bytes} Б`;
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
   return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} МБ`;
-}
-
-export function FileVideo({ src, name }: { src: string; name: string }) {
-  const node = useRef<HTMLVideoElement>(null);
-  const [armed, setArmed] = useState(false);
-  return (
-    <div className="relative mt-1.5 overflow-hidden rounded-2xl bg-black">
-      <video
-        ref={node}
-        src={src}
-        controls={armed}
-        playsInline
-        preload="metadata"
-        className="aspect-video max-h-72 w-full bg-black object-contain"
-        onLoadedData={() => setArmed(true)}
-        onPlay={() => setArmed(true)}
-      />
-      {armed ? null : (
-        <button
-          type="button"
-          className="absolute inset-0 grid place-items-center"
-          aria-label={`Смотреть ${name}`}
-          onClick={() => void node.current?.play()}
-        >
-          <span className="grid size-11 place-items-center rounded-full bg-white/90 text-black">
-            <Play className="size-4 fill-current" />
-          </span>
-        </button>
-      )}
-    </div>
-  );
 }
 
 export function PostAttachments({ files, urlFor, onLike }: { files: FeedFile[]; urlFor: (file: FeedFile) => string; onLike?: () => void }) {

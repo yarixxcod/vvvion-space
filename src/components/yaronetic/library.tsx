@@ -6,8 +6,9 @@ import { PageLoader } from "@/components/yaronetic/page-loader";
 import { PersonFace } from "@/components/yaronetic/person-face";
 import { getBearerToken } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { parseBookBytes } from "@/lib/books/parse";
+import { parseBookBytes, hydrateBookImages } from "@/lib/books/parse";
 import { listShelf, removeShelfBook, saveShelfProgress, shareShelfBook } from "@/lib/books/shelf";
+import { getAccess } from "@/lib/social/admin";
 import { clearJump, readJump } from "@/lib/jump";
 import { useCircleNest } from "@/lib/circle-history";
 import { useEdgeBack } from "@/lib/gestures/use-edge-back";
@@ -36,6 +37,7 @@ export function Library() {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [admin, setAdmin] = useState(false);
   const [room, setRoom] = useState<"read" | "watch" | "play">("read");
 
   useEffect(() => {
@@ -45,6 +47,19 @@ export function Library() {
     };
   }, [open]);
   useCircleNest(Boolean(open), () => setOpen(null));
+
+  useEffect(() => {
+    if (!me) return;
+    let dead = false;
+    void getAccess()
+      .then((access) => {
+        if (!dead) setAdmin(access.role === "admin");
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [me]);
 
   async function share(book: ShelfBook) {
     try {
@@ -60,6 +75,18 @@ export function Library() {
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Не удалось создать ссылку");
+    }
+  }
+
+  async function drop(book: ShelfBook) {
+    if (!window.confirm(`Убрать «${book.title}» с полки?`)) return;
+    try {
+      await removeShelfBook({ data: { id: book.id } });
+      toast("Книга убрана с полки");
+      if (open?.id === book.id) setOpen(null);
+      await refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Не удалось убрать книгу");
     }
   }
 
@@ -211,6 +238,8 @@ export function Library() {
             onRetry={() => void refresh().catch(() => setError("Полка сейчас недоступна"))}
             onOpen={setOpen}
             onShare={(book) => void share(book)}
+            onRemove={(book) => void drop(book)}
+            canRemove={(book) => admin || book.ownerId === me?.id}
             onAdded={() => void refresh().catch(() => undefined)}
           />
         )}
@@ -228,6 +257,8 @@ function Shelf({
   onRetry,
   onOpen,
   onShare,
+  onRemove,
+  canRemove,
   onAdded,
 }: {
   books: ShelfBook[] | null;
@@ -237,6 +268,8 @@ function Shelf({
   onRetry: () => void;
   onOpen: (book: ShelfBook) => void;
   onShare: (book: ShelfBook) => void;
+  onRemove: (book: ShelfBook) => void;
+  canRemove: (book: ShelfBook) => boolean;
   onAdded: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -249,7 +282,7 @@ function Shelf({
     for (const file of list.slice(0, 8)) {
       try {
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const parsed = parseBookBytes(bytes, file.name);
+        const parsed = await hydrateBookImages(bytes, parseBookBytes(bytes, file.name));
         await publishBook(file, parsed);
         saved += 1;
       } catch (err) {
@@ -276,7 +309,7 @@ function Shelf({
         <div>
           <h3 className="font-serif text-2xl tracking-tight">Читальня</h3>
           <p className="mt-1 max-w-md text-sm text-muted">
-            EPUB, FB2, TXT и PDF до 25 МБ. Загруженную книгу видят все, кто вошёл. Она остаётся в общей базе и не пропадает после перезапуска. Ищите по названию.
+            EPUB, FB2, TXT и PDF до 20 МБ. Книги с картинками тоже кладутся на полку. Загруженную книгу видят все, кто вошёл.
           </p>
         </div>
         <button
@@ -357,6 +390,16 @@ function Shelf({
                 >
                   <Share2 className="size-4" />
                 </button>
+                {canRemove(book) ? (
+                  <button
+                    type="button"
+                    className="press absolute top-2 left-2 inline-flex size-11 items-center justify-center rounded-2xl border border-line bg-bg/85 text-fg"
+                    aria-label={`Убрать «${book.title}» с полки`}
+                    onClick={() => onRemove(book)}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -367,6 +410,11 @@ function Shelf({
 }
 
 async function publishBook(file: File, parsed: { title: string; author: string; language: string; format: string; cover: string; words: number; chapters: { title: string }[] }) {
+  if (file.size > 20 * 1024 * 1024) throw new Error("Книга больше 20 МБ");
+  if (file.size > 3_000_000) {
+    await publishBookChunks(file, parsed);
+    return;
+  }
   const body = new FormData();
   body.set("file", file);
   body.set("title", parsed.title);
@@ -386,18 +434,90 @@ async function publishBook(file: File, parsed: { title: string; author: string; 
   }
 }
 
+async function publishBookChunks(file: File, parsed: { title: string; author: string; language: string; format: string; cover: string; words: number; chapters: { title: string }[] }) {
+  const started = await bookPost({ op: "start", name: file.name, size: file.size });
+  const id = typeof started.id === "string" ? started.id : "";
+  if (!id) throw new Error("Не удалось начать загрузку");
+  try {
+    const chunk = 1_200_000;
+    let offset = 0;
+    let index = 0;
+    while (offset < file.size) {
+      const raw = new Uint8Array(await file.slice(offset, offset + chunk).arrayBuffer());
+      await bookPost({ op: "chunk", id, index, data: bytesToBase64(raw) });
+      offset += raw.length;
+      index += 1;
+    }
+    await bookPost({
+      op: "finish",
+      id,
+      name: file.name,
+      title: parsed.title,
+      author: parsed.author,
+      language: parsed.language,
+      format: parsed.format,
+      cover: parsed.cover,
+      words: parsed.words,
+      chapters: parsed.chapters.length,
+    });
+  } catch (error) {
+    await bookPost({ op: "cancel", id }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function bookPost(body: unknown): Promise<{ id?: string; message?: string }> {
+  const headers = new Headers({ "content-type": "application/json" });
+  const token = getBearerToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch("/api/books", { method: "POST", headers, body: JSON.stringify(body) });
+  const payload = (await response.json().catch(() => null)) as { id?: string; message?: string } | null;
+  if (!response.ok) throw new Error(payload?.message || "Не удалось отправить книгу");
+  return payload ?? {};
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let text = "";
+  const step = 0x8000;
+  for (let i = 0; i < bytes.length; i += step) text += String.fromCharCode(...bytes.subarray(i, i + step));
+  return btoa(text);
+}
+
 async function loadBytes(id: string, linkToken?: string): Promise<Uint8Array> {
   const headers = new Headers();
   if (!linkToken) {
     const token = getBearerToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(linkToken ? `/api/books/shared/${linkToken}` : `/api/books/${id}`, { headers });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(payload?.message || "Книга не открылась");
+  const url = linkToken ? `/api/books/shared/${linkToken}` : `/api/books/${id}`;
+  const span = 1_500_000;
+  const parts: Uint8Array[] = [];
+  let start = 0;
+  let total = 0;
+  for (;;) {
+    const next = new Headers(headers);
+    next.set("Range", `bytes=${start}-${start + span - 1}`);
+    const response = await fetch(url, { headers: next });
+    if (response.status !== 206 && response.status !== 200) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message || "Книга не открылась");
+    }
+    const piece = new Uint8Array(await response.arrayBuffer());
+    parts.push(piece);
+    if (response.status === 200) break;
+    const match = /\/(\d+)$/.exec(response.headers.get("content-range") || "");
+    total = match ? Number(match[1]) : piece.length;
+    start += piece.length;
+    if (!piece.length || start >= total) break;
   }
-  return new Uint8Array(await response.arrayBuffer());
+  const size = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(size);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
 }
 
 function Cover({ book }: { book: ShelfBook }) {
@@ -481,7 +601,7 @@ export function Reader({
     let cancelled = false;
     let url = "";
     void loadBytes(book.id, linkToken)
-      .then((bytes) => {
+      .then(async (bytes) => {
         if (cancelled) return;
         if (book.format === "pdf") {
           const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
@@ -494,7 +614,7 @@ export function Reader({
           setChapters([]);
           return;
         }
-        const parsed = parseBookBytes(bytes, book.fileName);
+        const parsed = await hydrateBookImages(bytes, parseBookBytes(bytes, book.fileName));
         if (cancelled) return;
         setChapters(parsed.chapters);
         setIndex(Math.min(book.chapter, Math.max(parsed.chapters.length - 1, 0)));

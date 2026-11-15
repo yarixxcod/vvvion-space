@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Download, FileText, Folder, Music2 } from "lucide-react";
 import { toast } from "sonner";
+import { FileVideo } from "@/components/yaronetic/fit-video";
 import { Mark } from "@/components/yaronetic/mark";
 import { Wordmark } from "@/components/yaronetic/wordmark";
 import type { ShareEntry, SharePageData } from "@/lib/share-view";
@@ -245,7 +246,7 @@ function Preview({ entry, pull, onSave }: { entry: ShareEntry; pull: Pull | null
   return (
     <figure className="mt-8 overflow-hidden rounded-[1.75rem] border border-line bg-elev">
       {entry.media === "image" ? <img src={entry.view} alt={entry.name} className="max-h-[70dvh] w-full bg-subtle object-contain" /> : null}
-      {entry.media === "video" ? <video controls preload="metadata" src={entry.view} className="max-h-[70dvh] w-full bg-black" /> : null}
+      {entry.media === "video" ? <FileVideo src={entry.view} name={entry.name} /> : null}
       {entry.media === "audio" ? (
         <div className="flex items-center gap-3 px-5 py-6">
           <Music2 className="size-5 shrink-0 text-muted" />
