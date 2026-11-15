@@ -77,7 +77,33 @@ for attempt in {1..20}; do
   sleep 1
 done
 grep -Eq 'mIsInputViewShown=true' emulator-evidence/keyboard.txt
-sleep 1
+# IME visibility can precede the app's completed inset/layout pass. Assert the composer too.
+SCREEN_HEIGHT=$(adb shell wm size | tr -d '\r' | sed -n 's/.*: [0-9]*x\([0-9]*\).*/\1/p' | tail -n 1)
+export SCREEN_HEIGHT
+COMPOSER_VISIBLE=false
+for attempt in {1..12}; do
+  adb shell uiautomator dump /sdcard/keyboard.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/keyboard.xml emulator-evidence/keyboard.xml >/dev/null 2>&1 || true
+  if python3 - <<'PYLAYOUT' > emulator-evidence/keyboard-layout.txt
+import os, re, xml.etree.ElementTree as ET
+nodes = ET.parse('emulator-evidence/keyboard.xml').getroot().iter('node')
+fields = [n for n in nodes if n.get('package') == 'space.vvvion.app' and n.get('class') == 'android.widget.EditText' and n.get('focused') == 'true']
+for field in fields:
+    x1,y1,x2,y2 = map(int,re.findall(r'\d+',field.get('bounds')))
+    # Pixel 6 portrait IME takes over a quarter of the display; a full-height stale composer fails.
+    if x2 > x1 and 0 < y1 < y2 < int(os.environ['SCREEN_HEIGHT']) * 0.75:
+        print('Focused composer visible above the portrait IME:', field.get('bounds'))
+        break
+else:
+    raise SystemExit('Focused composer not visible above IME yet')
+PYLAYOUT
+  then
+    COMPOSER_VISIBLE=true
+    break
+  fi
+  sleep 1
+done
+[[ "$COMPOSER_VISIBLE" == true ]]
 adb exec-out screencap -p > emulator-evidence/keyboard.png
 adb shell input keyevent KEYCODE_BACK
 adb shell settings put system accelerometer_rotation 0
