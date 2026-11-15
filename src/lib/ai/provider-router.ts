@@ -2,6 +2,7 @@ export type ChatTarget = { url: string; headers: Headers; secret: string; model:
 export type ChatAttempt = {
   failed: boolean;
   response: Response;
+  unsupportedTools?: boolean;
   plainTools?: boolean;
   secret?: string;
 };
@@ -185,7 +186,7 @@ export function createProviderRouter(
           let result = await request();
           if (result.failed && payload.tools && [400, 404, 422].includes(result.response.status)) {
             const error = await result.response.clone().text();
-            if (/tool|function|unsupported parameter/i.test(error)) {
+            if (result.unsupportedTools || /tool|function|unsupported parameter|инструмент|функци/i.test(error)) {
               plain.add(i);
               result = await request();
             }

@@ -1431,7 +1431,8 @@ async function callChat(url: string, headers: Headers, payload: Record<string, u
 		body: JSON.stringify(body),
 		signal
 	}, { hops: 0 });
-	const fail = (response: Response) => ({
+	const fail = (response: Response, unsupportedTools = false) => ({
+        unsupportedTools,
 		failed: true,
 		response
 	});
@@ -1476,13 +1477,13 @@ async function callChat(url: string, headers: Headers, payload: Record<string, u
 	if ((lower.includes("reasoning_effort") || lower.includes("reasoning effort") || lower.includes("reasoning_content") || lower.includes("thinking") || lower.includes("enable_thinking")) && softenReasoning(retry, errText)) {
 		changed = true;
 	}
-	if (!changed) return fail(json(res.status, { message: told(res.status, url, errText, secret) }));
+	if (!changed) return fail(json(res.status, { message: told(res.status, url, errText, secret) }), /tool|function|инструмент|функци/i.test(errText));
 	res = await send(retry);
 	if (res.status >= 300 && res.status < 400) return fail(json(502, { message: "Провайдер вернул редирект — запрос остановлен" }));
 	if (!res.ok) {
 		const second = await res.text();
 		logUpstream(res.status, url, second, secret);
-		return fail(json(res.status, { message: told(res.status, url, second, secret) }));
+		return fail(json(res.status, { message: told(res.status, url, second, secret) }), /tool|function|инструмент|функци/i.test(second));
 	}
 	return {
 		failed: false,

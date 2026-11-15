@@ -180,3 +180,9 @@ test('a provider error after visible text continues once without exposing an int
   const result=recoverChatStream(stream(['event: delta\ndata: {"text":"Начало"}\n\n','event: error\ndata: {"message":"provider"}\n\n','event: done\ndata: {}\n\n']),async()=>{resumed++;return stream(['event: delta\ndata: {"text":" продолжение"}\n\n','event: done\ndata: {}\n\n']);},new AbortController().signal);
   const text=await new Response(result).text();assert.equal(resumed,1);assert.ok(text.includes('Начало'));assert.ok(text.includes('продолжение'));assert.equal(text.includes('event: error'),false);assert.equal(text.match(/event: done/g).length,1);
 });
+
+test('safe user-facing error text does not hide the native-tools capability signal',async()=>{
+ const used=[];
+ const result=await createProviderRouter(targets,async(url,_h,payload)=>{used.push(url);return payload.tools?{failed:true,unsupportedTools:true,response:Response.json({message:'Эндпоинт не найден. Проверьте адрес.'},{status:404})}:ok('{"answer":"Готово"}');},new AbortController().signal).send({tools:[{type:'function',function:{name:'my_files'}}],messages:[]});
+ assert.equal(result.plainTools,true);assert.deepEqual(used,['0','0']);
+});
