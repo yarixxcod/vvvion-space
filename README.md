@@ -271,7 +271,7 @@ docker compose up -d --build
 | `ALTCHA_HMAC_KEY` | Секрет подписи CAPTCHA, случайная строка не короче 32 символов. Без него проверка не проходит |
 | `TINYFISH_API_KEY` | Ключ поиска TinyFish, если сервис используется |
 | `CRYPTOPAY_TOKEN` | Токен Crypto Pay API |
-| `CRYPTOPAY_NETWORK` | Сеть Crypto Pay: `mainnet` или `testnet` |
+| `CRYPTOPAY_NETWORK` | `mainnet` для Production; `testnet` — только для разработки с отдельным токеном тестового приложения |
 | `CRYPTOPAY_WEBHOOK_SECRET` | Секрет пути вебхука |
 | `CRYPTOPAY_ENABLED` | Включить приём платежей Crypto Pay |
 | `PAY_TOPUP` | Включить пополнение вублей |
@@ -294,3 +294,17 @@ docker compose up -d --build
 - О проекте и журнал выпусков: [vvvion.space/about](https://vvvion.space/about)
 - Круг: [сообщения](https://vvvion.space/c/messages), [лента](https://vvvion.space/c/feed), [магазин](https://vvvion.space/c/shop)
 - Репозиторий: [github.com/yarixxcod/vvvion-space](https://github.com/yarixxcod/vvvion-space)
+
+### Если CryptoBot не создаёт счёт
+
+`GET /api/vubli/packages` возвращает поле `payment`: `ready`, `disabled`,
+`configuration_error` или `unavailable`. Проверка использует только `getMe`,
+кэшируется на минуту и не создаёт счета. `ready` подтверждает авторизацию API;
+создание и оплату конкретного счёта нужно проверять отдельно.
+
+`401 UNAUTHORIZED` означает, что Crypto Pay не принял подключение. Сначала
+проверьте соответствие `CRYPTOPAY_NETWORK` токену приложения: токены mainnet
+и testnet не взаимозаменяемы. Для Production используйте `mainnet` и токен
+приложения из CryptoBot → Crypto Pay. Токен обычного Telegram-бота не подходит.
+После изменения переменных Vercel нужен новый Production deployment.
+Коды ошибок провайдера сохраняются в серверных логах без токенов и тел ответов.

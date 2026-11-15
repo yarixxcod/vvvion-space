@@ -31,6 +31,9 @@ function countLabel(value: number, forms: [string, string, string]) {
   return `${value} ${forms[teen ? 2 : last === 1 ? 0 : last >= 2 && last <= 4 ? 1 : 2]}`;
 }
 
+const SHARE_CACHE = "vvvion-share";
+const CACHE_LIMIT = 48 * 1024 * 1024;
+
 const spin = "size-5 animate-spin motion-reduce:animate-none";
 
 function Loading({ label = "Загружаем…" }: { label?: string }) {
@@ -127,6 +130,24 @@ export function SharePage({ token, data }: { token: string; data: SharePageData 
     controller.current = abort;
     setPull({ id: entry.id, name: entry.name, got: 0, total: entry.bytes, pct: null, speed: 0 });
     try {
+      const absolute = new URL(entry.download, window.location.origin).href;
+      if (entry.bytes > 0 && entry.bytes <= CACHE_LIMIT && "caches" in window) {
+        try {
+          const hit = await (await caches.open(SHARE_CACHE)).match(absolute);
+          if (hit) {
+            const cached = await hit.blob();
+            abort.signal.throwIfAborted();
+            if (cached.size === entry.bytes) {
+              saveBlob(cached, entry.name);
+              toast.success("Файл сохранён из кэша");
+              return;
+            }
+          }
+        } catch {
+          /* Caching is optional; a fresh download remains available. */
+        }
+      }
+      abort.signal.throwIfAborted();
       const sink = await openSink(entry.name);
       if (sink === "cancel") return;
       const blob = await downloadShared(
@@ -136,7 +157,22 @@ export function SharePage({ token, data }: { token: string; data: SharePageData 
         (progress) => setPull({ ...progress, id: entry.id, name: entry.name }),
         sink,
       );
-      if (blob) saveBlob(blob, entry.name);
+      if (blob) {
+        saveBlob(blob, entry.name);
+        if (blob.size > 0 && blob.size <= CACHE_LIMIT && "caches" in window) {
+          void caches
+            .open(SHARE_CACHE)
+            .then((cache) =>
+              cache.put(
+                absolute,
+                new Response(blob.slice(), {
+                  headers: { "content-type": blob.type || "application/octet-stream" },
+                }),
+              ),
+            )
+            .catch(() => undefined);
+        }
+      }
       toast.success("Файл передан на сохранение");
     } catch (error) {
       if (!abort.signal.aborted)
