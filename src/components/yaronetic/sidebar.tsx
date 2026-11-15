@@ -427,6 +427,22 @@ function HistoryItem({
   const lang = useLang();
   const [menu, setMenu] = useState(false);
   const row = useRef<HTMLDivElement>(null);
+  const item = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    function dismiss(event: PointerEvent) {
+      if (event.target instanceof Node && !item.current?.contains(event.target)) setMenu(false);
+    }
+    function escape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenu(false);
+    }
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [menu]);
   const mode = useRef<"open" | "delete" | "close">("close");
   const swipe = useSwipe({
     enabled: surface && !editing,
@@ -444,7 +460,7 @@ function HistoryItem({
       if (mode.current === "delete") {
         haptic("heavy");
         if (row.current) row.current.style.transform = "";
-        onDelete();
+        onAskDelete();
         return;
       }
       if (row.current) row.current.style.transform = "translateX(-144px)";
@@ -459,7 +475,7 @@ function HistoryItem({
     },
   });
   return (
-    <li className="group relative mb-0.5 overflow-hidden rounded-xl">
+    <li ref={item} className={cn("group relative mb-0.5 rounded-xl", menu ? "z-10" : "")}>
       {surface ? (
         <div className="absolute inset-y-0 right-0 flex">
           <button type="button" className="w-[72px] bg-subtle text-xs" onClick={onPin}>
@@ -470,7 +486,7 @@ function HistoryItem({
             className="w-[72px] bg-danger text-xs text-bg"
             onClick={() => {
               haptic("heavy");
-              onDelete();
+              onAskDelete();
             }}
           >
             {ui(lang, "delete")}
@@ -497,7 +513,7 @@ function HistoryItem({
         <div
           ref={row}
           {...swipe}
-          className={cn("relative flex items-center bg-elev pr-0.5", active ? "bg-subtle text-fg" : "text-muted hover:bg-subtle/70 hover:text-fg")}
+          className={cn("relative flex items-center rounded-xl bg-elev pr-0.5", active ? "bg-subtle text-fg" : "text-muted hover:bg-subtle/70 hover:text-fg")}
         >
           <button type="button" onClick={onSelect} className="flex min-h-11 min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm">
             <span className="flex min-w-0 items-center gap-2">
@@ -515,12 +531,13 @@ function HistoryItem({
             className="press inline-flex size-8 items-center justify-center rounded-lg text-faint hover:bg-bg hover:text-fg"
             aria-label="Ещё"
             aria-expanded={menu}
+            aria-haspopup="menu"
             onClick={() => setMenu((value) => !value)}
           >
             <MoreHorizontal className="size-3.5" />
           </button>
           {menu ? (
-            <div className="absolute top-10 right-1 z-20 w-44 rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
+            <div role="menu" aria-label={lang === "en" ? "Chat actions" : "Действия с диалогом"} className="absolute top-full right-1 z-50 mt-1 w-48 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
               <button type="button" className="press flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm" onClick={() => { setMenu(false); onStartEdit(); }}>
                 <Pencil className="size-3.5" /> {ui(lang, "rename")}
               </button>
