@@ -1,3 +1,4 @@
+import { diskAccessEnabled } from "@/lib/ai/disk-access";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -914,6 +915,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             reasoning: reasoningRef.current,
             track: userIdRef.current ? { chatId, messageId: asstId } : undefined,
             mcp: wantImage ? undefined : enabledMcpUrls(),
+            diskAccess: !wantImage && diskAccessEnabled(),
             messages: wireTurns(nextMessages.filter((item) => item.id !== asstId).slice(-32)),
           },
           {

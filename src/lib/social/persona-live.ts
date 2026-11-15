@@ -6,4 +6,5 @@ export function readLivePersona(): string {
 
 export function writeLivePersona(id: string | null): void {
   active = id && /^[a-z0-9-]{2,40}$/.test(id) ? id : "";
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("vv-persona-changed", { detail: active }));
 }

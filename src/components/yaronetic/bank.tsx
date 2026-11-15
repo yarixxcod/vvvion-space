@@ -251,6 +251,12 @@ export function Bank() {
     };
   }, [pan, rail]);
 
+  useEffect(() => {
+    const refresh = () => { void load().catch(() => undefined); };
+    window.addEventListener("vv-wallet-refresh", refresh);
+    return () => window.removeEventListener("vv-wallet-refresh", refresh);
+  }, [span]);
+
   async function send() {
     if (!picked || busy || lock.current || !bank) return;
     if (transferHint(amount, bank.balance) !== "ok") return;

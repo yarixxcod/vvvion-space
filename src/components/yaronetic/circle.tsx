@@ -265,6 +265,7 @@ function Home({
             </button>
           ) : null}
           <h1 className="min-w-0 flex-1 truncate font-serif text-xl leading-tight">{title}</h1>
+          {onClose ? <button type="button" className="press min-h-10 rounded-xl border border-line px-3 text-xs xl:hidden" onClick={onClose}>ИИ-чат</button> : null}
           {onTheme ? (
             <button
               type="button"

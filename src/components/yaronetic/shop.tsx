@@ -8,11 +8,13 @@ import { PurchaseSheet } from "@/components/yaronetic/purchase-sheet";
 import { TopupSheet } from "@/components/yaronetic/topup-sheet";
 import { VerifyMailButton } from "@/components/yaronetic/verify-mail";
 import { getBank, type BankSnapshot } from "@/lib/social/bank";
-import { getPersonaShop, type PersonaShop } from "@/lib/social/personas";
+import { getPersonaShop, setActivePersona, type PersonaShop } from "@/lib/social/personas";
 import { getPremium, type PremiumState } from "@/lib/social/premium";
 import { getMegaOffer, type MegaOffer } from "@/lib/social/mega";
 import { getVpnShowcase, type VpnShowcase } from "@/lib/social/vpn";
 import { fmtRubApprox, fmtVub } from "@/lib/pay/format";
+import { CatalogArt } from "@/components/yaronetic/catalog-art";
+import { writeLivePersona } from "@/lib/social/persona-live";
 import { GiftDesk } from "@/components/yaronetic/gift-desk";
 import { getShopShelf } from "@/lib/social/prices";
 import { useTx } from "@/lib/lang";
@@ -90,6 +92,12 @@ export function Shop() {
 
   useEffect(() => {
     void load().catch((err: unknown) => setError(loadError(err instanceof Error ? err.message : "", "Магазин сейчас закрыт")));
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => { void load().catch(() => undefined); };
+    window.addEventListener("vv-wallet-refresh", refresh);
+    return () => window.removeEventListener("vv-wallet-refresh", refresh);
   }, []);
 
   function pick(next: Section) {
@@ -188,6 +196,7 @@ export function Shop() {
     return (
       <div className="flex h-full min-h-0 flex-col">
         <div className="px-4 pt-3">
+          <button type="button" className="press mb-2 min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setPeople(false)}>← В магазин</button>
           <h2 className="font-serif text-2xl tracking-tight">Персонажи</h2>
           <p className="text-xs text-faint">Пока действует Premium, все уже доступны. Покупка оставляет персонажа и после.</p>
         </div>
@@ -195,16 +204,14 @@ export function Shop() {
           {shop ? (
             <ul className="mx-auto grid w-full max-w-[960px] grid-cols-2 gap-2 md:grid-cols-3">
               {shop.items.map((item) => (
-                <li key={item.id} className="rounded-3xl border border-line bg-elev p-3">
-                  <img src={item.face} alt="" className="size-16 rounded-2xl bg-subtle" />
+                <li key={item.id} className="catalog-card flex min-w-0 flex-col rounded-3xl border border-line bg-elev p-3">
+                  <CatalogArt kind="personas" id={item.id} alt={item.name} className="aspect-square w-full rounded-2xl" />
                   <p className="mt-2 text-sm font-medium">{item.name}</p>
-                  <p className="mt-0.5 text-xs text-faint">{item.role}</p>
+                  <p className="mt-0.5 min-h-8 text-xs text-faint">{item.role}</p>
                   <p className="mt-2 font-serif text-lg tabular-nums">{fmtVub(item.price)}</p>
                   <p className="text-xs text-faint">{fmtRubApprox(item.price)}</p>
-                  {item.owned ? (
-                    <p className="mt-2 text-xs text-muted">Куплен</p>
-                  ) : item.viaPremium ? (
-                    <p className="mt-2 text-xs text-muted">В подписке</p>
+                  {item.owned || item.viaPremium ? (
+                    <><p className="mt-2 text-xs text-muted">{item.owned ? "В коллекции" : "Доступен с Premium"}</p><button type="button" disabled={busy} className="press mt-2 min-h-11 w-full rounded-xl border border-line-strong text-sm disabled:opacity-50" onClick={() => { setBusy(true); void setActivePersona({ data: item.id }).then((next) => { setShop(next); writeLivePersona(next.activeId); toast.success(`Выбран ${item.name}`); }).catch((err: unknown) => toast.error(loadError(err instanceof Error ? err.message : "", "Не удалось выбрать персонажа"))).finally(() => setBusy(false)); }}>{shop.activeId === item.id ? "Выбран" : "Выбрать"}</button></>
                   ) : (
                     <button
                       type="button"

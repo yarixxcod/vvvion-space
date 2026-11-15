@@ -1,3 +1,4 @@
+import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -77,6 +78,7 @@ export function Transcript({
   onAsk,
   readonly = false,
   face,
+  personaId,
   labels = {},
   continuing = false,
   reasoningOn = true,
@@ -91,6 +93,7 @@ export function Transcript({
   onAsk?: (text: string) => void;
   readonly?: boolean;
   face?: FaceVariant;
+  personaId?: string;
   labels?: Record<string, string>;
   continuing?: boolean;
   reasoningOn?: boolean;
@@ -236,6 +239,7 @@ export function Transcript({
                       continuing={continuing && pending}
                       canRegenerate={!readonly && !streaming && !pending}
                       face={face}
+                      personaId={personaId}
                       label={shownModel(message, labels)}
                       full={message.id === lastAssistantId}
                       reasoningOn={reasoningOn}
@@ -459,6 +463,7 @@ function AssistantBubble({
   continuing,
   canRegenerate,
   face,
+  personaId,
   label,
   full,
   reasoningOn = true,
@@ -475,6 +480,7 @@ function AssistantBubble({
   continuing?: boolean;
   canRegenerate: boolean;
   face?: FaceVariant;
+  personaId?: string;
   label: string;
   full?: boolean;
   reasoningOn?: boolean;
@@ -531,12 +537,12 @@ function AssistantBubble({
   return (
     <div className="group/msg flex sm:gap-3" {...swipe}>
       <div className="hidden sm:block">
-        <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={40} variant={face} />
+        {personaId ? <CatalogArt kind="personas" id={personaId} className="size-10 rounded-full" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={40} variant={face} />}
       </div>
       <div ref={box} className="min-w-0 flex-1" {...hold}>
         <div className="mb-1 flex items-center gap-2 text-xs text-faint">
           <span className="sm:hidden">
-            <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={24} variant={face} />
+            {personaId ? <CatalogArt kind="personas" id={personaId} className="size-6 rounded-full" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={24} variant={face} />}
           </span>
           <span>{assistantName.trim() || message.providerName || "vvvion.space"}</span>
           {label ? <span className="max-w-[14rem] truncate">{label}</span> : null}

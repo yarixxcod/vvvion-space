@@ -21,6 +21,7 @@ export type StreamPayload = {
   personaId?: string;
   toolNote?: string;
   mcp?: string[];
+  diskAccess?: boolean;
 };
 
 type Handlers = {

@@ -1,3 +1,4 @@
+import { diskAccessEnabled, setDiskAccess } from "@/lib/ai/disk-access";
 import { useEffect, useState, type ReactNode } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -188,6 +189,7 @@ export function SettingsDialog({
               </button>
               <p className="mt-1.5 px-1 text-[13px] text-muted">{tx({ ru: "Инструменты сервера попадут в следующий ответ чата.", en: "The server’s tools go into the next chat reply.", kk: "Сервер құралдары келесі чат жауабына кіреді." })}</p>
             </div>
+            <DiskAiAccess />
             <SoundChoices />
             {onEditInterests ? (
               <div className="mt-4 rounded-2xl border border-line px-3 py-3">
@@ -429,4 +431,16 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
+}
+
+function DiskAiAccess() {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => setEnabled(diskAccessEnabled()), []);
+  return <section className="mt-4 rounded-2xl border border-line p-3">
+    <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-medium">
+      Мой диск в ИИ-чате
+      <input type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setDiskAccess(event.target.checked); }} className="size-5 accent-[var(--accent)]" />
+    </label>
+    <p className="mt-1 text-xs text-muted">Разрешить выбранной ИИ-модели по вашему запросу искать личные файлы и музыку, читать тексты и изображения, создавать новые текстовые файлы на Мегадиске. Содержимое передаётся провайдеру выбранной модели. Запись — по просьбе в чате; существующие файлы сохраняются.</p>
+  </section>;
 }

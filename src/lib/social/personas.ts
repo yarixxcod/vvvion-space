@@ -60,7 +60,7 @@ async function readShop(userId: string): Promise<PersonaShop> {
         name: item.name,
         role: item.role,
         price: prices.get(`persona:${item.id}`) ?? item.price,
-        face: `/personas/${item.id}.svg`,
+        face: `/personas/${item.id}-v2.webp`,
         owned: mine,
         viaPremium,
         prompt: mine || premium ? item.prompt : null,

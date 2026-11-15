@@ -168,7 +168,7 @@ export function App({
     return () => {
       cancelled = true;
     };
-  }, [user, settings]);
+  }, [user, settings, circle]);
 
   useEffect(() => {
     if (!user) {
@@ -560,12 +560,13 @@ export function App({
                 streaming={streamingHere}
                 continuing={studio.continuingId === studio.activeChatId}
                 face={studio.face}
+                personaId={personaShop?.activeId ?? undefined}
                 labels={{
                   ...studio.modelLabels,
                   ...Object.fromEntries(studio.imageModels.map((item) => [item.name, item.displayName])),
                 }}
                 reasoningOn={studio.reasoning}
-                assistantName={studio.displayName}
+                assistantName={personaShop?.items.find(item => item.id === personaShop.activeId)?.name || studio.displayName}
                 onRegenerate={studio.regenerate}
                 onResend={studio.resendFrom}
                 onDelete={studio.dropMessage}
