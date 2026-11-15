@@ -1,5 +1,5 @@
-import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { SharePage } from "@/components/yaronetic/share-page";
+import { Link, createFileRoute, notFound, useRouter } from "@tanstack/react-router";
+import { SharePage, ShareLoading } from "@/components/yaronetic/share-page";
 import { readPublicDisk } from "@/lib/social/disk.fn";
 import { readPublicMega, type PublicMega, type PublicMegaEntry } from "@/lib/social/mega";
 import { mediaKind, type ShareEntry, type SharePageData } from "@/lib/share-view";
@@ -31,9 +31,30 @@ export const Route = createFileRoute("/d/$token")({
       { name: "googlebot", content: ROBOTS },
     ],
   }),
+  pendingComponent: ShareLoading,
+  pendingMs: 150,
+  pendingMinMs: 200,
+  errorComponent: ShareError,
   component: Page,
   notFoundComponent: MissingLink,
 });
+
+function ShareError() {
+  const router = useRouter();
+  return (
+    <div className="mx-auto max-w-md px-5 py-16 text-center">
+      <h1 className="font-serif text-3xl">Не удалось открыть ссылку</h1>
+      <p className="mt-3 text-sm text-muted">Проверьте соединение и попробуйте ещё раз.</p>
+      <button
+        type="button"
+        className="press mt-5 min-h-11 rounded-full bg-accent px-5 text-accent-fg"
+        onClick={() => void router.invalidate()}
+      >
+        Повторить
+      </button>
+    </div>
+  );
+}
 
 function fromMega(row: PublicMega, token: string): SharePageData {
   const map = (entry: PublicMegaEntry): ShareEntry => ({
@@ -67,7 +88,10 @@ function MissingLink() {
       <div>
         <h1 className="font-serif text-4xl tracking-tight">Ссылка не действует</h1>
         <p className="mt-3 max-w-sm text-sm text-muted">Этого уже нет, или адрес неполный.</p>
-        <Link to="/" className="press mt-6 inline-flex h-11 items-center rounded-full bg-accent px-5 text-sm font-medium text-accent-fg">
+        <Link
+          to="/"
+          className="press mt-6 inline-flex h-11 items-center rounded-full bg-accent px-5 text-sm font-medium text-accent-fg"
+        >
           На сайт
         </Link>
       </div>

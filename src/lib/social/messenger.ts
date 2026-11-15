@@ -1,3 +1,4 @@
+import { peopleQuery, peopleLike } from "@/lib/social/people-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
@@ -6,7 +7,7 @@ import { assertActive } from "@/lib/social/access";
 import { stickerCode } from "@/lib/stickers";
 import { bookMark, megaMark, postMark, screenMark, splitChat } from "@/lib/screen/mark";
 
-export type Person = { id: string; name: string; image: string | null };
+export type Person = { handle?: string | null; id: string; name: string; image: string | null };
 
 export type FoundPerson = Person & {
   relation: "none" | "pending-out" | "pending-in" | "friend";
@@ -157,7 +158,7 @@ export const searchPeople = createServerFn({ method: "POST" })
         : input && typeof input === "object" && typeof (input as { q?: unknown }).q === "string"
           ? (input as { q: string }).q
           : "";
-    const q = raw.trim().replace(/[\\%_]/g, "").slice(0, 80);
+    const q = peopleQuery(raw);
     if (q.length < 2) throw new Error("Напишите хотя бы 2 символа");
     return q;
   })
@@ -165,16 +166,15 @@ export const searchPeople = createServerFn({ method: "POST" })
     try {
       await assertActive(context.userId);
       const sql = await getSql();
-      const like = `%${data}%`;
-      const rows = await sql<{ id: string; name: string; image: string | null }>`
-        select u.id, coalesce(u.name, 'Участник') as name, u.image
+      const like = peopleLike(data);
+      const rows = await sql<Person>`
+        select u.id, coalesce(u.name, 'Участник') as name, u.image, h.handle
         from "user" u
+        left join user_handles h on h.user_id = u.id
         where u.id <> ${context.userId}
-          and (u.name ilike ${like} or u.email ilike ${like})
-          and not exists (
-            select 1 from members m where m.user_id = u.id and m.banned_at is not null
-          )
-        order by u.name asc
+          and (u.name ilike ${like} or u.email ilike ${like} or h.handle ilike ${like})
+          and not exists (select 1 from members m where m.user_id = u.id and m.banned_at is not null)
+        order by (h.handle = ${data.toLowerCase()}) desc nulls last, u.name asc, u.id
         limit 8
       `;
       const links = await sql<{ from_id: string; to_id: string; status: string }>`
@@ -192,7 +192,7 @@ export const searchPeople = createServerFn({ method: "POST" })
         if (link?.status === "accepted") relation = "friend";
         else if (link?.status === "pending" && link.from_id === context.userId) relation = "pending-out";
         else if (link?.status === "pending") relation = "pending-in";
-        return { id: row.id, name: row.name, image: row.image, relation };
+        return { id: row.id, name: row.name, image: row.image, handle: row.handle, relation };
       });
     } catch (err) {
       fail(err);
@@ -205,10 +205,11 @@ export const listFriends = createServerFn({ method: "GET" })
     try {
       await assertActive(context.userId);
       const sql = await getSql();
-      const rows = await sql<{ id: string; name: string; image: string | null }>`
-        select distinct u.id, coalesce(u.name, 'Участник') as name, u.image
+      const rows = await sql<{ id: string; name: string; image: string | null; handle: string | null }>`
+        select distinct u.id, coalesce(u.name, 'Участник') as name, u.image, h.handle
         from friend_links f
         join "user" u on u.id = case when f.from_id = ${context.userId} then f.to_id else f.from_id end
+        left join user_handles h on h.user_id = u.id
         where f.status = 'accepted' and (f.from_id = ${context.userId} or f.to_id = ${context.userId})
         order by name asc
         limit 200

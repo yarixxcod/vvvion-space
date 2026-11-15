@@ -6,6 +6,7 @@ import { fmtVub } from "@/lib/pay/format";
 import { haptic } from "@/lib/haptic";
 
 type Packages = {
+  payment?: "ready" | "disabled" | "configuration_error" | "unavailable";
   minRub: number;
   maxRub: number;
   tiers: { id: string; fromRub: number; vubPerRub: number; label: string | null; bonusPct: number }[];
@@ -68,6 +69,8 @@ export function TopupSheet({
   existingId?: string | null;
   onPaid?: (balance?: number) => void;
 }) {
+  const creating = useRef(false);
+  const attempt = useRef<{ rub: number; key: string } | null>(null);
   const [node, setNode] = useState<HTMLElement | null>(null);
   const [phase, setPhase] = useState<Phase>("choose");
   const [packages, setPackages] = useState<Packages | null>(null);
@@ -171,7 +174,9 @@ export function TopupSheet({
   }, [open, phase, invoice?.id]);
 
   async function create() {
-    if (phase === "creating") return;
+    if (creating.current) return;
+    creating.current = true;
+    if (attempt.current?.rub !== rub) attempt.current = { rub, key: crypto.randomUUID() };
     setPhase("creating");
     setNote("");
     setVerify(false);
@@ -179,9 +184,10 @@ export function TopupSheet({
       const res = await fetch("/api/vubli/topup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ rub, returnTo, idempotencyKey: crypto.randomUUID() }),
+        body: JSON.stringify({ rub, returnTo, idempotencyKey: attempt.current.key }),
       });
       const body = (await res.json().catch(() => ({}))) as Invoice & { code?: string };
+      if (!res.ok) attempt.current = null;
       if (body.code === "topup_disabled" || res.status === 503) {
         setPhase("error");
         setNote("Пополнение ещё не включено на сервере.");
@@ -195,14 +201,16 @@ export function TopupSheet({
       }
       if (!res.ok || !body.id) {
         setPhase("error");
-        setNote(body.code === "daily_cap" ? "Дневной предел пополнения исчерпан." : body.code === "rate_limited" ? "Слишком много счетов. Подождите немного." : "Счёт не создался. Попробуйте ещё раз.");
+        setNote(body.code === "payment_configuration_error" ? "CryptoBot отклонил подключение магазина. Администратору нужно проверить настройки Crypto Pay." : body.code === "provider_rate_limited" ? "CryptoBot временно ограничил запросы. Попробуйте через минуту." : body.code === "daily_cap" ? "Дневной предел пополнения исчерпан." : body.code === "rate_limited" ? "Слишком много счетов. Подождите немного." : "Счёт не создался. Попробуйте ещё раз.");
         return;
       }
       setInvoice(body);
       setPhase("invoice");
     } catch {
       setPhase("error");
-      setNote("Сеть не ответила. Счёт мог не создаться.");
+      setNote("Сеть не ответила. Повторная попытка проверит этот же счёт.");
+    } finally {
+      creating.current = false;
     }
   }
 
@@ -249,6 +257,7 @@ export function TopupSheet({
             <p className="mt-3 font-serif text-3xl tabular-nums">{quote ? fmtVub(quote.vubliTotal) : "…"}</p>
             <p className="text-sm text-faint">{quote?.label || (quote ? "курс без наценки" : "")}</p>
             {packages && rub > 0 ? <p className="mt-1 text-xs text-muted">{hint(rub, packages.tiers)}</p> : null}
+            {packages?.payment === "configuration_error" ? <p role="status" className="mt-3 rounded-xl border border-line bg-elev p-3 text-xs text-muted">CryptoBot отклонил подключение магазина. Администратору нужно проверить настройки Crypto Pay.</p> : packages?.payment === "unavailable" ? <p role="status" className="mt-3 text-xs text-muted">CryptoBot сейчас не отвечает. Можно повторить попытку позже.</p> : null}
             {note ? <p className="mt-2 text-sm text-danger">{note}</p> : null}
             {verify ? <p className="mt-1 text-sm text-muted">Кнопка «Подтвердить почту» есть на карточке товара.</p> : null}
             <button type="button" disabled={phase === "creating"} className="press mt-4 min-h-11 w-full rounded-2xl bg-accent text-sm font-medium text-accent-fg disabled:opacity-40" onClick={() => void create()}>

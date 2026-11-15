@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth/server";
 import { getSql, withTransaction, type Sql } from "@/lib/db";
 import { assertActive } from "@/lib/social/access";
 import {
-  acceptedAssets,
+  PayError,
   createInvoice,
   deleteInvoice,
   getInvoices,
@@ -139,7 +139,6 @@ async function issue(sql: Sql, row: TopupDb): Promise<TopupResult> {
       currency_type: "fiat",
       fiat: "RUB",
       amount: rubAmount(rub),
-      accepted_assets: acceptedAssets(flags.network),
       description: `VVVion: ${num(row.vubli_total).toLocaleString("ru-RU")} вублей`,
       payload: row.id,
       expires_in: 1800,
@@ -169,9 +168,11 @@ async function issue(sql: Sql, row: TopupDb): Promise<TopupResult> {
     const next = await readRow(sql, row.id);
     return present(next ?? row);
   } catch (err) {
-    console.error("[pay] createInvoice", err instanceof Error ? err.name : "error");
+    const provider = err instanceof PayError ? err : null;
+    console.error("[pay] createInvoice", { code: provider?.providerCode ?? provider?.code ?? "internal_error", status: provider?.httpStatus ?? null, network: flags.network });
     await sql.query(`update vubli_topups set status = 'failed', updated_at = now() where id = $1 and status = 'pending'`, [row.id]);
-    return { status: 502, body: { code: "provider_unavailable" } };
+    const configError = provider?.httpStatus === 401 || provider?.httpStatus === 403 || /^(TOKEN_INVALID|UNAUTHORIZED|AUTH_)/.test(provider?.providerCode ?? "");
+    return { status: 502, body: { code: configError ? "payment_configuration_error" : provider?.httpStatus === 429 ? "provider_rate_limited" : "provider_unavailable" } };
   }
 }
 

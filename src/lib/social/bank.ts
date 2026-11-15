@@ -1,3 +1,4 @@
+import { peopleQuery, peopleLike } from "@/lib/social/people-query";
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseStatus } from "@tanstack/react-start/server";
 import { wholeVubles } from "@/lib/social/amount";
@@ -22,6 +23,7 @@ export type BankMove = {
 };
 
 export type BankPerson = {
+  handle?: string | null;
   id: string;
   name: string;
   image: string | null;
@@ -90,7 +92,7 @@ function noteOf(value: unknown): string {
 
 function queryOf(value: unknown): string {
   if (typeof value !== "string") return "";
-  return value.replace(/[%_\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+  return peopleQuery(value);
 }
 
 function randInt(max: number): number {
@@ -329,16 +331,17 @@ export const searchBankPeople = createServerFn({ method: "POST" })
     await assertActive(context.userId);
     if (data.length < 2) return [];
     const sql = await getSql();
-    const like = `%${data}%`;
-    const rows = await sql<{ id: string; name: string | null; image: string | null }>`
-      select id, name, image
-      from "user"
-      where id <> ${context.userId}
-        and name ilike ${like}
-      order by name asc
+    const like = peopleLike(data);
+    return await sql<BankPerson>`
+      select u.id, coalesce(u.name, 'Участник') as name, u.image, h.handle
+      from "user" u
+      left join user_handles h on h.user_id = u.id
+      where u.id <> ${context.userId}
+        and (u.name ilike ${like} or h.handle ilike ${like})
+        and not exists (select 1 from members m where m.user_id = u.id and m.banned_at is not null)
+      order by (h.handle = ${data.toLowerCase()}) desc nulls last, u.name asc, u.id
       limit 8
     `;
-    return rows.map((row) => ({ id: row.id, name: row.name || "Участник", image: row.image }));
   });
 
 export const findCardOwner = createServerFn({ method: "POST" })

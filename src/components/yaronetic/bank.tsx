@@ -7,7 +7,7 @@ import { PersonFace } from "@/components/yaronetic/person-face";
 import { TopupSheet } from "@/components/yaronetic/topup-sheet";
 import { fmtRubApprox, fmtVub } from "@/lib/pay/format";
 import { useTx } from "@/lib/lang";
-import { findCardOwner, getBank, repayLoan, settleLoan, takeLoan, transferWoobli, type BankCard, type BankPerson, type BankSnapshot } from "@/lib/social/bank";
+import { searchBankPeople, findCardOwner, getBank, repayLoan, settleLoan, takeLoan, transferWoobli, type BankCard, type BankPerson, type BankSnapshot } from "@/lib/social/bank";
 import { wholeVubles, repayHint, transferHint } from "@/lib/social/amount";
 import { claimDaily } from "@/lib/social/checkin";
 import { HumanCheck } from "@/components/yaronetic/human-check";
@@ -158,6 +158,9 @@ export function Bank() {
   const tx = useTx();
   const navigate = useNavigate();
   const search = useSearch({ from: "/" });
+  const [people, setPeople] = useState<BankPerson[]>([]);
+  const [finding, setFinding] = useState(false);
+  const [peopleError, setPeopleError] = useState(false);
   const [bank, setBank] = useState<BankSnapshot | null>(null);
   const [span, setSpan] = useState<5 | 30>(5);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +233,20 @@ export function Bank() {
       cancelled = true;
     };
   }, [desk, rail]);
+
+  useEffect(() => {
+    setPicked(null);
+    setPeople([]);
+    setPeopleError(false);
+    if (desk !== "pay" || rail !== "friend" || friendQuery.trim().replace(/^@/, "").length < 2) { setFinding(false); return; }
+    let active = true;
+    setFinding(true);
+    const timer = window.setTimeout(() => {
+      void searchBankPeople({ data: { query: friendQuery } }).then((rows) => { if (active) setPeople(rows); })
+        .catch(() => { if (active) setPeopleError(true); }).finally(() => { if (active) setFinding(false); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [friendQuery, desk, rail]);
 
   useEffect(() => {
     if (rail !== "card") return;
@@ -506,26 +523,27 @@ export function Bank() {
               <input
                 className="field"
                 value={friendQuery}
-                placeholder="Имя друга"
+                placeholder="Имя или @username"
+                aria-label="Поиск получателя перевода"
                 onChange={(event) => setFriendQuery(event.target.value)}
               />
               <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                {(friends ?? [])
-                  .filter((person) => person.name.toLocaleLowerCase("ru").includes(friendQuery.trim().toLocaleLowerCase("ru")))
+                {(friendQuery.trim().replace(/^@/, "").length >= 2 ? people : friends ?? [])
                   .map((person) => (
                     <li key={person.id}>
                       <button
                         type="button"
                         className={picked?.id === person.id ? "press flex w-full items-center gap-2 rounded-xl bg-subtle px-2 py-1.5 text-left" : "press flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-subtle"}
-                        onClick={() => setPicked({ id: person.id, name: person.name, image: person.image })}
+                        onClick={() => setPicked(person)}
                       >
                         <PersonFace name={person.name} image={person.image} size={28} userId={person.id} />
-                        <span className="truncate text-sm">{person.name}</span>
+                        <span className="min-w-0"><span className="block truncate text-sm">{person.name}</span>{person.handle ? <span className="block truncate text-xs text-faint">@{person.handle}</span> : null}</span>
                       </button>
                     </li>
                   ))}
               </ul>
-              {friends && friends.length === 0 ? <p className="mt-2 text-xs text-faint">Друзей пока нет. Добавьте человека в сообщениях.</p> : null}
+              {finding ? <p role="status" className="mt-2 text-xs text-muted">Ищем получателя…</p> : peopleError ? <p role="alert" className="mt-2 text-xs text-muted">Поиск недоступен. Повторите запрос.</p> : friendQuery.trim().replace(/^@/, "").length >= 2 && people.length === 0 ? <p className="mt-2 text-xs text-faint">Никого не нашли.</p> : null}
+              {!friendQuery && friends && friends.length === 0 ? <p className="mt-2 text-xs text-faint">Друзей пока нет. Добавьте человека в сообщениях.</p> : null}
               {friends === null ? <PageLoader compact /> : null}
             </div>
           ) : (
@@ -543,7 +561,7 @@ export function Bank() {
           {picked ? (
             <p className="mt-2 flex items-center gap-2 text-sm">
               <PersonFace name={picked.name} image={picked.image} size={24} userId={picked.id} />
-              Получатель: {picked.name}
+              Получатель: {picked.name}{picked.handle ? ` (@${picked.handle})` : ""}
             </p>
           ) : rail === "card" && pan.replace(/\D/g, "").length === 16 ? (
             <p className="mt-2 text-xs text-faint">Такой карты нет</p>

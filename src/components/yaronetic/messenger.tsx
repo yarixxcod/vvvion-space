@@ -226,20 +226,20 @@ export function Messenger({ openRoom = null }: { openRoom?: string | null }) {
   useCircleNest(Boolean(roomId), closeRoom);
 
   useEffect(() => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setFound(null);
-      return;
-    }
+    const q = query.trim().replace(/^@/, "");
+    let active = true;
+    setFound(null);
+    if (q.length < 2) return;
     const timer = window.setTimeout(() => {
       void searchPeople({ data: q })
-        .then(setFound)
+        .then((people) => { if (active) setFound(people); })
         .catch((err) => {
+          if (!active) return;
           setFound([]);
           toast.error(err instanceof Error ? err.message : "Поиск не удался");
         });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [query]);
 
   async function startWith(person: Person) {
@@ -460,7 +460,7 @@ function PersonRow({
   disabled,
   onClick,
 }: {
-  person: { id: string; name: string; image?: string | null };
+  person: { id: string; name: string; image?: string | null; handle?: string | null };
   action: string;
   disabled?: boolean;
   onClick: () => void;
@@ -470,6 +470,7 @@ function PersonRow({
       <Avatar name={person.name} image={person.image} userId={person.id} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">{person.name}</p>
+        {person.handle ? <p className="truncate text-xs text-faint">@{person.handle}</p> : null}
       </div>
       <button
         type="button"

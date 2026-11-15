@@ -23,6 +23,7 @@ export async function readHandle(userId: string): Promise<string | null> {
 }
 
 export async function findUserByHandle(handle: string): Promise<{ id: string; name: string; handle: string } | null> {
+  handle = normalizeHandle(handle);
   const sql = await getSql();
   const rows = await sql<{ id: string; name: string; handle: string }>`
     select u.id, u.name, h.handle
@@ -74,6 +75,6 @@ export const lookupHandle = createServerFn({ method: "GET" })
   .handler(async ({ context, data }): Promise<HandleHit> => {
     await assertActive(context.userId);
     const hit = await findUserByHandle(data);
-    if (!hit || hit.id === context.userId) return null;
+    if (!hit) return null;
     return { handle: hit.handle, name: hit.name };
   });

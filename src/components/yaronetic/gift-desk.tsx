@@ -15,6 +15,7 @@ function GiftArt({ sku, compact = false }: { sku: string; compact?: boolean }) {
 export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: number; verified: boolean; onDone: () => void; onNeed: (missing: number) => void }) {
   const [gifts, setGifts] = useState<GiftItem[]>([]);
   const [inbox, setInbox] = useState<GiftInboxItem[]>([]);
+  const [self, setSelf] = useState(false);
   const [handle, setHandle] = useState("");
   const [note, setNote] = useState("");
   const [found, setFound] = useState<string | null>(null);
@@ -79,7 +80,8 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
   return (
     <div className="mt-3 space-y-3">
       <section className="rounded-3xl border border-line bg-bg px-4 py-4">
-        <p className="text-sm font-medium">Кому</p>
+        <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium">Кому</p><div className="flex rounded-full border border-line p-1">{[{ value: false, label: "Другому" }, { value: true, label: "Себе" }].map((option) => <button key={option.label} type="button" aria-pressed={self === option.value} onClick={() => setSelf(option.value)} className={`press min-h-9 rounded-full px-4 text-xs ${self === option.value ? "bg-accent text-accent-fg" : "text-muted"}`}>{option.label}</button>)}</div></div>
+        {self ? <p className="mt-3 text-sm text-muted">Выберите подарок для себя. Он появится в вашей коллекции в профиле.</p> : <>
         <p className="mt-1 text-xs text-faint">Нужен юзернейм человека. Свой задаётся в профиле.</p>
         <input
           className="field mt-3"
@@ -91,6 +93,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
           onChange={(event) => setHandle(event.target.value.toLowerCase())}
         />
         <p id="gift-recipient-status" role="status" aria-live="polite" className="mt-1 min-h-5 text-xs text-muted">{lookupState === "checking" ? "Проверяем юзернейм…" : lookupState === "found" && found ? `Это ${found}` : lookupState === "missing" ? "Такого юзернейма нет" : lookupState === "error" ? "Не удалось проверить юзернейм. Попробуйте ещё раз." : ""}</p>
+        </>}
         <label className="mt-2 block text-xs text-faint">
           Записка, необязательно
           <input className="field mt-1" value={note} maxLength={80} onChange={(event) => setNote(event.target.value)} />
@@ -120,7 +123,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
               {gift.price.toLocaleString("ru-RU")} вуб.<span className="mt-0.5 block text-xs font-normal text-faint">{fmtRubApprox(gift.price)}</span>
             </p>
             <button type="button" className="press mt-3 min-h-11 w-full rounded-2xl border border-line-strong px-3 text-sm font-medium transition-colors hover:bg-subtle" onClick={() => setPick(gift)}>
-              Подарить
+              {self ? "Купить себе" : "Подарить"}
             </button>
           </li>
         ))}
@@ -153,7 +156,7 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
       <PurchaseSheet
         open={Boolean(pick)}
         title={pick ? `Подарок «${pick.title}»` : "Подарок"}
-        detail={found && verifiedHandle === handle.trim().replace(/^@/, "") ? `Получит ${found}. Спишется с вашей карты.` : "Укажите существующий юзернейм."}
+        detail={self ? "Подарок появится в вашей коллекции. Спишется с вашей карты." : found && verifiedHandle === handle.trim().replace(/^@/, "") ? `Получит ${found}. Спишется с вашей карты.` : "Укажите существующий юзернейм."}
         price={pick?.price ?? 0}
         balance={balance}
         busy={busy}
@@ -169,16 +172,16 @@ export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: numbe
             toast.error("Сначала подтвердите почту");
             return;
           }
-          if (!found || !verifiedHandle || verifiedHandle !== handle.trim().replace(/^@/, "")) {
+          if (!self && (!found || !verifiedHandle || verifiedHandle !== handle.trim().replace(/^@/, ""))) {
             toast.error("Сначала найдите человека по юзернейму");
             return;
           }
           sending.current = true;
           setBusy(true);
-          void sendGift({ data: { sku: pick.sku, handle: verifiedHandle, note, idempotencyKey: crypto.randomUUID() } })
+          void sendGift({ data: { sku: pick.sku, self, handle: verifiedHandle ?? "", note, idempotencyKey: crypto.randomUUID() } })
             .then(() => {
               haptic("success");
-              toast("Подарок отправлен");
+              toast(self ? "Подарок теперь в вашей коллекции" : "Подарок отправлен");
               setPick(null);
               setNote("");
               onDone();
@@ -213,7 +216,7 @@ export function GiftCollectionCard() {
         <h3 className="font-serif text-xl">Мои подарки</h3>
         <span className="rounded-full bg-subtle px-3 py-1 text-xs text-muted">{items.length}</span>
       </div>
-      <p className="mt-1 text-xs text-muted">Подарки, которые вам отправили. Можно оставить на память или продать за вубли.</p>
+      <p className="mt-1 text-xs text-muted">Подарки, которые вы получили или купили себе. Можно оставить на память или продать за вубли.</p>
       {loading ? <p className="mt-3 text-sm text-muted">Загружаем коллекцию…</p> : items.length === 0 ? <p className="mt-3 text-sm text-faint">Пока подарков нет.</p> : (
         <ul className="mt-3 grid grid-cols-2 gap-2">
           {items.map((item) => (

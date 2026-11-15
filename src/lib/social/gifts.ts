@@ -50,11 +50,10 @@ export const getGiftDesk = createServerFn({ method: "GET" })
     };
   });
 
-export async function sendGiftTo(userId: string, sku: string, handle: string, note: string, idem: string): Promise<void> {
+export async function sendGiftTo(userId: string, sku: string, handle: string, note: string, idem: string, self = false): Promise<void> {
   if (!(await verified(userId))) throw new Error("Сначала подтвердите почту в профиле");
-  const who = await findUserByHandle(handle);
+  const who = self ? { id: userId } : await findUserByHandle(handle);
   if (!who) throw new Error("Такого юзернейма нет");
-  if (who.id === userId) throw new Error("Себе подарок не отправить");
   const sql = await getSql();
   const id = `gift-${idem}`;
   const prev = await sql<{ id: string }>`select id from wallet_transfers where id = ${id}`;
@@ -97,17 +96,17 @@ export const sendGift = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
     if (!input || typeof input !== "object") throw new Error("Подарок не выбран");
-    const raw = input as { sku?: unknown; handle?: unknown; note?: unknown; idempotencyKey?: unknown };
+    const raw = input as { sku?: unknown; self?: unknown; handle?: unknown; note?: unknown; idempotencyKey?: unknown };
     const sku = typeof raw.sku === "string" ? raw.sku.trim() : "";
     if (!sku.startsWith("gift:")) throw new Error("Подарок не выбран");
     const idem = typeof raw.idempotencyKey === "string" ? raw.idempotencyKey.trim() : "";
     if (!/^[0-9a-f-]{36}$/i.test(idem)) throw new Error("Повторите отправку");
     const note = typeof raw.note === "string" ? raw.note : "";
-    return { sku, handle: normalizeHandle(raw.handle), note, idem };
+    return { sku, self: raw.self === true, handle: raw.self === true ? "" : normalizeHandle(raw.handle), note, idem };
   })
   .handler(async ({ context, data }) => {
     await assertActive(context.userId);
-    await sendGiftTo(context.userId, data.sku, data.handle, data.note, data.idem);
+    await sendGiftTo(context.userId, data.sku, data.handle, data.note, data.idem, data.self);
     return { ok: true as const };
   });
 

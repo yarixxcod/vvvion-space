@@ -3,10 +3,14 @@ import { payFlags, type PayNetwork } from "./flags.ts";
 
 export class PayError extends Error {
   readonly code: string;
-  constructor(code: string) {
+  readonly providerCode: string | null;
+  readonly httpStatus: number | null;
+  constructor(code: string, providerCode: string | null = null, httpStatus: number | null = null) {
     super(code);
     this.name = "PayError";
     this.code = code;
+    this.providerCode = providerCode;
+    this.httpStatus = httpStatus;
   }
 }
 
@@ -34,7 +38,7 @@ export type CreateInvoiceParams = {
   currency_type: "fiat";
   fiat: "RUB";
   amount: string;
-  accepted_assets: string;
+  accepted_assets?: string;
   description: string;
   payload: string;
   expires_in: number;
@@ -100,7 +104,12 @@ async function call<T>(method: string, params: Record<string, unknown>, opts?: C
     throw new PayError("provider_unavailable");
   }
   const json = (await res.json().catch(() => null)) as { ok?: boolean; result?: T; error?: { name?: string } | string } | null;
-  if (!json || json.ok !== true) throw new PayError("provider_error");
+  if (!res.ok || !json || json.ok !== true) {
+    const raw = typeof json?.error === "string" ? json.error : json?.error?.name;
+    // Only protocol identifiers belong in logs. Never echo raw provider bodies or tokens.
+    const providerCode = typeof raw === "string" && /^[A-Z][A-Z0-9_]{1,79}$/.test(raw) ? raw : null;
+    throw new PayError("provider_error", providerCode, res.status);
+  }
   return json.result as T;
 }
 

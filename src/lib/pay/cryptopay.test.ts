@@ -88,3 +88,13 @@ test("getInvoices accepts both list shapes", async () => {
   assert.equal(rows[0]?.invoice_id, 1);
   assert.equal(wrapped[0]?.status, "active");
 });
+
+test("provider errors retain a safe protocol code and HTTP status", async () => {
+  const { getMe } = await import("./cryptopay.ts");
+  await assert.rejects(() => getMe({ token, fetchImpl: async () => Response.json({ ok: false, error: { name: "AUTH_APP_ID_INVALID" } }, { status: 401 }) }),
+    (error: unknown) => error instanceof PayError && error.providerCode === "AUTH_APP_ID_INVALID" && error.httpStatus === 401 && !JSON.stringify(error).includes(token));
+  await assert.rejects(() => getMe({ token, fetchImpl: async () => Response.json({ ok: false, error: { name: `Invalid token ${token}` } }) }),
+    (error: unknown) => error instanceof PayError && error.providerCode === null && !JSON.stringify(error).includes(token));
+  await assert.rejects(() => getMe({ token, fetchImpl: async () => Response.json({ ok: true, result: {} }, { status: 429 }) }),
+    (error: unknown) => error instanceof PayError && error.httpStatus === 429);
+});
