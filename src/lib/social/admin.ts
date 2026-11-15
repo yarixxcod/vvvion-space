@@ -558,13 +558,14 @@ export const chatStats = createServerFn({ method: "GET" })
       order by date_trunc('day', created_at at time zone 'UTC')
     `;
     const models = await sql<{ model: string; requests: number; tokens: number | string }>`
-      select model,
+      select coalesce(nullif(trim(cm.display_name), ''), a.model) as model,
              count(*)::int as requests,
-             coalesce(sum(total_tokens), 0)::bigint as tokens
-      from chat_attempts
-      where created_at >= now() - interval '14 days'
-      group by model
-      order by coalesce(sum(total_tokens), 0) desc, count(*) desc
+             coalesce(sum(a.total_tokens), 0)::bigint as tokens
+      from chat_attempts a
+      left join catalog_models cm on cm.name = a.model
+      where a.created_at >= now() - interval '14 days'
+      group by a.model, cm.display_name
+      order by coalesce(sum(a.total_tokens), 0) desc, count(*) desc
       limit 8
     `;
     const row = totals[0];
