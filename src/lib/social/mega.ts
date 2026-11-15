@@ -460,6 +460,27 @@ export const buyMega = createServerFn({ method: "POST" })
     return purchaseMega(context.userId);
   });
 
+export async function createMegaFolderForUser(userId: string, name: string, parent: string | null) {
+  await assertActive(userId);
+  name = entryName(name);
+  const offer = await offerOf(userId);
+  if (!offer.active) throw new Error("Подписка на мегадиск не действует");
+  const key = await parentKey(userId, parent);
+  const sql = await getSql();
+  const id = crypto.randomUUID();
+  try {
+    await sql`
+      insert into mega_entries (id, user_id, parent_id, name, kind, status)
+      values (${id}, ${userId}, ${key || null}, ${name}, 'folder', 'ok')
+    `;
+  } catch (error) {
+    const text = error instanceof Error ? error.message : "";
+    if (/unique|duplicate|mega_entries_slot/i.test(text)) throw new Error("Такое имя уже есть");
+    throw new Error("Папка не создалась");
+  }
+  return { id, name, storage: "mega" as const, created: true };
+}
+
 export const makeMegaFolder = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
@@ -469,21 +490,7 @@ export const makeMegaFolder = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<MegaView> => {
     await assertActive(context.userId);
-    const offer = await offerOf(context.userId);
-    if (!offer.active) throw new Error("Подписка на мегадиск не действует");
-    const key = await parentKey(context.userId, data.folder);
-    const sql = await getSql();
-    const id = crypto.randomUUID();
-    try {
-      await sql`
-        insert into mega_entries (id, user_id, parent_id, name, kind, status)
-        values (${id}, ${context.userId}, ${key || null}, ${data.name}, 'folder', 'ok')
-      `;
-    } catch (error) {
-      const text = error instanceof Error ? error.message : "";
-      if (/unique|duplicate|mega_entries_slot/i.test(text)) throw new Error("Такое имя уже есть");
-      throw new Error("Папка не создалась");
-    }
+    await createMegaFolderForUser(context.userId, data.name, data.folder);
     return readView(context.userId, data.folder);
   });
 
@@ -833,28 +840,33 @@ export async function storeMegaBytes(
   mime: string,
   bytes: Uint8Array,
   ttlSeconds = 0,
+  parent: string | null = null,
+  signal?: AbortSignal,
 ): Promise<{ id: string; name: string }> {
+  signal?.throwIfAborted();
   if (bytes.byteLength < 1) throw new Error("Файл пустой");
   let label = name.trim() || "Файл";
   let id = "";
   try {
-    id = await beginMegaUpload(userId, label, null, mime, bytes.byteLength);
+    id = await beginMegaUpload(userId, label, parent, mime, bytes.byteLength);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (!/уже есть/i.test(message)) throw error;
     const dot = label.lastIndexOf(".");
     const ext = dot > 0 && label.length - dot <= 8 ? label.slice(dot) : "";
     const stem = (ext ? label.slice(0, label.length - ext.length) : label).trim().slice(0, 60) || "Файл";
-    label = `${stem} ${Math.random().toString(36).slice(2, 6)}${ext}`.trim().slice(0, 80);
-    id = await beginMegaUpload(userId, label, null, mime, bytes.byteLength);
+    label = `${stem.slice(0, 70 - ext.length)} ${Math.random().toString(36).slice(2, 6)}${ext}`.trim().slice(0, 75);
+    id = await beginMegaUpload(userId, label, parent, mime, bytes.byteLength);
   }
   try {
     let offset = 0;
     while (offset < bytes.byteLength) {
+      signal?.throwIfAborted();
       const next = bytes.subarray(offset, Math.min(bytes.byteLength, offset + MEGA_CHUNK));
       await writeMegaChunk(userId, id, offset, next);
       offset += next.byteLength;
     }
+    signal?.throwIfAborted();
     await finishMegaUpload(userId, id);
     if (ttlSeconds > 0) {
       const sql = await getSql();

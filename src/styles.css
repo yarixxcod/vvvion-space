@@ -329,3 +329,30 @@ html, body { overscroll-behavior-y: none; }
 @keyframes af-orbit { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(12deg); } }
 html.circle-open .ai-face *, html.vv-reduce-motion .ai-face *, html.vv-lowend .ai-face * { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .ai-face * { animation: none !important; transition: none !important; } }
+
+/* Dedicated daylight palettes: the actual chat and its swatch always agree. */
+html.light[data-paper="cosmos"] .chat-paper, html.light .paper-swatch[data-paper="cosmos"] {
+  background-color:#f2f0fa;
+  background-image:radial-gradient(circle at 16% 19%,#9b8ac044 0 1px,transparent 2px),radial-gradient(circle at 77% 36%,#8571b244 0 1px,transparent 2px),radial-gradient(ellipse at 80% 90%,#dcd3f180,transparent 55%),linear-gradient(155deg,#f7f6fc,#edeaf8);
+  background-blend-mode:normal;
+}
+html.light[data-paper="aurora"] .chat-paper, html.light .paper-swatch[data-paper="aurora"] {
+  background-color:#eef7f6;
+  background-image:radial-gradient(ellipse at 72% 5%,#bbe4d580,transparent 70%),radial-gradient(ellipse at 20% 15%,#d4e6f380,transparent 75%),linear-gradient(155deg,#f5faf8,#edf3f9);
+  background-blend-mode:normal;
+}
+html.light[data-paper="ocean"] .chat-paper, html.light .paper-swatch[data-paper="ocean"] {
+  background-color:#f0f6fa;
+  background-image:radial-gradient(ellipse at 80% 85%,#c9e2ed70,transparent 60%),repeating-radial-gradient(ellipse at 75% 130%,transparent 0 42px,#6a9aad12 43px 44px,transparent 45px 90px),linear-gradient(#f5f9fc,#eaf2f8);
+  background-blend-mode:normal;
+}
+html.light[data-paper="dusk"] .chat-paper, html.light .paper-swatch[data-paper="dusk"] {
+  background-color:#faf1f4;
+  background-image:radial-gradient(ellipse at 80% 85%,#f2cfdb75,transparent 62%),radial-gradient(ellipse at 12% 8%,#e2d6f175,transparent 68%),linear-gradient(155deg,#faf6fc,#faf0f2);
+  background-blend-mode:normal;
+}
+html.light[data-paper="graphite"] .chat-paper, html.light .paper-swatch[data-paper="graphite"] {
+  background-color:#f2f3f6;
+  background-image:linear-gradient(150deg,transparent 20%,#6b668d0c 20.2%,transparent 20.5% 69%,#6b668d0c 69.2%,transparent 69.5%),linear-gradient(145deg,#f8f8fa,#edf0f4);
+  background-blend-mode:normal;
+}

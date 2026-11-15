@@ -19,7 +19,7 @@ export type DiskFile = {
   name: string;
   mime: string;
   bytes: number;
-  kind: "image" | "audio";
+  kind: "image" | "audio" | "file";
   folderId: string | null;
   createdAt: string;
   url: string;
@@ -362,7 +362,7 @@ export async function readDisk(userId: string): Promise<DiskSnapshot> {
       name: row.name,
       mime: row.mime,
       bytes: Number(row.bytes),
-      kind: row.kind === "audio" ? "audio" : "image",
+      kind: row.kind === "audio" ? "audio" : row.kind === "file" ? "file" : "image",
       folderId: row.folder_id,
       createdAt: row.created_at,
       url: diskPath(row.id),

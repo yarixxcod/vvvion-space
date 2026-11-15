@@ -9,7 +9,7 @@ export const PAPERS = [
   { id: "aurora", label: "Аврора", hint: "Северное сияние" },
   { id: "ocean", label: "Океан", hint: "Глубокий синий" },
   { id: "dusk", label: "Закат", hint: "Розовый и лиловый" },
-  { id: "graphite", label: "Графит", hint: "Тёмный минимализм" },
+  { id: "graphite", label: "Графит", hint: "Сдержанный минимализм" },
 ] as const;
 
 export type PaperId = (typeof PAPERS)[number]["id"];

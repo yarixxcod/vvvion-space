@@ -16,6 +16,7 @@ import { dropTags, loadTags } from "@/lib/music/load";
 import { coverUrl, isMusicFile, musicBits } from "@/lib/music/tags";
 import { deleteDiskFile, getDisk, makeDiskFolder, moveDiskFiles, removeDiskFolder, renameDiskFile, shareDisk } from "@/lib/social/disk.fn";
 import type { DiskFile, DiskSnapshot } from "@/lib/social/disk";
+import { sizeLabel } from "@/lib/share-download";
 import { cn } from "@/lib/utils";
 import { loadError } from "@/lib/load-error";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
@@ -272,6 +273,7 @@ function OwnDisk() {
     dir,
   );
   const images = shown.filter((file) => file.kind === "image");
+  const documents = shown.filter((file) => file.kind === "file");
   const voices = shown.filter((file) => file.kind === "audio");
   const ratio = disk.quota > 0 ? Math.min(1, disk.used / disk.quota) : 0;
 
@@ -485,6 +487,8 @@ function OwnDisk() {
           </ul>
         </section>
       ) : null}
+
+      {documents.length > 0 ? <section className="mt-4"><h3 className="px-1 text-sm font-medium">Файлы</h3><ul className="mt-2 space-y-2">{documents.map((file) => <li key={file.id} className={cn("flex items-center gap-3 rounded-2xl border bg-bg p-3", picked.includes(file.id) ? "border-accent" : "border-line")}><button type="button" onClick={() => toggle(file.id)} aria-pressed={picked.includes(file.id)} className="press grid size-11 shrink-0 place-items-center rounded-xl bg-subtle text-accent">{picked.includes(file.id) ? "✓" : "TXT"}</button><div className="min-w-0 flex-1"><p className="truncate text-sm">{file.name}</p><p className="text-xs text-faint">{sizeLabel(file.bytes)}</p></div><button type="button" aria-label={`Скачать ${file.name}`} className="press min-h-11 rounded-xl border border-line px-3 text-xs" onClick={() => void downloadUrl(srcOf(file), file.name).catch(() => toast.error("Не удалось скачать файл"))}>Скачать</button>{diskMenu(file)}</li>)}</ul></section> : null}
 
       {voices.length > 0 ? (
         <section className="mt-4">
