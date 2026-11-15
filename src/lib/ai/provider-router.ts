@@ -80,7 +80,7 @@ export async function probeChatResponse(
       }
       chunks.push(step.value);
       bytes += step.value.byteLength;
-      if (bytes > (streaming ? 131072 : 524288)) throw new Error("provider_response_too_large");
+      if (bytes > (streaming ? 131072 : 2_000_000)) throw new Error("provider_response_too_large");
       text += decoder.decode(step.value, { stream: true });
       if (!streaming) continue;
       const lines = text.split(/\r?\n/);
@@ -169,7 +169,8 @@ export function createProviderRouter(
         signal.throwIfAborted();
         const target = targets[i];
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        const waitMs = payload.tools ? Math.max(timeoutMs, 110_000) : timeoutMs;
+        const timer = setTimeout(() => controller.abort(), waitMs);
         const combined = AbortSignal.any([signal, controller.signal]);
         const request = async () =>
           send(

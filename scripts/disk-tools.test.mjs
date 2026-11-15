@@ -140,6 +140,19 @@ test("folders and disk text files use storage and returned folder ids", async ()
   assert.equal(deps.saved[4], "disk");
   assert.equal(deps.saved[5], folder.id);
 });
+test("a site file without storage is written into the folder created in this request", async () => {
+  reset();
+  const tools = await pack("Напиши сайт, создай папку и помести туда файлы");
+  assert.equal(tools.filesRequested, true);
+  const folder = JSON.parse(await tools.invoke("create_my_folder", { name: "site" }));
+  assert.equal(folder.storage, "disk");
+  const file = JSON.parse(
+    await tools.invoke("save_my_text", { name: "index.html", text: "<h1>Привет</h1>" }),
+  );
+  assert.equal(file.saved, true);
+  assert.equal(deps.saved[4], "disk");
+  assert.equal(deps.saved[5], folder.id);
+});
 test("editing requires this turn's complete read and version; original remains intact", async () => {
   reset();
   const tools = await pack("Измени файл");

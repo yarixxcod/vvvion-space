@@ -171,6 +171,11 @@ test("weak-model JSON parser accepts only explicit action objects and rejects ma
   assert.equal(plainAgentReply('{"answer":"Done"}').answer, "Done");
   assert.equal(parseToolArguments("["), null);
   assert.equal(parseToolArguments("[]"), null);
+  assert.equal(
+    plainAgentReply('Сейчас сохраню.\n{"tool":"save_my_text","arguments":{"name":"a.txt","text":"x"}}')
+      .call.name,
+    "save_my_text",
+  );
 });
 
 test('a provider error after visible text continues once without exposing an intermediate error', async()=>{

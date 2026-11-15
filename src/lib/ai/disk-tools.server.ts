@@ -20,6 +20,7 @@ export async function prepareDiskTools(
   await assertActive(userId);
   let mutations = 0;
   let writtenBytes = 0;
+  let recentFolder: { id: string; storage: "disk" | "mega" } | null = null;
   const completed = new Map<string, string>();
   const readVersions = new Map<
     string,
@@ -38,7 +39,7 @@ export async function prepareDiskTools(
         "Достигнут предел 8 изменений за запрос. Сообщите пользователю о выполненных действиях.",
       );
   };
-  const storageOf = (value: unknown, fallback: "disk" | "mega" = "mega"): "disk" | "mega" => {
+  const storageOf = (value: unknown, fallback: "disk" | "mega" = "disk"): "disk" | "mega" => {
     if (value === undefined) return fallback;
     if (value !== "disk" && value !== "mega") throw new Error("storage должен быть disk или mega");
     return value;
@@ -137,6 +138,7 @@ export async function prepareDiskTools(
           folderOf(args.parent_id),
           signal,
         );
+        if (folder.id) recentFolder = { id: folder.id, storage: folder.storage };
         return JSON.stringify(folder);
       }
       if (name === "my_files") {
@@ -281,9 +283,17 @@ export async function prepareDiskTools(
       }
       if (name === "save_my_text" || name === "write_my_file") {
         writable();
-        const storage = storageOf(args.storage);
+        let remembered = recentFolder;
+        if (name === "write_my_file" && args.storage === undefined) {
+          const id = typeof args.id === "string" ? args.id : "";
+          if (readVersions.has(`disk:${id}`)) args.storage = "disk";
+          else if (readVersions.has(`mega:${id}`)) args.storage = "mega";
+        }
+        const storage =
+          args.storage === undefined && remembered ? remembered.storage : storageOf(args.storage, "disk");
+        if (remembered && remembered.storage !== storage) remembered = null;
         let label = args.name;
-        let folder = folderOf(args.folder_id);
+        let folder = args.folder_id === undefined && remembered ? remembered.id : folderOf(args.folder_id);
         let previousId: string | undefined;
         if (name === "write_my_file") {
           const id = typeof args.id === "string" ? args.id : "";
@@ -337,17 +347,24 @@ export async function prepareDiskTools(
       }
       throw new Error("Неизвестный инструмент");
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Диск недоступен";
       return JSON.stringify({
-        error: error instanceof Error ? error.message : "Диск недоступен",
+        error: /check constraint|disk_files_kind/i.test(message)
+          ? "Текстовый файл не сохранился: тип file ещё не разрешён в базе. Папка при этом остаётся."
+          : message,
       });
     }
   };
   return {
     tools,
     writeRequested:
-      /(?:сохрани|запиши|создай|сделай|дополни|измени|редактируй|create|save|write|update|append)(?=[\s,.!])/i.test(
+      /(сохран|запиш|напиш|написать|созда|сдела|помести|полож|добав|редакт|измени|дополн|save|write|create|update|append|edit)/i.test(
         requestText,
       ),
+    filesRequested:
+      /(сохран|запиш|напиш|написать|созда|сдела|помести|полож|добав|редакт|измени|дополн|save|write|create|update|append|edit)/i.test(
+        requestText,
+      ) && /(файл|сайт|html|страниц|код|документ|\bfile\b|\bpage\b|\bsite\b)/i.test(requestText),
     changes: () =>
       [...completed.values()].map(
         (value) =>
