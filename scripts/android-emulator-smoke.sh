@@ -11,6 +11,8 @@ trap collect_evidence EXIT
 # Android's first immersive-mode tutorial is a system overlay, not app content.
 adb shell settings put secure immersive_mode_confirmations confirmed
 adb install -r artifacts/*-debug.apk
+# Pregrant this declared runtime permission in the disposable CI device so its first-run dialog does not cover the chat.
+adb shell pm grant space.vvvion.app android.permission.POST_NOTIFICATIONS
 adb logcat -c
 adb shell am start -W -n space.vvvion.app/.MainActivity > emulator-evidence/launch.txt
 # Wait for the native loader/site rather than capturing the initial system splash.
@@ -43,8 +45,11 @@ print((x1+x2)//2,(y1+y2)//2)
 PYINPUT
 read -r INPUT_X INPUT_Y < emulator-evidence/input-tap.txt
 adb shell input tap "$INPUT_X" "$INPUT_Y"
-sleep 2
-adb shell dumpsys input_method > emulator-evidence/keyboard.txt
+for attempt in {1..10}; do
+  adb shell dumpsys input_method > emulator-evidence/keyboard.txt
+  if grep -Eq 'mInputShown=true|mIsInputViewShown=true|isInputShown=true' emulator-evidence/keyboard.txt; then break; fi
+  sleep 1
+done
 grep -Eq 'mInputShown=true|mIsInputViewShown=true|isInputShown=true' emulator-evidence/keyboard.txt
 adb exec-out screencap -p > emulator-evidence/keyboard.png
 adb shell input keyevent KEYCODE_BACK
