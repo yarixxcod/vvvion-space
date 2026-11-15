@@ -510,6 +510,7 @@ function HistoryItem({
           />
         </form>
       ) : (
+        <>
         <div
           ref={row}
           {...swipe}
@@ -536,8 +537,9 @@ function HistoryItem({
           >
             <MoreHorizontal className="size-3.5" />
           </button>
+        </div>
           {menu ? (
-            <div role="menu" aria-label={lang === "en" ? "Chat actions" : "Действия с диалогом"} className="absolute top-full right-1 z-50 mt-1 w-48 max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
+            <div role="menu" aria-label={lang === "en" ? "Chat actions" : "Действия с диалогом"} className="relative z-10 mx-1 mt-1 rounded-2xl border border-line bg-bg p-1 shadow-[var(--shadow)]">
               <button type="button" className="press flex min-h-10 w-full items-center gap-2 rounded-xl px-2 text-left text-sm" onClick={() => { setMenu(false); onStartEdit(); }}>
                 <Pencil className="size-3.5" /> {ui(lang, "rename")}
               </button>
@@ -555,7 +557,7 @@ function HistoryItem({
               </button>
             </div>
           ) : null}
-        </div>
+        </>
       )}
     </li>
   );
