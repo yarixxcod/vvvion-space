@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
+import { openPersonCard } from "@/components/yaronetic/person-card";
+import { type AccountPanel } from "@/lib/account-panel";
+import { pushBackLayer } from "@/lib/app-back";
+import { ServiceStatus } from "@/components/yaronetic/service-status";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Check, Copy, Eye, EyeOff, Info, LogOut, Send, UserRound, Volume2, VolumeX } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { toast } from "sonner";
@@ -66,129 +71,51 @@ async function fileToJpeg(file: File): Promise<string> {
 
 export function UserButton({ compact = false, onTheme, theme }: { compact?: boolean; onTheme?: () => void; theme?: "dark" | "light" } = {}) {
   const user = useCurrentUser();
-  const lang = useLang();
-  const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<"profile" | "about" | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
+  const release = useReleaseFlag();
+  if (!user) return null;
+  const label = user.displayName || user.primaryEmail || "Мой профиль";
+  return <button type="button" aria-label="Мой профиль" aria-haspopup="dialog" className={compact ? "press relative grid size-11 place-items-center rounded-full border border-line bg-elev" : "press relative flex min-h-11 min-w-0 items-center gap-2 rounded-2xl border border-line bg-elev py-1 pr-3 pl-1"} onClick={() => openPersonCard(user.id)}>
+    <PersonFace name={label} image={user.profileImageUrl} size={36} userId={user.id} pressable={false} />
+    {compact ? null : <span className="truncate text-sm">{label}</span>}
+    {release ? <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent" aria-label="Есть обновление" /> : null}
+  </button>;
+}
+
+/** One host prevents duplicate panels when avatar buttons exist in several layouts. */
+export function AccountPanelHost() {
+  const user = useCurrentUser();
+  const [view, setView] = useState<AccountPanel | null>(null);
+  const [previous, setPrevious] = useState<AccountPanel | null>(null);
   const [sound, setSound] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
+  const [light, setLight] = useState(false);
   const release = useReleaseFlag();
   useEffect(() => {
-    const pull = () => setSound(soundsEnabled());
-    pull();
-    window.addEventListener("vvvion-sounds", pull);
-    return () => window.removeEventListener("vvvion-sounds", pull);
+    const open = (event: Event) => { const next = (event as CustomEvent<AccountPanel>).detail; if (["profile", "settings", "about"].includes(next)) { setPrevious(null); setView(next); setLight(document.documentElement.classList.contains("light")); } };
+    const soundState = () => setSound(soundsEnabled()); soundState();
+    window.addEventListener("vv-account-panel", open); window.addEventListener("vvvion-sounds", soundState);
+    return () => { window.removeEventListener("vv-account-panel", open); window.removeEventListener("vvvion-sounds", soundState); };
   }, []);
-  if (!user) return null;
-  const label = user.displayName ?? user.primaryEmail ?? ui(lang, "member");
-  const email = user.primaryEmail;
-  const gate = typeof window !== "undefined" && hasGateSessionMarker();
-  return (
-    <>
-      <div className="relative">
-        <button
-          type="button"
-          className={
-            compact
-              ? "press grid size-11 place-items-center rounded-full border border-line bg-elev"
-              : `press flex max-w-full min-w-0 items-center gap-2 rounded-2xl border bg-elev py-1 pr-3 pl-1 ${open ? "border-accent" : "border-line"}`
-          }
-          aria-expanded={open}
-          aria-haspopup="menu"
-          onClick={() => setOpen((value) => !value)}
-        >
-          <span className="relative shrink-0">
-            <PersonFace name={label} image={user.profileImageUrl} size={36} userId={user.id} />
-            {release && !compact ? (
-              <span className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full border border-bg bg-accent text-[12px] font-semibold leading-none text-accent-fg" aria-hidden="true">
-                !
-              </span>
-            ) : null}
-            {release && compact ? <span className="absolute top-0 right-0 size-2 rounded-full bg-accent" aria-hidden="true" /> : null}
-          </span>
-          {compact ? null : <span className="min-w-0 truncate text-sm font-medium">{label}</span>}
-        </button>
-        {open ? (
-          <>
-            <button type="button" className="fixed inset-0 z-20 cursor-default" aria-label={ui(lang, "closeMenu")} onClick={() => setOpen(false)} />
-            <div role="menu" className="absolute top-12 right-0 z-30 w-64 rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
-              <LangSwitch />
-              {onTheme ? (
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="press flex h-11 w-full items-center rounded-xl px-3 text-left text-sm"
-                  onClick={() => {
-                    setOpen(false);
-                    onTheme();
-                  }}
-                >
-                  {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                role="menuitem"
-                className="press flex h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm"
-                onClick={() => {
-                  setOpen(false);
-                  setSheet("profile");
-                }}
-              >
-                <UserRound className="size-4 text-muted" />
-                {ui(lang, "menuProfile")}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="press flex h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm"
-                aria-pressed={sound}
-                onClick={() => {
-                  const next = !soundsEnabled();
-                  setSoundsEnabled(next);
-                  if (next) playSound("notice", true);
-                }}
-              >
-                {sound ? <Volume2 className="size-4 text-muted" /> : <VolumeX className="size-4 text-muted" />}
-                {sound ? ui(lang, "soundOn") : ui(lang, "soundOff")}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="press flex h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm"
-                onClick={() => {
-                  setOpen(false);
-                  setSheet("about");
-                }}
-              >
-                <Info className="size-4 text-muted" />
-                {ui(lang, "about")}
-                {release ? <span className="ml-auto text-sm font-semibold text-accent">!</span> : null}
-              </button>
-              {gate ? null : (
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={signingOut}
-                  className="press flex h-11 w-full items-center gap-2 rounded-xl px-3 text-left text-sm text-danger disabled:opacity-40"
-                  onClick={() => {
-                    setSigningOut(true);
-                    signOut().catch(() => setSigningOut(false));
-                  }}
-                >
-                  <LogOut className="size-4" />
-                  {ui(lang, "signOut")}
-                </button>
-              )}
-            </div>
-          </>
-        ) : null}
-      </div>
-      {sheet === "profile" ? (
-        <ProfileSheet label={label} email={email} image={user.profileImageUrl} userId={user.id} onClose={() => setSheet(null)} />
-      ) : null}
-      {sheet === "about" ? <AboutSheet onClose={() => setSheet(null)} /> : null}
-    </>
-  );
+  useEffect(() => { setView(null); }, [user?.id]);
+  function go(next: AccountPanel) { setPrevious(view); setView(next); }
+  function back() { if (previous) { setView(previous); setPrevious(null); } else { setView(null); if (user) openPersonCard(user.id); } }
+  useEffect(() => { if (!view) return; return pushBackLayer(back); }, [view, previous, user?.id]);
+  if (!view || !user) return null;
+  const label = user.displayName || user.primaryEmail || "Профиль";
+  let content: ReactNode;
+  if (view === "profile") content = <ProfileSheet label={label} email={user.primaryEmail} image={user.profileImageUrl} userId={user.id} onClose={back} />;
+  else if (view === "about") content = <AboutSheet onClose={back} />;
+  else content = <div className="fixed inset-0 flex items-end justify-center bg-black/55 sm:items-center" onClick={() => setView(null)}><section role="dialog" aria-modal="true" aria-label="Настройки аккаунта" className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-line bg-elev p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:rounded-3xl" onClick={e => e.stopPropagation()}>
+    <div className="flex items-center justify-between"><h2 className="font-serif text-2xl">Настройки</h2><button type="button" aria-label="Закрыть настройки" className="press size-11 rounded-xl border border-line" onClick={() => setView(null)}>×</button></div>
+    <button type="button" className="press mt-4 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm" onClick={() => go("profile")}>Редактировать профиль и аккаунт</button>
+    <div className="mt-4 rounded-xl border border-line p-3"><LangSwitch /></div>
+    <button type="button" className="press mt-2 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm" onClick={() => { const next = !light; setLight(next); window.dispatchEvent(new CustomEvent("vv-theme-request", { detail: next ? "light" : "dark" })); }}>{light ? "Включить тёмную тему" : "Включить светлую тему"}</button>
+    <button type="button" aria-pressed={sound} className="press mt-2 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm" onClick={() => { const next = !soundsEnabled(); setSoundsEnabled(next); if (next) playSound("notice", true); }}>{sound ? "Звук включён" : "Звук выключен"}</button>
+    <button type="button" className="press mt-2 flex min-h-12 w-full items-center justify-between rounded-xl border border-line px-3 text-left text-sm" onClick={() => go("about")}>О проекте и обновления {release ? <span className="rounded-full bg-accent px-2 py-1 text-xs text-accent-fg">Новое</span> : null}</button>
+    <ServiceStatus />
+    {hasGateSessionMarker() ? null : <button type="button" disabled={signingOut} className="press mt-3 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm text-danger disabled:opacity-40" onClick={() => { setSigningOut(true); void signOut().catch(() => { setSigningOut(false); toast.error("Не удалось выйти"); }); }}>{signingOut ? "Выходим…" : "Выйти из аккаунта"}</button>}
+  </section></div>;
+  return createPortal(<div className="relative z-[220]">{content}</div>, document.body);
 }
 
 function ProfileSheet({
@@ -326,7 +253,7 @@ function ProfileSheet({
         <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-line bg-bg/90 px-4 py-3 backdrop-blur">
           <div className="flex min-w-0 items-center gap-1">
             <BackButton onClick={onClose} label="Назад" />
-            <h2 className="truncate font-serif text-2xl tracking-tight">Профиль</h2>
+            <h2 className="truncate font-serif text-2xl tracking-tight">Редактирование</h2>
           </div>
           <button type="button" className="press hidden h-10 rounded-xl px-3 text-sm text-muted md:inline-flex" onClick={onClose}>
             Закрыть
@@ -334,7 +261,7 @@ function ProfileSheet({
         </div>
         <div className="px-4 pt-6 pb-10">
           <div className="flex flex-col items-center text-center">
-            <PersonFace name={name || label} image={photo} size={96} userId={userId} />
+            <PersonFace name={name || label} image={photo} size={96} userId={userId} pressable={false} />
             <p className="mt-3 font-serif text-3xl tracking-tight">{name.trim() || label}</p>
             {shownEmail ? (
               <button

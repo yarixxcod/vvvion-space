@@ -1,3 +1,5 @@
+import { readDraft, writeDraft } from "@/lib/ai/drafts";
+import { memoryForChat, moveNewChatMemory } from "@/lib/ai/memory";
 import { diskAccessEnabled } from "@/lib/ai/disk-access";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -204,14 +206,14 @@ function isNetworkDrop(err: unknown): boolean {
     text.includes("network error") ||
     text.includes("failed to fetch") ||
     text.includes("load failed") ||
-    text.includes("networkerror")
+    text.includes("networkerror") || text.includes("соединение прервано до завершения")
   );
 }
 
 function isDropError(value: string | undefined): boolean {
   if (!value) return false;
   const text = value.toLowerCase();
-  return text.includes("network error") || text.includes("failed to fetch") || text.includes("load failed") || text.includes("networkerror");
+  return text.includes("network error") || text.includes("failed to fetch") || text.includes("load failed") || text.includes("networkerror") || text.includes("соединение прервано до завершения");
 }
 
 function lastAssistant(chat: Chat): ChatMessage | undefined {
@@ -267,7 +269,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     setStreamingChatId(id);
   };
   const [continuingId, setContinuingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraftState] = useState("");
   const [guestLeft, setGuestLeft] = useState<number | null>(null);
   const [needAccount, setNeedAccount] = useState(false);
   const [imageMode, setImageMode] = useState(false);
@@ -306,6 +308,17 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   const streamingIdRef = useRef<string | null>(null);
   const readyRef = useRef(true);
   const userIdRef = useRef<string | null>(null);
+  const draftWarning = useRef(false);
+  const setDraft = useCallback((text: string) => {
+    setDraftState(text);
+    const saved = writeDraft(userIdRef.current, activeChatRef.current, text);
+    if (!saved && !draftWarning.current) toast.error("Не удалось сохранить черновик. Пока он останется только в открытом окне.");
+    draftWarning.current = !saved;
+  }, []);
+  useEffect(() => {
+    if (isPending) return;
+    setDraftState(readDraft(user?.id ?? null, activeChatId));
+  }, [user?.id, isPending, activeChatId]);
   const guestLeftRef = useRef<number | null>(null);
   const attachmentsRef = useRef<ChatFile[]>([]);
 
@@ -570,7 +583,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       if (chat.unread) {
         void persistRef.current({ ...chat, unread: false, messages, updatedAt: Date.now() }, true);
       }
-      setDraft("");
+      setDraftState(readDraft(userIdRef.current, id));
     },
     [],
   );
@@ -586,7 +599,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     activeChatRef.current = null;
     setActiveChatIdState(null);
     setMsgs([]);
-    setDraft("");
+    setDraftState(readDraft(userIdRef.current, null));
     setAttachments([]);
   }, [setMsgs]);
 
@@ -740,6 +753,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       stopRef.current = false;
       abandonRef.current = false;
       let streamingStarted = false;
+      const pendingDraftChat = activeChatRef.current;
       try {
       const provider =
         providersRef.current.find((item) => item.id === activeProviderId) ?? providersRef.current[0];
@@ -795,12 +809,14 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       const existing = activeChatRef.current
         ? chatsRef.current.find((item) => item.id === activeChatRef.current)
         : undefined;
+      const draftOrigin = pendingDraftChat;
+      const memory = memoryForChat(userIdRef.current, draftOrigin);
       const chatId = existing?.id ?? crypto.randomUUID();
       const nextMessages = [...history, userMsg, asst];
       activeChatRef.current = chatId;
       setActiveChatIdState(chatId);
       setMsgs(nextMessages);
-      setDraft("");
+
       if (!opts?.reuseUser) setAttachments([]);
       setStreaming(true);
       setStreamId(chatId);
@@ -816,6 +832,9 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       };
       liveRef.current = { chatId, asstId, base: chatBase, messages: nextMessages };
       await persistChat(chatBase, true);
+      if (!draftOrigin) moveNewChatMemory(userIdRef.current, chatId);
+      writeDraft(userIdRef.current, draftOrigin, "");
+      setDraftState("");
       streamingStarted = true;
 
       const controller = new AbortController();
@@ -916,6 +935,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             track: userIdRef.current ? { chatId, messageId: asstId } : undefined,
             mcp: wantImage ? undefined : enabledMcpUrls(),
             diskAccess: !wantImage && diskAccessEnabled(),
+            memory: wantImage ? undefined : memory,
             messages: wireTurns(nextMessages.filter((item) => item.id !== asstId).slice(-32)),
           },
           {
@@ -1025,6 +1045,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       }
       } catch (err) {
         if (!streamingStarted) {
+          setDraftState(readDraft(userIdRef.current, pendingDraftChat));
           setStreaming(false);
           setStreamId(null);
           liveRef.current = null;

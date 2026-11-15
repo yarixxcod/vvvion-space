@@ -1,8 +1,8 @@
+import { createServerOnlyFn } from "@tanstack/react-start";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import { auth } from "@/lib/auth/server";
 import { acceptUpload, claimedMime, serveFile } from "@/lib/social/file-accept";
 import { byteRange } from "@/lib/http/byte-range";
 import { getSql } from "@/lib/db";
@@ -42,12 +42,13 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function requireUser(request: Request): Promise<string | Response> {
+const requireUser = createServerOnlyFn(async (request: Request): Promise<string | Response> => {
   const headers = new Headers(request.headers);
   const token = new URL(request.url).searchParams.get("t");
   if (!headers.get("authorization") && token && token.length >= 16 && token.length <= 2000 && /^[\w.~+/-]+=*$/.test(token)) {
     headers.set("authorization", `Bearer ${token}`);
   }
+  const { auth } = await import("@/lib/auth/server");
   const session = await auth.api.getSession({ headers });
   const id = session?.user?.id;
   if (!id) return json(401, { message: "Нужен аккаунт" });
@@ -57,7 +58,7 @@ async function requireUser(request: Request): Promise<string | Response> {
     return json(403, { message: error instanceof Error ? error.message : "Аккаунт закрыт" });
   }
   return id;
-}
+});
 
 async function assertMember(roomId: string, userId: string): Promise<"dm" | "group"> {
   const sql = await getSql();

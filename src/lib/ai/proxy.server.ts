@@ -1,3 +1,4 @@
+import { memoryNote } from "@/lib/ai/memory";
 import { prepareDiskTools } from "@/lib/ai/disk-tools.server";
 import { mcpUrlsOf, prepareMcp } from "@/lib/ai/mcp.server";
 import { isBlockedHost, publicFetch } from "@/lib/security/net-guard";
@@ -41,6 +42,7 @@ type ChatBody = {
   toolNote?: unknown;
   mcp?: unknown;
   diskAccess?: unknown;
+  memory?: unknown;
 };
 type ModelsBody = { kind?: unknown; baseUrl?: unknown; apiKey?: unknown; extraHeaders?: unknown };
 type CatalogProvider = { baseUrl: string; apiKey: string; model: string };
@@ -1013,6 +1015,10 @@ export async function handleChat(request: Request): Promise<Response> {
 			}
 			if (limit.remainingPct != null && limit.remainingPct <= 50) limitNotice = { remainingPct: limit.remainingPct };
 		}
+        if (actorUser) {
+          const preferenceNote = memoryNote(body.memory);
+          if (preferenceNote) messages.unshift({ role: "system", content: preferenceNote });
+        }
 		const payload: Record<string, unknown> = {
 			model,
 			messages,

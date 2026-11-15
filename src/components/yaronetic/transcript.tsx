@@ -607,6 +607,7 @@ function AssistantBubble({
             ))}
           </div>
         ) : null}
+        {message.error && canRegenerate ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onRegenerate}>Повторить ответ</button> : null}
         {message.stopped ? <p className="mt-2 text-sm text-faint">Остановлено</p> : null}
         {done ? (
           <div className={full ? "msg-actions msg-actions-last mt-1 flex gap-1" : "msg-actions mt-1 flex gap-1"}>

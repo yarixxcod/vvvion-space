@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Pwa } from "@/components/yaronetic/pwa";
 import { AppBridgeHost } from "@/components/yaronetic/app-bridge-host";
+import { AccountPanelHost } from "@/components/yaronetic/account-menu";
 import { PersonCardHost } from "@/components/yaronetic/person-card";
 import { PullRefresh } from "@/components/yaronetic/pull-refresh";
 import { NotFoundPage } from "@/lib/error-component";
@@ -64,6 +65,7 @@ function RootDocument() {
           <AuthProvider>
             <AppBridgeHost />
             <PersonCardHost />
+            <AccountPanelHost />
             <PullRefresh>
               <Outlet />
             </PullRefresh>

@@ -73,6 +73,11 @@ export function App({
   const [banned, setBanned] = useState(false);
   const [interests, setInterests] = useState<InterestProfile | null>(null);
   const [askInterests, setAskInterests] = useState(false);
+  useEffect(() => {
+    const toggle = (event: Event) => { const value = (event as CustomEvent<string>).detail; if (value === "dark" || value === "light") studio.setTheme(value); };
+    window.addEventListener("vv-theme-request", toggle);
+    return () => window.removeEventListener("vv-theme-request", toggle);
+  }, [studio.setTheme]);
   const [personaShop, setPersonaShop] = useState<PersonaShop | null>(null);
   const { user, isPending } = useCurrentUserState();
   const unread = useCircleUnread(Boolean(user) && !isPending);
@@ -657,6 +662,7 @@ export function App({
         </>
       ) : null}
       <SettingsDialog
+        chatId={studio.activeChatId}
         open={settings}
         onOpenChange={setSettings}
         displayName={studio.displayName}

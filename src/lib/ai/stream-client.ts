@@ -22,6 +22,7 @@ export type StreamPayload = {
   toolNote?: string;
   mcp?: string[];
   diskAccess?: boolean;
+  memory?: string[];
 };
 
 type Handlers = {
@@ -64,20 +65,31 @@ export async function streamChat(payload: StreamPayload, handlers: Handlers): Pr
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let completed = false;
+  let failed = false;
+  function consume(raw: string) {
+    const event = parseEvent(raw, handlers);
+    if (event === "done") completed = true;
+    if (event === "error") failed = true;
+  }
 
+  try {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
+    buffer = buffer.replace(/\r\n/g, "\n");
     let split = buffer.indexOf("\n\n");
     while (split >= 0) {
       const raw = buffer.slice(0, split);
       buffer = buffer.slice(split + 2);
-      parseEvent(raw, handlers);
+      consume(raw);
       split = buffer.indexOf("\n\n");
     }
   }
-  if (buffer.trim()) parseEvent(buffer, handlers);
+  if (buffer.trim()) consume(buffer);
+  if (!completed && !failed && !handlers.signal.aborted) throw new TypeError("Соединение прервано до завершения ответа");
+  } finally { await reader.cancel().catch(() => undefined); }
 }
 
 function parseEvent(raw: string, handlers: Handlers) {
@@ -102,6 +114,7 @@ function parseEvent(raw: string, handlers: Handlers) {
   else if (event === "error" && json.message) handlers.onError(json.message);
   else if (event === "image" && json.url) handlers.onImage?.(json.url);
   else if (event === "sources" && Array.isArray(json.sources)) handlers.onSources?.(json.sources);
+  return event;
 }
 
 export type ModelsResult = {

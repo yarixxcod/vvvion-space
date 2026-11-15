@@ -1,3 +1,4 @@
+import { useSectionScroll } from "@/lib/section-scroll";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BookOpen, Compass, HardDrive, Landmark, MessageCircle, MessageSquare, Moon, MoreHorizontal, Newspaper, Shield, ShoppingBag, Sun } from "lucide-react";
@@ -94,6 +95,8 @@ function Home({
 }) {
   const lang = useLang();
   const [tab, setTab] = useState<CircleTab>(initialTab);
+  const owner = useCurrentUserState().user?.id || "guest";
+  const paneRef = useSectionScroll(tab, owner);
   const [access, setAccess] = useState<Access | null>(null);
   const [more, setMore] = useState(false);
   const [keys, setKeys] = useState(false);
@@ -295,7 +298,7 @@ function Home({
           ) : null}
         </div>
         <SectionSwipe tabs={order} active={order.includes(tab) ? tab : "chat"} paused={nested} onChange={(id) => pick(id, true)}>
-          <div data-circle-pane className={cn("mx-auto flex h-full min-h-0 w-full flex-col", column)}>
+          <div ref={paneRef} data-circle-pane className={cn("mx-auto flex h-full min-h-0 w-full flex-col", column)}>
             {banned ? (
               <p className="p-4 text-sm text-danger">{ui(lang, "banned")}</p>
             ) : tab === "admin" && admin ? (

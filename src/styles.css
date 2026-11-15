@@ -299,3 +299,33 @@ html.light[data-paper="cosmos"] .chat-paper,html.light[data-paper="aurora"] .cha
 .catalog-rarity[data-tier="epic"] { color: #dbb0ff; border-color: #c08bff77; }
 .catalog-rarity[data-tier="legendary"] { color: #ffe3a0; border-color: #e9c57188; box-shadow: 0 0 16px #c9a54c33; }
 html, body { overscroll-behavior-y: none; }
+
+/* Polished native vector companions: expression changes follow the actual chat state. */
+.ai-face { overflow: visible; vertical-align: middle; contain: layout style; }
+.ai-face-body { transform-origin: 32px 34px; animation: af-breathe 5.8s ease-in-out infinite; }
+.ai-face-eyes { transform-origin: 32px 32px; animation: af-blink 6.7s infinite; }
+.ai-face-look, .ai-face-brow, .ai-face-mouth, .ai-face-cheeks { transition: transform .4s ease, opacity .3s ease; }
+.ai-face-speaking, .ai-face-orbit, .ai-face-star, .ai-face-cheeks { opacity: 0; }
+.ai-face[data-mood="talk"] .ai-face-mouth { opacity: 0; }
+.ai-face[data-mood="talk"] .ai-face-speaking { opacity: 1; transform-origin: 32px 45px; animation: af-speak .55s ease-in-out infinite alternate; }
+.ai-face[data-mood="think"] .ai-face-look { transform: translate(1px,-1px); }
+.ai-face[data-mood="think"] .ai-face-brow-left { transform: translateY(-2px) rotate(-3deg); transform-origin: 23px 21px; }
+.ai-face[data-mood="think"] .ai-face-orbit, .ai-face[data-mood="seek"] .ai-face-orbit { opacity: .85; animation: af-orbit 3s ease-in-out infinite; transform-origin: 32px 32px; }
+.ai-face[data-mood="look"] .ai-face-look, .ai-face[data-mood="seek"] .ai-face-look { animation: af-look 3s ease-in-out infinite; }
+.ai-face[data-mood="happy"] .ai-face-cheeks { opacity: .65; }
+.ai-face[data-mood="happy"] .ai-face-body { animation: af-joy 2s ease-in-out infinite; }
+.ai-face[data-mood="wonder"] .ai-face-brow { transform: translateY(-2.5px); }
+.ai-face[data-mood="wonder"] .ai-face-eyes { transform: scaleY(1.08); }
+.ai-face[data-mood="oops"] .ai-face-brow-left { transform: rotate(14deg); transform-origin: 23px 21px; }
+.ai-face[data-mood="oops"] .ai-face-brow-right { transform: rotate(-14deg); transform-origin: 41px 21px; }
+.ai-face[data-mood="oops"] .ai-face-body { animation: none; }
+.ai-face[data-mood="draw"] .ai-face-star, .ai-face[data-mood="wonder"] .ai-face-star, .ai-face[data-mood="happy"] .ai-face-star { opacity: .9; animation: af-shine 2.5s ease-in-out infinite; transform-origin: 53px 10px; }
+@keyframes af-breathe { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-1px) rotate(1deg); } }
+@keyframes af-blink { 0%,43%,47%,100% { transform: scaleY(1); } 45% { transform: scaleY(.1); } }
+@keyframes af-speak { from { transform: scaleY(.5); } to { transform: scaleY(1.25); } }
+@keyframes af-look { 0%,100% { transform: translateX(0); } 35% { transform: translateX(-2px); } 70% { transform: translateX(2px); } }
+@keyframes af-joy { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px) rotate(3deg); } }
+@keyframes af-shine { 0%,100% { transform: scale(.8); opacity: .45; } 50% { transform: scale(1.12); opacity: 1; } }
+@keyframes af-orbit { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(12deg); } }
+html.circle-open .ai-face *, html.vv-reduce-motion .ai-face *, html.vv-lowend .ai-face * { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .ai-face * { animation: none !important; transition: none !important; } }

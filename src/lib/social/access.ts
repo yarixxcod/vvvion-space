@@ -1,5 +1,5 @@
+import { createServerOnlyFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
-import { getSessionUser } from "@/lib/auth/verify.server";
 
 export type Access = {
   role: "admin" | "member";
@@ -31,13 +31,14 @@ export async function assertAdmin(userId: string): Promise<Access> {
 }
 
 /** Builtin chat: model must be in the shared catalog. Signed-in bans are rejected. */
-export async function assertBuiltinChat(model: string): Promise<void> {
+export const assertBuiltinChat = createServerOnlyFn(async (model: string): Promise<void> => {
   const sql = await getSql();
   const known = await sql<{ name: string }>`
     select name from catalog_models where name = ${model}
   `;
   if (!known.length) throw new Error("Этой модели больше нет");
   try {
+    const { getSessionUser } = await import("@/lib/auth/verify.server");
     const user = await getSessionUser();
     if (!user) return;
     const access = await loadAccess(user.id);
@@ -47,4 +48,4 @@ export async function assertBuiltinChat(model: string): Promise<void> {
       throw err;
     }
   }
-}
+});

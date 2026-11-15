@@ -1,3 +1,5 @@
+import { MemoryPanel } from "@/components/yaronetic/memory-panel";
+import { ServiceStatus } from "@/components/yaronetic/service-status";
 import { diskAccessEnabled, setDiskAccess } from "@/lib/ai/disk-access";
 import { useEffect, useState, type ReactNode } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
@@ -7,7 +9,7 @@ import { toast } from "sonner";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { pushBackLayer } from "@/lib/app-back";
 import { appCopy, isApp } from "@/lib/app-bridge";
-import { FACE_VARIANTS, ModelFace, type FaceVariant } from "@/components/yaronetic/model-face";
+import { FACE_VARIANTS, ModelFace, type FaceVariant, type FaceMood } from "@/components/yaronetic/model-face";
 import { PAPERS, type PaperId } from "@/lib/ai/paper";
 import { SEARCH_ENGINES, type SearchEngine } from "@/lib/ai/search-engine";
 import { Wordmark } from "@/components/yaronetic/wordmark";
@@ -18,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 export function SettingsDialog({
   open,
+  chatId,
   onOpenChange,
   displayName,
   onDisplayName,
@@ -42,6 +45,7 @@ export function SettingsDialog({
   onClear,
 }: {
   open: boolean;
+  chatId?: string | null;
   onOpenChange: (open: boolean) => void;
   displayName: string;
   onDisplayName: (value: string) => void;
@@ -161,6 +165,7 @@ export function SettingsDialog({
                 ))}
               </div>
             </div>
+            <FaceEmotionPreview variant={face} />
             <div className="mt-4">
               <p className="px-1 text-xs font-medium tracking-wide text-faint uppercase">{tx({ ru: "Поиск", en: "Search", kk: "Іздеу" })}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -189,7 +194,9 @@ export function SettingsDialog({
               </button>
               <p className="mt-1.5 px-1 text-[13px] text-muted">{tx({ ru: "Инструменты сервера попадут в следующий ответ чата.", en: "The server’s tools go into the next chat reply.", kk: "Сервер құралдары келесі чат жауабына кіреді." })}</p>
             </div>
+            <MemoryPanel chatId={chatId} />
             <DiskAiAccess />
+            <ServiceStatus />
             <SoundChoices />
             {onEditInterests ? (
               <div className="mt-4 rounded-2xl border border-line px-3 py-3">
@@ -442,5 +449,14 @@ function DiskAiAccess() {
       <input type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setDiskAccess(event.target.checked); }} className="size-5 accent-[var(--accent)]" />
     </label>
     <p className="mt-1 text-xs text-muted">Разрешить выбранной ИИ-модели по вашему запросу искать личные файлы и музыку, читать тексты и изображения, создавать новые текстовые файлы на Мегадиске. Содержимое передаётся провайдеру выбранной модели. Запись — по просьбе в чате; существующие файлы сохраняются.</p>
+  </section>;
+}
+
+function FaceEmotionPreview({ variant }: { variant: FaceVariant }) {
+  const [mood, setMood] = useState<FaceMood>("idle");
+  const moods: [FaceMood, string][] = [["idle", "Спокойствие"], ["think", "Размышление"], ["talk", "Речь"], ["happy", "Радость"], ["oops", "Ошибка"], ["look", "Интерес"], ["wonder", "Удивление"], ["draw", "Рисование"], ["seek", "Поиск"]];
+  return <section className="mt-3 rounded-2xl border border-line bg-bg p-3" aria-label="Эмоции лица ИИ">
+    <div className="flex items-center gap-4"><ModelFace name="VVVion" variant={variant} mood={mood} size={80} /><div><p className="text-sm font-medium">{moods.find(item => item[0] === mood)?.[1]}</p><p className="mt-1 text-xs leading-relaxed text-muted">Во время общения выражение меняется по состоянию ответа. Здесь можно примерить эмоции.</p></div></div>
+    <div className="mt-3 flex gap-2 overflow-x-auto pb-1">{moods.map(([id, label]) => <button type="button" key={id} aria-pressed={mood === id} className={`press min-h-10 shrink-0 rounded-full border px-3 text-xs ${mood === id ? "border-accent bg-subtle" : "border-line text-muted"}`} onClick={() => setMood(id)}>{label}</button>)}</div>
   </section>;
 }

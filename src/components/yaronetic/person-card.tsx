@@ -1,3 +1,4 @@
+import { openAccountPanel } from "@/lib/account-panel";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { BackButton } from "@/components/yaronetic/back-button";
@@ -64,7 +65,9 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line sm:hidden" />
         <div className="flex items-center justify-between">
           <BackButton onClick={onClose} label="Назад" />
-          <p className="text-xs tracking-wide text-faint uppercase">Профиль</p>
+          <p className="flex-1 text-center text-xs tracking-wide text-faint uppercase">Профиль</p>
+          <button type="button" aria-label="Закрыть профиль" className="press hidden min-h-10 rounded-xl px-3 text-xs md:block" onClick={onClose}>Закрыть</button>
+          {mine ? <button type="button" aria-label="Настройки аккаунта" className="press size-11 rounded-xl border border-line text-xl" onClick={() => { onClose(); openAccountPanel("settings"); }}>⋯</button> : <button type="button" aria-label="Закрыть профиль" className="press size-11 rounded-xl border border-line" onClick={onClose}>×</button>}
         </div>
         {error ? <p className="py-10 text-center text-sm text-danger">{error}</p> : null}
         {!error && !person ? <p className="py-10 text-center text-sm text-muted">Открываем профиль…</p> : null}
@@ -89,6 +92,7 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
               )}
               <p className="mt-1 text-xs text-faint">В VVVion с {formatBirth(person.joinedAt.slice(0, 10))}</p>
             </div>
+            {mine ? <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" className="press min-h-11 rounded-xl bg-accent px-3 text-sm font-medium text-accent-fg" onClick={() => { onClose(); openAccountPanel("profile"); }}>Редактировать</button><button type="button" className="press min-h-11 rounded-xl border border-line px-3 text-sm" onClick={() => { onClose(); openAccountPanel("settings"); }}>Настройки</button></div> : null}
             <section className="mt-5">
               <div className="flex items-baseline justify-between gap-3">
                 <h3 className="font-serif text-xl">Подарки</h3>
@@ -107,7 +111,7 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
                   ))}
                 </ul>
               )}
-              {mine ? <p className="mt-2 text-xs text-faint">Продать подарок можно в своём профиле, в круге.</p> : null}
+              {mine ? <p className="mt-2 text-xs text-faint">Управление подарками и продажа — в разделе «Редактировать».</p> : null}
             </section>
           </div>
         ) : null}

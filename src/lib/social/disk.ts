@@ -1,5 +1,5 @@
+import { createServerOnlyFn } from "@tanstack/react-start";
 import { zipSync } from "fflate";
-import { auth } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
 import { playbackType } from "@/lib/music/tags";
 import { bytesResponse } from "@/lib/http/byte-range";
@@ -156,7 +156,8 @@ export async function storeDiskImage(userId: string, dataUrl: string): Promise<s
   return putFile(userId, name, mime, "image", bytes);
 }
 
-async function requireUser(request: Request): Promise<string | Response> {
+const requireUser = createServerOnlyFn(async (request: Request): Promise<string | Response> => {
+  const { auth } = await import("@/lib/auth/server");
   const session = await auth.api.getSession({ headers: request.headers });
   const id = session?.user?.id;
   if (!id) return json(401, { message: "Нужен аккаунт" });
@@ -166,7 +167,7 @@ async function requireUser(request: Request): Promise<string | Response> {
     return json(403, { message: error instanceof Error ? error.message : "Аккаунт закрыт" });
   }
   return id;
-}
+});
 
 function fileResponse(request: Request, row: { data: string; mime: string; name: string }, download: boolean): Response {
   const bytes = Buffer.from(row.data, "base64");
@@ -183,7 +184,7 @@ function fileResponse(request: Request, row: { data: string; mime: string; name:
   return bytesResponse(request, bytes, headers);
 }
 
-export async function readDiskFile(request: Request, id: string): Promise<Response> {
+export const readDiskFile = createServerOnlyFn(async (request: Request, id: string): Promise<Response> => {
   if (!DISK_ID.test(id)) return json(404, { message: "Файл не найден" });
   const sql = await getSql();
   const meta = await sql<{ user_id: string }>`
@@ -200,7 +201,8 @@ export async function readDiskFile(request: Request, id: string): Promise<Respon
     allowed = Boolean(open[0]);
   }
   if (!allowed) {
-    const session = await auth.api.getSession({ headers: request.headers });
+    const { auth } = await import("@/lib/auth/server");
+  const session = await auth.api.getSession({ headers: request.headers });
     const userId = session?.user?.id;
     if (!userId || userId !== ownerId) return json(404, { message: "Файл не найден" });
     try {
@@ -216,7 +218,7 @@ export async function readDiskFile(request: Request, id: string): Promise<Respon
   if (!row?.data) return json(404, { message: "Файл не найден" });
   const download = new URL(request.url).searchParams.get("dl") === "1";
   return fileResponse(request, row, download);
-}
+});
 
 async function replaceAudio(userId: string, form: FormData): Promise<Response> {
   const id = typeof form.get("id") === "string" ? String(form.get("id")) : "";
