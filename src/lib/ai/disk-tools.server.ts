@@ -173,6 +173,7 @@ export async function prepareDiskTools(
           const name = typeof args.name === "string" ? args.name.trim() : "";
           const text = typeof args.text === "string" ? args.text : "";
           if (
+            // eslint-disable-next-line no-control-regex -- Reject control bytes in untrusted file names.
             !/^[^/\\\x00-\x1f]{1,75}\.(txt|md|csv|json)$/i.test(name) ||
             !text ||
             Buffer.byteLength(text) > 100_000
