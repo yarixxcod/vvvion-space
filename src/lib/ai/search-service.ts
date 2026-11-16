@@ -119,7 +119,10 @@ export function createSearchService(
             (engine) => engine !== requested,
           );
           const jobs = [primary, ...backups.map((engine) => attempt(engine))];
-          await Promise.race([Promise.allSettled(jobs), strong]);
+          await Promise.race([
+            Promise.allSettled(jobs),
+            primary.then(() => (enough() ? Promise.resolve() : strong)),
+          ]);
           if (enough() && !signal.aborted) {
             qualityStop = true;
             controller.abort();

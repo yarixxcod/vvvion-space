@@ -26,3 +26,9 @@ Bing RSS was investigated as a replacement but returned an empty feed on a contr
 Live smoke queries: `Vite official documentation`, `Алматы музей искусств Кастеева часы работы`, `C++ vs Rust memory safety`. Results varied: useful topical DuckDuckGo hits, but Vite also produced a namesake blockchain documentation site. Lexical ranking is not semantic fact verification; the grounding prompt explicitly checks entity context and the UI exposes domains and excerpts. No claim of broad retrieval accuracy from this small smoke set. Provider replacement needs broader evaluation and a configured authenticated candidate.
 
 Tests cover query preservation, parsing, relevance, safe URLs, case-sensitive deduplication, quality-triggered reserve, missing credentials, timeout/cancellation, cache, source diversity and current-fact fallback policy. UI states checked at a 390 CSS-pixel frame in both themes; final Production chat flow is checked separately.
+
+## Production follow-up
+
+The first Production flow exposed a concrete relevance issue: response-format instructions polluted the query, and substring matching let React match Preact. Fixed both, added named-product coverage for documentation queries, and restricted documentation normalization to simple intent phrases so specialized constraints and versions are preserved. A fast reserve no longer cancels the selected primary before it finishes (the total deadline still applies).
+
+Rechecking the exact Russian React/Vite question produced `Vite React documentation build`; the live combined result now started with React's official “Build a React app from Scratch” page and included Cloudflare's React/Vite guide. A namesake Vite documentation page still illustrates the limits of lexical retrieval; source context remains visible and the model must not treat a matching name as proof.

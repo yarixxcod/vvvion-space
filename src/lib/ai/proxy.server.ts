@@ -1035,7 +1035,7 @@ export async function handleChat(request: Request): Promise<Response> {
             if (at >= 0) messages[at] = { role: "system", content: `${contentToText(messages[at].content)}\n\n${note}` };
             else messages.unshift({ role: "system", content: note });
           }
-          console.info("[search]", { requested: engine, status: result.summary.status, engines: result.summary.used, count: sources.length, ms: result.summary.durationMs, cached: Boolean(result.summary.cached) });
+          console.info("[search]", { requested: engine, status: result.summary.status, engines: result.summary.used, count: sources.length, ms: result.summary.durationMs, cached: Boolean(result.summary.cached), attempts: result.summary.attempts.map(({engine,status,ms}) => ({engine,status,ms})) });
         }
 		const mcpUrls = mcpUrlsOf(body.mcp);
 		if (mcpUrls.length || (body.diskAccess === true && actorUser)) {

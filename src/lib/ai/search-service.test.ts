@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSearchService } from "./search-service.ts";
-import { httpUrl, sourceKey, queryTokens, searchQuery, formatSearch } from "./search-rank.ts";
+import {
+  httpUrl,
+  rankSources,
+  sourceKey,
+  queryTokens,
+  searchQuery,
+  formatSearch,
+} from "./search-rank.ts";
 const rows = (host: string, count = 2) =>
   Array.from({ length: count }, (_, i) => ({
     title: `Vite documentation ${i}`,
@@ -99,4 +106,77 @@ test("subdomains do not crowd out independent sources", async () => {
   const result = await search("Vite documentation");
   assert.equal(result.sources.filter((source) => source.url.includes("vite.dev")).length, 2);
   assert.ok(result.sources.some((source) => source.engine === "freeserp"));
+});
+
+test("response formatting does not pollute a technical documentation query", () => {
+  assert.equal(
+    searchQuery(
+      "Найди документацию Vite для сборки React-приложения. Ответь в двух предложениях со ссылкой на источник.",
+    ),
+    "Vite React documentation build",
+  );
+});
+test("React does not match Preact by substring or URL", () => {
+  const ranked = rankSources("React documentation", [
+    {
+      title: "Preact documentation",
+      url: "https://preactjs.com/guide/",
+      snippet: "Lightweight UI library",
+    },
+    {
+      title: "React",
+      url: "https://react.dev/learn",
+      snippet: "Documentation for React applications",
+    },
+  ]);
+  assert.deepEqual(
+    ranked.map((x) => x.url),
+    ["https://react.dev/learn"],
+  );
+});
+
+test("fast reserve does not cancel a slower selected primary", async () => {
+  let primaryFinished = false;
+  const search = createSearchService(
+    async (engine) => {
+      if (engine === "duck") {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        primaryFinished = true;
+        return rows("vite.dev");
+      }
+      return [...rows("one.example"), ...rows("two.example")];
+    },
+    { budgetMs: 150, hedgeMs: 1 },
+  );
+  const result = await search("Vite documentation");
+  assert.equal(primaryFinished, true);
+  assert.ok(result.summary.used.includes("duck"));
+});
+test("technical query normalization preserves versions and specialized constraints", () => {
+  assert.equal(
+    searchQuery("Найди документацию Vite 5 для сборки React 18 приложения. Ответь кратко."),
+    "Vite 5 React 18 documentation build",
+  );
+  assert.equal(
+    searchQuery("документация React про серверные компоненты"),
+    "документация React про серверные компоненты",
+  );
+});
+test("documentation ranking requires both named products", () => {
+  const result = rankSources("Vite React documentation build", [
+    {
+      title: "Vite Preact documentation",
+      url: "https://example.com/vite-preact",
+      snippet: "Build a Preact app with Vite",
+    },
+    {
+      title: "Vite React documentation",
+      url: "https://example.com/vite-react",
+      snippet: "Build a React app with Vite",
+    },
+  ]);
+  assert.deepEqual(
+    result.map((x) => x.url),
+    ["https://example.com/vite-react"],
+  );
 });

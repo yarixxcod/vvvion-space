@@ -109,13 +109,34 @@ export function searchQuery(text: string): string {
     /^(?:привет|здравствуй(?:те)?|добрый\s+(?:день|вечер|утро)|hello|hi)[!.,\s]+/iu,
     "",
   );
-  const query = stripLead(withoutGreeting)
+  let query = stripLead(withoutGreeting)
+    .replace(/[.!?]\s+(?:ответь|отвечай|оформи|дай\s+ответ|answer|respond)(?=\s)[\s\S]*$/iu, "")
     .replace(
       /(?:[.!]\s*)?(?:ответь кратко|кратко ответь|ответ дай кратко|answer briefly)[.!]?$/iu,
       "",
     )
     .trim();
   if (/^(?:привет|здравствуй(?:те)?|hello|hi)[.!]*$/iu.test(query)) return "";
+  // Technical documentation often indexes best under the product's original names.
+  // Keep place/person queries untouched; translate only a narrow, explicit docs intent.
+  const products = [...new Set(query.match(/\b[A-Za-z][A-Za-z0-9.+#]*(?:-[A-Za-z0-9]+)*/g) ?? [])];
+  const narrowDocs = queryTokens(query)
+    .filter((token) => /[а-я]/.test(token))
+    .every((token) =>
+      /^(?:документац|руководств|сборк|приложени|официальн|русск|язык)/.test(token),
+    );
+  if (
+    narrowDocs &&
+    /[А-Яа-я]/.test(query) &&
+    /документац|руководств/i.test(query) &&
+    products.length > 0 &&
+    products.length <= 4
+  ) {
+    const terms =
+      query.match(/\b(?:[A-Za-z][A-Za-z0-9.+#]*(?:-[A-Za-z0-9]+)*|\d+(?:\.\d+){0,3})/g) ?? products;
+    query = `${terms.join(" ")} documentation${/сборк/i.test(query) ? " build" : ""}${/на русском|русскоязыч|русская/i.test(query) ? " на русском" : ""}`;
+  }
+
   return query.length <= 260 ? query : query.slice(0, 260).replace(/\s+\S*$/, "");
 }
 export function queryTokens(text: string): string[] {
@@ -143,6 +164,8 @@ export function needsFreshness(query: string): boolean {
 }
 
 function related(word: string, token: string): boolean {
+  if (/^[a-z0-9]+$/.test(token))
+    return word === token || (token.length >= 4 && (word === `${token}s` || word === `${token}es`));
   if (word.includes(token) || token.includes(word)) return true;
   const size = Math.min(5, word.length, token.length);
   return size >= 4 && word.slice(0, size) === token.slice(0, size);
@@ -155,13 +178,13 @@ function hitScore(
 ): { score: number; hits: number } {
   const title = queryTokens(item.title);
   const snippet = queryTokens(item.snippet);
-  const host = item.url.toLowerCase();
+  const host = queryTokens(item.url);
   let score = 0;
   let hits = 0;
   for (const token of tokens) {
     const inTitle = title.some((word) => related(word, token));
     const inSnippet = snippet.some((word) => related(word, token));
-    const inHost = host.includes(token);
+    const inHost = host.some((word) => related(word, token));
     if (inTitle || inSnippet || inHost) hits += 1;
     if (inTitle) score += 5;
     else if (inSnippet) score += 2;
@@ -192,9 +215,18 @@ export function rankSources(query: string, items: WebSource[], limit = 5): WebSo
   const tokens = queryTokens(query);
   if (!tokens.length) return unique.slice(0, limit);
   const need = tokens.length >= 2 ? 2 : 1;
+  const names = /документац|documentation|\bapi\b|\bsdk\b/i.test(query)
+    ? queryTokens(
+        (query.match(/\b(?:[A-Z][a-z][A-Za-z0-9.+#]*|[A-Z]{2,}|C[+#]+)/g) ?? [])
+          .filter((word) => !/^(?:Find|Search|Show|Build|Create|Explain|Compare|Best)$/i.test(word))
+          .join(" "),
+      )
+    : [];
+
   return unique
     .map((item, order) => {
       const hit = hitScore(tokens, query, item);
+      const entityHits = hitScore(names, query, item).hits;
       const url = new URL(item.url);
       let authority = 0;
       if (/документац|official|documentation|\bapi\b|\bsdk\b/i.test(query)) {
@@ -207,9 +239,21 @@ export function rankSources(query: string, items: WebSource[], limit = 5): WebSo
           authority += 2;
       }
       if (/\.gov(?:\.[a-z]+)?$|\.edu$/.test(url.hostname)) authority += 2;
-      return { item, ...hit, score: hit.score + (hit.hits ? authority : 0), authority, order };
+      return {
+        item,
+        ...hit,
+        entityHits,
+        score: hit.score + (hit.hits ? authority : 0),
+        authority,
+        order,
+      };
     })
-    .filter((row) => row.score > 0 && (row.hits >= need || (row.hits > 0 && row.authority >= 6)))
+    .filter(
+      (row) =>
+        (names.length < 2 || row.entityHits >= names.length) &&
+        row.score > 0 &&
+        (row.hits >= need || (row.hits > 0 && row.authority >= 6)),
+    )
     .sort((a, b) => b.score - a.score || a.order - b.order)
     .filter(
       (row, index, all) =>
