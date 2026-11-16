@@ -29,6 +29,7 @@ import { Route as ApiTelegramRouteImport } from './routes/api/telegram'
 import { Route as ApiTipsRouteImport } from './routes/api/tips'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as ApiTtsRouteImport } from './routes/api/tts'
+import { Route as ApiVpnAgentRouteImport } from './routes/api/vpn-agent'
 import { Route as AppSplatRouteImport } from './routes/app/$'
 import { Route as BTokenRouteImport } from './routes/b/$token'
 import { Route as CSectionRouteImport } from './routes/c/$section'
@@ -166,6 +167,11 @@ const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
 const ApiTtsRoute = ApiTtsRouteImport.update({
   id: '/api/tts',
   path: '/api/tts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVpnAgentRoute = ApiVpnAgentRouteImport.update({
+  id: '/api/vpn-agent',
+  path: '/api/vpn-agent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppSplatRoute = AppSplatRouteImport.update({
@@ -382,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/api/tips': typeof ApiTipsRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/api/tts': typeof ApiTtsRoute
+  '/api/vpn-agent': typeof ApiVpnAgentRoute
   '/app/$': typeof AppSplatRoute
   '/b/$token': typeof BTokenRoute
   '/c/$section': typeof CSectionRoute
@@ -442,6 +449,7 @@ export interface FileRoutesByTo {
   '/api/tips': typeof ApiTipsRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/api/tts': typeof ApiTtsRoute
+  '/api/vpn-agent': typeof ApiVpnAgentRoute
   '/app/$': typeof AppSplatRoute
   '/b/$token': typeof BTokenRoute
   '/c/$section': typeof CSectionRoute
@@ -503,6 +511,7 @@ export interface FileRoutesById {
   '/api/tips': typeof ApiTipsRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/api/tts': typeof ApiTtsRoute
+  '/api/vpn-agent': typeof ApiVpnAgentRoute
   '/app/$': typeof AppSplatRoute
   '/b/$token': typeof BTokenRoute
   '/c/$section': typeof CSectionRoute
@@ -565,6 +574,7 @@ export interface FileRouteTypes {
     | '/api/tips'
     | '/api/transcribe'
     | '/api/tts'
+    | '/api/vpn-agent'
     | '/app/$'
     | '/b/$token'
     | '/c/$section'
@@ -625,6 +635,7 @@ export interface FileRouteTypes {
     | '/api/tips'
     | '/api/transcribe'
     | '/api/tts'
+    | '/api/vpn-agent'
     | '/app/$'
     | '/b/$token'
     | '/c/$section'
@@ -685,6 +696,7 @@ export interface FileRouteTypes {
     | '/api/tips'
     | '/api/transcribe'
     | '/api/tts'
+    | '/api/vpn-agent'
     | '/app/$'
     | '/b/$token'
     | '/c/$section'
@@ -746,6 +758,7 @@ export interface RootRouteChildren {
   ApiTipsRoute: typeof ApiTipsRoute
   ApiTranscribeRoute: typeof ApiTranscribeRoute
   ApiTtsRoute: typeof ApiTtsRoute
+  ApiVpnAgentRoute: typeof ApiVpnAgentRoute
   AppSplatRoute: typeof AppSplatRoute
   BTokenRoute: typeof BTokenRoute
   CSectionRoute: typeof CSectionRoute
@@ -918,6 +931,13 @@ declare module '@tanstack/react-router' {
       path: '/api/tts'
       fullPath: '/api/tts'
       preLoaderRoute: typeof ApiTtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vpn-agent': {
+      id: '/api/vpn-agent'
+      path: '/api/vpn-agent'
+      fullPath: '/api/vpn-agent'
+      preLoaderRoute: typeof ApiVpnAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/$': {
@@ -1284,6 +1304,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTipsRoute: ApiTipsRoute,
   ApiTranscribeRoute: ApiTranscribeRoute,
   ApiTtsRoute: ApiTtsRoute,
+  ApiVpnAgentRoute: ApiVpnAgentRoute,
   AppSplatRoute: AppSplatRoute,
   BTokenRoute: BTokenRoute,
   CSectionRoute: CSectionRoute,

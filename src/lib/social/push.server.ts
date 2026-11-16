@@ -417,8 +417,14 @@ export async function runSubscriptionReminders() {
   await remindProduct("premium", "1d");
   await remindExpired("mega");
   await remindExpired("premium");
+  await remindVpn("7d");
   await remindVpn("3d");
   await remindVpn("1d");
+  await remindVpnExpired();
+  await remindVpnTraffic();
+  await remindVpnDownNodes();
+  const { renewDueVpn } = await import("@/lib/social/vpn");
+  await renewDueVpn();
 }
 
 async function remindExpired(product: "mega" | "premium") {
@@ -442,24 +448,97 @@ async function remindExpired(product: "mega" | "premium") {
   }
 }
 
-async function remindVpn(window: "3d" | "1d") {
+async function remindVpn(window: "7d" | "3d" | "1d") {
   const sql = await getSql();
   const rows =
-    window === "3d"
+    window === "7d"
       ? await sql<{ user_id: string; until_at: string }>`
           select user_id, until_at::text as until_at from vpn_passes
-          where until_at > now() + interval '2 days' and until_at <= now() + interval '3 days'
+          where blocked_at is null and until_at > now() + interval '6 days' and until_at <= now() + interval '7 days'
+        `
+      : window === "3d"
+      ? await sql<{ user_id: string; until_at: string }>`
+          select user_id, until_at::text as until_at from vpn_passes
+          where blocked_at is null and until_at > now() + interval '2 days' and until_at <= now() + interval '3 days'
         `
       : await sql<{ user_id: string; until_at: string }>`
           select user_id, until_at::text as until_at from vpn_passes
-          where until_at > now() and until_at <= now() + interval '1 day'
+          where blocked_at is null and until_at > now() and until_at <= now() + interval '1 day'
         `;
-  const copy = subCopy("vpn", window);
+  const copy =
+    window === "7d"
+      ? { id: "sub:vpn:7d", title: "VPN", body: "VPN закончится через 7 дней", url: "/c/services" }
+      : subCopy("vpn", window);
   for (const row of rows) {
     const ends = new Date(row.until_at);
     if (Number.isNaN(ends.getTime())) continue;
-    if (!(await claimOnce(row.user_id, subKind("vpn", window), subRef(ends)))) continue;
+    if (!(await claimOnce(row.user_id, window === "7d" ? "vpn:7d" : subKind("vpn", window), subRef(ends)))) continue;
     await sendPush(row.user_id, "subs", { id: copy.id, title: copy.title, body: copy.body, url: copy.url });
+  }
+}
+
+async function remindVpnExpired() {
+  const sql = await getSql();
+  const rows = await sql<{ user_id: string; until_at: string }>`
+    select user_id, until_at::text as until_at from vpn_passes
+    where until_at > now() - interval '1 day' and until_at <= now()
+  `;
+  for (const row of rows) {
+    const ends = new Date(row.until_at);
+    if (Number.isNaN(ends.getTime())) continue;
+    if (!(await claimOnce(row.user_id, "vpn:expired", subRef(ends)))) continue;
+    await sendPush(row.user_id, "subs", { id: "sub:vpn:expired", title: "VPN", body: "Подписка VPN закончилась", url: "/c/services" });
+  }
+}
+
+export async function pushVpnNodeDown(nodeId: string, name: string) {
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(nodeId)) return;
+  const sql = await getSql();
+  const day = new Date().toISOString().slice(0, 10);
+  const people = await sql<{ user_id: string }>`
+    select user_id from vpn_passes where blocked_at is null and until_at > now() limit 200
+  `;
+  const body = `Сервер «${clipText(name, 32) || "VPN"}» сейчас не отвечает`;
+  for (const person of people) {
+    if (!(await claimOnce(person.user_id, "vpn:down", `${nodeId}:${day}`))) continue;
+    await sendPush(person.user_id, "subs", { id: `vpn-down:${nodeId}`, title: "VPN", body, url: "/c/services" });
+  }
+}
+
+async function remindVpnDownNodes() {
+  const sql = await getSql();
+  const nodes = await sql<{ id: string; name: string }>`
+    select id, name from vpn_nodes where reach = 'down' and enabled = true and maintenance = false
+  `;
+  for (const node of nodes) await pushVpnNodeDown(node.id, node.name);
+}
+
+async function remindVpnTraffic() {
+  const sql = await getSql();
+  const plan = await sql<{ traffic_bytes: string | number }>`select traffic_bytes from vpn_plan where id = 1`;
+  const quota = Number(plan[0]?.traffic_bytes ?? 0);
+  if (!(quota > 0)) return;
+  const rows = await sql<{ user_id: string; used: string | number; anchor: string }>`
+    select p.user_id,
+           coalesce(sum(greatest(c.upload_bytes - c.baseline_upload, 0) + greatest(c.download_bytes - c.baseline_download, 0)), 0)::bigint as used,
+           coalesce(to_char(p.quota_reset_at at time zone 'utc', 'YYYY-MM-DD'), 'open') as anchor
+    from vpn_passes p
+    join vpn_counters c on c.user_id = p.user_id
+    where p.blocked_at is null and p.until_at > now()
+    group by p.user_id, p.quota_reset_at
+  `;
+  for (const row of rows) {
+    const used = Number(row.used);
+    if (!Number.isFinite(used)) continue;
+    const level = used / quota >= 0.95 ? "95" : used / quota >= 0.8 ? "80" : "";
+    if (!level) continue;
+    if (!(await claimOnce(row.user_id, `vpn:traffic${level}`, row.anchor || "open"))) continue;
+    await sendPush(row.user_id, "subs", {
+      id: `vpn-traffic:${level}`,
+      title: "VPN",
+      body: level === "95" ? "Трафик VPN почти закончился" : "Использовано больше 80% трафика VPN",
+      url: "/c/services",
+    });
   }
 }
 

@@ -3,11 +3,14 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/api/vpn/$token")({
   server: {
     handlers: {
-      GET: async ({ params }) => {
+      GET: async ({ params, request }) => {
         const { renderVpnSubscription } = await import("@/lib/social/vpn");
-        return renderVpnSubscription(params.token);
+        return renderVpnSubscription(params.token, request);
       },
-      HEAD: () => new Response(null, { status: 200, headers: { "cache-control": "no-store" } }),
+      HEAD: async ({ params, request }) => {
+        const { renderVpnSubscription } = await import("@/lib/social/vpn");
+        return renderVpnSubscription(params.token, request);
+      },
     },
   },
 });
