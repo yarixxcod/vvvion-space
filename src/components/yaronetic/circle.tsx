@@ -320,7 +320,12 @@ function Home({
             )}
           </div>
         </SectionSwipe>
-        <nav className={cn("circle-nav grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
+        <nav className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
+          <span
+            className="circle-drop"
+            style={{ transform: `translateX(${(mainTabs.indexOf(tab) >= 0 ? mainTabs.indexOf(tab) : 4) * 100}%)` }}
+            aria-hidden="true"
+          />
           {mainTabs.map((id) => (
             <button
               key={id}

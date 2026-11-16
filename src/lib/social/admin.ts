@@ -533,7 +533,7 @@ export type ChatStats = {
   ok: number;
   tokens: number;
   days: { day: string; requests: number; tokens: number }[];
-  models: { model: string; requests: number; tokens: number }[];
+  models: { model: string; requests: number; tokens: number; icon: string }[];
 };
 
 export const chatStats = createServerFn({ method: "GET" })
@@ -557,14 +557,23 @@ export const chatStats = createServerFn({ method: "GET" })
       group by to_char(created_at at time zone 'UTC', 'DD.MM'), date_trunc('day', created_at at time zone 'UTC')
       order by date_trunc('day', created_at at time zone 'UTC')
     `;
-    const models = await sql<{ model: string; requests: number; tokens: number | string }>`
-      select coalesce(nullif(trim(cm.display_name), ''), a.model) as model,
+    const models = await sql<{ model: string; requests: number; tokens: number | string; icon: string | null }>`
+      select coalesce(nullif(trim(cm.display_name), ''), nullif(trim(via.display_name), ''), a.model) as model,
+             coalesce(nullif(cm.icon, ''), nullif(via.icon, ''), '') as icon,
              count(*)::int as requests,
              coalesce(sum(a.total_tokens), 0)::bigint as tokens
       from chat_attempts a
       left join catalog_models cm on cm.name = a.model
+      left join lateral (
+        select c.display_name, c.icon
+        from catalog_providers p
+        join catalog_models c on c.name = p.model_name
+        where cm.name is null and p.model_id = a.model and nullif(trim(p.model_id), '') is not null
+        order by p.slot asc
+        limit 1
+      ) via on true
       where a.created_at >= now() - interval '14 days'
-      group by a.model, cm.display_name
+      group by 1, 2
       order by coalesce(sum(a.total_tokens), 0) desc, count(*) desc
       limit 8
     `;
@@ -574,7 +583,12 @@ export const chatStats = createServerFn({ method: "GET" })
       ok: Number(row?.ok ?? 0),
       tokens: Number(row?.tokens ?? 0),
       days: days.map((item) => ({ day: item.day, requests: Number(item.requests), tokens: Number(item.tokens) })),
-      models: models.map((item) => ({ model: item.model, requests: Number(item.requests), tokens: Number(item.tokens) })),
+      models: models.map((item) => ({
+        model: item.model,
+        requests: Number(item.requests),
+        tokens: Number(item.tokens),
+        icon: publicIcon(item.icon),
+      })),
     };
   });
 

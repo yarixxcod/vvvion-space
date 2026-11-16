@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as
 import { Captions, ChevronDown, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, X } from "lucide-react";
 import { ArtistNames } from "@/components/yaronetic/artist-card";
 import { useTx } from "@/lib/lang";
+import { appRestoreQueue, appSavedQueue } from "@/lib/app-bridge";
 import { coverUrl, musicBits, type MusicTags } from "@/lib/music/tags";
 import { loadTags } from "@/lib/music/load";
 import { parseLrc, type LrcLine } from "@/lib/music/lrc";
@@ -888,6 +889,41 @@ export function MusicCard({ name, src, mine }: { name: string; src: string; mine
   );
 }
 
+function resumeNativeQueue() {
+  if (!appRestoreQueue() || !nativeAttach()) return false;
+  const live = nativeState();
+  if (!live?.id && !live?.url) return false;
+  const lone = blank(live.url || live.id, live.title || "Трек");
+  lone.title = live.title || lone.title;
+  lone.artist = live.artist;
+  lone.album = live.album;
+  queue = [lone];
+  index = 0;
+  mode = "mini";
+  pendingPlay = false;
+  emit();
+  return true;
+}
+
+function SavedQueueBar() {
+  const tx = useTx();
+  const [title, setTitle] = useState("");
+  useEffect(() => {
+    const row = appSavedQueue();
+    setTitle(row?.has && !nativeState() ? row.title || "" : "");
+  }, []);
+  if (!title) return null;
+  return (
+    <button
+      type="button"
+      className="press fixed inset-x-3 bottom-[max(0.8rem,env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center rounded-2xl border border-line bg-elev px-3 py-2 text-left text-sm shadow-[var(--shadow)]"
+      onClick={() => resumeNativeQueue()}
+    >
+      {tx({ ru: `Продолжить: ${title}`, en: `Continue: ${title}`, kk: `Жалғастыру: ${title}` })}
+    </button>
+  );
+}
+
 export function MusicDock() {
   const tx = useTx();
   const deck = useSyncExternalStore(subscribe, () => snapshot, () => SERVER_DECK);
@@ -956,7 +992,8 @@ export function MusicDock() {
     };
   }, [miniOpen]);
 
-  if (!booted || !deck.track) return null;
+  if (!booted) return null;
+  if (!deck.track) return <SavedQueueBar />;
   const current = deck.track;
   const progress = dur > 0 ? Math.min(1, at / dur) : 0;
   const facts = [current.album, current.genre, musicBits(current, 0)].filter(Boolean).join(" · ");

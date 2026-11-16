@@ -59,6 +59,12 @@ type VvvionApp = {
   updateMeta?: (meta: { index?: number; title?: string; artist?: string; album?: string; artwork?: string }) => void;
   getState?: () => import("@/lib/player/native").NativePlayerState | null;
   setWidgetCity?: (city: string) => void;
+  openAppSettings?: () => void;
+  checkForUpdates?: () => void;
+  diagnostics?: () => unknown;
+  widgetSessionChanged?: () => void;
+  savedQueue?: () => { has: boolean; count?: number; index?: number; id?: string; title?: string; artist?: string; positionMs?: number; savedAt?: number };
+  restoreQueue?: () => boolean;
 };
 
 declare global {
@@ -211,6 +217,64 @@ export function appOpenNotificationSettings() {
   }
 }
 
+function callApp(feature: string, run: () => void): boolean {
+  if (!isApp() || !appHas(feature)) return false;
+  try {
+    run();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function appOpenSettings(): boolean {
+  return callApp("appSettings", () => {
+    window.VvvionApp?.openAppSettings?.();
+  });
+}
+
+export function appCheckUpdates(): boolean {
+  return callApp("checkUpdates", () => {
+    window.VvvionApp?.checkForUpdates?.();
+  });
+}
+
+export function appDiagnostics(): unknown {
+  if (typeof window === "undefined" || !isApp() || !appHas("diagnostics")) return null;
+  try {
+    return window.VvvionApp?.diagnostics?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function appWidgetSessionChanged(): boolean {
+  return callApp("widgetSession", () => {
+    window.VvvionApp?.widgetSessionChanged?.();
+  });
+}
+
+export type SavedQueue = { has: boolean; count?: number; index?: number; id?: string; title?: string; artist?: string; positionMs?: number; savedAt?: number };
+
+export function appSavedQueue(): SavedQueue | null {
+  if (typeof window === "undefined" || !isApp() || !appHas("playerRestore")) return null;
+  try {
+    const row = window.VvvionApp?.savedQueue?.();
+    return row && row.has === true ? row : null;
+  } catch {
+    return null;
+  }
+}
+
+export function appRestoreQueue(): boolean {
+  if (typeof window === "undefined" || !isApp() || !appHas("playerRestore")) return false;
+  try {
+    return window.VvvionApp?.restoreQueue?.() === true;
+  } catch {
+    return false;
+  }
+}
+
 function authHeaders() {
   const headers = new Headers({ "content-type": "application/json" });
   const token = getBearerToken();
@@ -279,6 +343,7 @@ export async function unregisterPushToken() {
 function tryRegister() {
   if (loggedIn()) void registerPushToken();
   if (loggedIn()) void loadPushSettings();
+  if (loggedIn()) appWidgetSessionChanged();
 }
 
 export function initAppBridge(isLoggedIn: () => boolean) {

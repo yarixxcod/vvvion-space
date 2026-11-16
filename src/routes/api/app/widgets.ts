@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getSql } from "@/lib/db";
 import { json, readWalletBalance, requireUser } from "@/lib/pay/topup.server";
+import { widgetPayload } from "@/lib/social/widgets";
 
 export const Route = createFileRoute("/api/app/widgets")({
   server: {
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/api/app/widgets")({
         const rows = await sql<{ city: string }>`
           select city from weather_cities where user_id = ${user} order by added_at desc limit 8
         `;
-        return json(200, { balance: await readWalletBalance(user), weatherCities: rows.map((row) => row.city) });
+        return json(200, widgetPayload(await readWalletBalance(user), rows.map((row) => row.city)));
       },
     },
   },

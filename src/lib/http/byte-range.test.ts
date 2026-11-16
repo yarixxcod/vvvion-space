@@ -43,6 +43,12 @@ test("a suffix range is the last bytes", async () => {
   assert.equal(bytes[0], 150);
 });
 
+test("several ranges stay the whole file", async () => {
+  const res = respond("bytes=0-1,5-6");
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("accept-ranges"), "bytes");
+  assert.equal((await res.arrayBuffer()).byteLength, 200);
+});
 test("a range past the end is 416", () => {
   const res = respond("bytes=999999999-");
   assert.equal(res.status, 416);

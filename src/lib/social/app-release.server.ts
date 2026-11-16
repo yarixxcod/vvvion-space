@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -410,9 +411,26 @@ export async function handlePublicApp(request: Request): Promise<Response> {
   try {
     const path = decodeURIComponent(new URL(request.url).pathname);
     if (path === "/app/version.json") return await versionDocumentResponse(request);
+    if (path === "/app/assets.json") return appAssetsResponse(request);
     if (path.startsWith("/app/")) return await apkFileResponse(request, path.slice("/app/".length));
     return new Response("Не найдено", { status: 404 });
   } catch {
     return json(500, { message: "Обновление не открылось" });
   }
+}
+
+function appAssetsResponse(request: Request): Response {
+  const file = [
+    join(process.cwd(), "app-assets.json"),
+    join(process.cwd(), ".vercel/output/static/app/assets.json"),
+    join(process.cwd(), ".vercel/output/functions/__server.func/app-assets.json"),
+  ].find((item) => existsSync(item));
+  if (!file) return new Response("Не найдено", { status: 404 });
+  return new Response(request.method === "HEAD" ? null : readFileSync(file), {
+    status: 200,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-cache",
+    },
+  });
 }

@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
@@ -42,6 +42,30 @@ function pgliteBundleAssetsPlugin(): Plugin {
         const from = join(srcDir, name);
         if (existsSync(from)) copyFileSync(from, join(destDir, name));
       }
+    },
+  };
+}
+
+function appAssetsManifestPlugin(): Plugin {
+  return {
+    name: "app-builder:app-assets-manifest",
+    apply: "build",
+    enforce: "post",
+    closeBundle() {
+      const root = join(process.cwd(), ".vercel/output/static");
+      const dir = join(root, "assets");
+      if (!existsSync(dir)) return;
+      const hashed = /^[A-Za-z0-9_.-]+-[A-Za-z0-9_-]{8}\.(js|css|woff2|svg|png|webp|jpg)$/;
+      const assets = readdirSync(dir)
+        .filter((name) => hashed.test(name) && !/^(pglite|initdb)[-.]/.test(name))
+        .sort()
+        .slice(0, 400)
+        .map((name) => ({ path: `/assets/${name}`, size: statSync(join(dir, name)).size }));
+      const body = JSON.stringify({ version: 1, generatedAt: new Date().toISOString(), assets });
+      mkdirSync(join(root, "app"), { recursive: true });
+      writeFileSync(join(root, "app", "assets.json"), body);
+      const func = join(process.cwd(), ".vercel/output/functions/__server.func");
+      if (existsSync(func)) writeFileSync(join(func, "app-assets.json"), body);
     },
   };
 }
@@ -280,6 +304,7 @@ export default defineConfig(({ command, isPreview }) => ({
             vercel: { functions: { maxDuration: 60 } },
           }),
           pgliteBundleAssetsPlugin(),
+          appAssetsManifestPlugin(),
           ssh2BundlePlugin(),
           appReleaseSeedPlugin(),
           firebaseKeyPlugin(),

@@ -23,6 +23,13 @@
       ]
     },
     {
+      "source": "/app/assets.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json; charset=utf-8" },
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    },
+    {
       "source": "/app/version.json",
       "headers": [
         { "key": "Content-Type", "value": "application/json; charset=utf-8" },

@@ -1,4 +1,5 @@
 import { HowlPlayer, HowlerPlayer } from "@/lib/vendor/howler-2.2.4.js";
+import { nativeOwns } from "@/lib/player/native";
 
 const KEY = "vvvion.sounds";
 const PACK_KEY = "vvvion.sound-pack";
@@ -331,6 +332,7 @@ export function trackIsPlaying(): boolean {
 }
 
 export function trackPlay() {
+  if (nativeOwns()) return;
   const node = elementOf(live?.howl) ?? (live ? speaker : null);
   if (!node) return;
   kick(node);
@@ -338,6 +340,7 @@ export function trackPlay() {
 }
 
 export function trackToggle() {
+  if (nativeOwns()) return;
   const node = elementOf(live?.howl) ?? (live ? speaker : null);
   if (!node || !live) return;
   if (!node.paused && !node.ended) node.pause();
@@ -362,7 +365,7 @@ export function trackStop() {
 }
 
 export function trackStart(src: string, format: string, autoplay = true, at = 0) {
-  if (typeof window === "undefined" || !src) return;
+  if (typeof window === "undefined" || !src || nativeOwns()) return;
   attachHowler();
   dropGesture();
   const same = elementOf(live?.howl);

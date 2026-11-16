@@ -119,6 +119,8 @@ export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onC
         });
         if (error) throw new Error(explain(error));
         await authClient.getSession();
+        const { appWidgetSessionChanged } = await import("@/lib/app-bridge");
+        appWidgetSessionChanged();
         toast.success(txNow({ ru: "Вы вошли в аккаунт.", en: "Signed in successfully.", kk: "Аккаунтқа кірдіңіз." }));
         onComplete?.();
       }

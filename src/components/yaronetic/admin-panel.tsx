@@ -1018,7 +1018,10 @@ function Stats() {
           {row.models.map((item) => (
             <li key={item.model}>
               <div className="flex items-baseline justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                {item.icon ? <img src={item.icon} alt="" className="size-5 shrink-0 rounded-full object-cover" /> : null}
                 <p className="min-w-0 truncate text-sm">{item.model}</p>
+              </div>
                 <p className="shrink-0 text-xs tabular-nums text-faint">{num(item.requests)} · {num(item.tokens)}</p>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-subtle">

@@ -139,6 +139,8 @@ export async function signIn(
     } catch {
       /* session store will recover on next useSession fetch */
     }
+    const { appWidgetSessionChanged } = await import("@/lib/app-bridge");
+    appWidgetSessionChanged();
     if (typeof window !== "undefined") {
       const dest = new URL(callbackURL, window.location.origin);
       const here = window.location;
@@ -225,8 +227,9 @@ function waitForPopupToken(popup: Window): Promise<string | null> {
  * preview the local clear is sufficient, so it always resolves.
  */
 export async function signOut(redirectTo = "/"): Promise<void> {
-  const { unregisterPushToken } = await import("@/lib/app-bridge");
+  const { unregisterPushToken, appWidgetSessionChanged } = await import("@/lib/app-bridge");
   await unregisterPushToken();
+  appWidgetSessionChanged();
   await runSignOut({
     livePreview: inLivePreview(),
     hasBearer: Boolean(getBearerToken()),

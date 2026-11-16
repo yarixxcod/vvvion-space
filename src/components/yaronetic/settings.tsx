@@ -8,7 +8,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { pushBackLayer } from "@/lib/app-back";
-import { appCopy, isApp } from "@/lib/app-bridge";
+import { appCheckUpdates, appHas, appOpenSettings, appCopy, isApp } from "@/lib/app-bridge";
 import { FACE_VARIANTS, ModelFace, type FaceVariant, type FaceMood } from "@/components/yaronetic/model-face";
 import { PAPERS, type PaperId } from "@/lib/ai/paper";
 import { SEARCH_ENGINES, type SearchEngine } from "@/lib/ai/search-engine";
@@ -197,6 +197,7 @@ export function SettingsDialog({
             <MemoryPanel chatId={chatId} />
             <DiskAiAccess />
             <ServiceStatus />
+            <AppTools />
             <SoundChoices />
             {onEditInterests ? (
               <div className="mt-4 rounded-2xl border border-line px-3 py-3">
@@ -330,6 +331,35 @@ function AppAbout() {
       >
         {tx({ ru: "Скопировать лог", en: "Copy log", kk: "Журналды көшіру" })}
       </button>
+    </div>
+  );
+}
+
+function AppTools() {
+  const tx = useTx();
+  const [settings, setSettings] = useState(false);
+  const [updates, setUpdates] = useState(false);
+  useEffect(() => {
+    if (!isApp()) return;
+    setSettings(appHas("appSettings"));
+    setUpdates(appHas("checkUpdates"));
+  }, []);
+  if (!settings && !updates) return null;
+  return (
+    <div className="mt-4 rounded-2xl border border-line px-3 py-3">
+      <p className="text-sm">{tx({ ru: "Приложение", en: "App", kk: "Қолданба" })}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {settings ? (
+          <button type="button" className="press min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => appOpenSettings()}>
+            {tx({ ru: "Настройки приложения", en: "App settings", kk: "Қолданба баптауы" })}
+          </button>
+        ) : null}
+        {updates ? (
+          <button type="button" className="press min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => appCheckUpdates()}>
+            {tx({ ru: "Проверить обновления", en: "Check for updates", kk: "Жаңартуды тексеру" })}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
