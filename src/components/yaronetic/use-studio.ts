@@ -847,6 +847,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       let truncated = false;
       let imageUrl: string | undefined;
       let sources: ChatMessage["sources"];
+      let search: ChatMessage["search"];
       let raf = 0;
       let lastSave = 0;
       let slow = 0;
@@ -868,6 +869,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
                 truncated: truncated || undefined,
                 imageUrl,
                 sources,
+                search,
               }
             : item,
         );
@@ -964,7 +966,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
               imageUrl = url;
               schedule();
             },
-            onSources(next) {
+            onSources(next, summary) {
+              search = summary;
               sources = next.slice(0, 6);
               schedule();
             },

@@ -1,3 +1,4 @@
+import { SearchEvidence } from "./search-evidence";
 import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -575,37 +576,22 @@ function AssistantBubble({
           </span>
         </div>
         {usageOpen && tokens ? <p className="mb-1 text-xs text-faint tabular-nums">{tokens}</p> : null}
-        {pending ? (
+        {pending && !message.web ? (
           <p className="mt-0.5 text-xs text-muted">
             <LiveLine />
           </p>
         ) : null}
-        {message.reasoning || (waiting && reasoningOn) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
+        {message.reasoning || (waiting && reasoningOn && !message.web) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
         {continuing ? <p className="mb-2 text-sm text-muted">Ответ дописывается сам. Экран можно выключить.</p> : null}
         {src ? <ChatPicture url={src} alt={message.content || "Сгенерированная картинка"} /> : null}
+        {message.web || message.sources?.length ? <SearchEvidence sources={message.sources} summary={message.search} pending={pending} failed={Boolean(message.error || message.stopped)} /> : null}
         {message.content ? (
           <div className={pending ? "caret" : undefined}>
-            <Markdown text={message.content} live={pending} askable={askable} askNote={askNote} onAsk={onAsk} />
+            <Markdown sources={message.sources} text={message.content} live={pending} askable={askable} askNote={askNote} onAsk={onAsk} />
           </div>
         ) : null}
         {message.error ? (
           <p className="mt-2 rounded-2xl border border-line bg-subtle px-3 py-2 text-sm text-danger">{message.error}</p>
-        ) : null}
-        {message.sources && message.sources.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {message.sources.map((source) => (
-              <a
-                key={source.url}
-                href={source.url}
-                target="_blank"
-                rel="noreferrer"
-                className="max-w-full rounded-2xl border border-line bg-subtle px-3 py-2 text-xs hover:bg-elev"
-              >
-                <span className="block truncate font-medium text-fg">{source.title}</span>
-                {source.snippet ? <span className="mt-0.5 line-clamp-2 block text-faint">{source.snippet}</span> : null}
-              </a>
-            ))}
-          </div>
         ) : null}
         {message.error && canRegenerate ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onRegenerate}>Повторить ответ</button> : null}
         {message.stopped ? <p className="mt-2 text-sm text-faint">Остановлено</p> : null}

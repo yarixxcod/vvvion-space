@@ -28,7 +28,7 @@ test("duck html keeps the real link and the snippet", () => {
   assert.match(hits[0]?.snippet || "", /fine-tune Llama 3/);
 });
 
-test("the model is not told the engine name or to admit a miss", () => {
+test("source excerpts keep provider names out of the grounding prompt", () => {
   const note = formatSearch([{ title: "Llama", url: "https://example.com/llama", snippet: "guide" }]);
   assert.doesNotMatch(note, /DuckDuckGo|TinyFish|FreeSERP|ничего не нашёл/i);
   assert.equal(formatSearch([]), "");

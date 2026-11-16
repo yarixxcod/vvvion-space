@@ -1,3 +1,4 @@
+import { cleanSearchSummary, type SearchSummary } from "./search-types";
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
@@ -52,15 +53,16 @@ function asMessage(value: unknown): ChatMessage | null {
   if (raw.translate) message.translate = true;
   const imageUrl = keepImageUrl(raw.imageUrl);
   if (imageUrl) message.imageUrl = imageUrl;
+  message.search = cleanSearchSummary(raw.search);
   if (Array.isArray(raw.sources)) {
     const sources = raw.sources.slice(0, 6).flatMap((item) => {
       if (!item || typeof item !== "object") return [];
       const source = item as Partial<Source>;
       const title = typeof source.title === "string" ? source.title.slice(0, 160) : "";
-      const url = typeof source.url === "string" ? source.url.slice(0, 500) : "";
-      const snippet = typeof source.snippet === "string" ? source.snippet.slice(0, 300) : "";
+      const url = typeof source.url === "string" ? source.url.slice(0, 1800) : "";
+      const snippet = typeof source.snippet === "string" ? source.snippet.slice(0, 600) : "";
       if (!title || !/^https?:\/\//.test(url)) return [];
-      return [{ title, url, snippet }];
+      return [{ title, url, snippet, engine: source.engine, publishedAt: typeof source.publishedAt === "string" ? source.publishedAt.slice(0, 40) : undefined }];
     });
     if (sources.length) message.sources = sources;
   }
@@ -237,7 +239,7 @@ export async function finishCloudReply(
   userId: string,
   chatId: string,
   messageId: string,
-  patch: { content: string; reasoning?: string; error?: string; imageUrl?: string; truncated?: boolean; live?: boolean; sync?: number; unread?: boolean; stopped?: boolean },
+  patch: { sources?: Source[]; search?: SearchSummary; content: string; reasoning?: string; error?: string; imageUrl?: string; truncated?: boolean; live?: boolean; sync?: number; unread?: boolean; stopped?: boolean },
 ): Promise<void> {
   if (!/^[A-Za-z0-9-]{8,80}$/.test(chatId) || !/^[A-Za-z0-9-]{8,80}$/.test(messageId)) return;
   const sql = await getSql();
@@ -252,6 +254,8 @@ export async function finishCloudReply(
   if (!current || current.role !== "assistant") return;
   if (typeof patch.sync === "number" && typeof current.sync === "number" && patch.sync < current.sync) return;
   const next: ChatMessage = { ...current, content: patch.content.slice(0, MAX_CONTENT) };
+  if (patch.sources) next.sources = patch.sources;
+  if (patch.search) next.search = cleanSearchSummary(patch.search);
   if (typeof patch.sync === "number") next.sync = patch.sync;
   if (patch.live) next.live = true;
   else delete next.live;

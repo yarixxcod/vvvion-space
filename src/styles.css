@@ -356,3 +356,5 @@ html.light[data-paper="graphite"] .chat-paper, html.light .paper-swatch[data-pap
   background-image:linear-gradient(150deg,transparent 20%,#6b668d0c 20.2%,transparent 20.5% 69%,#6b668d0c 69.2%,transparent 69.5%),linear-gradient(145deg,#f8f8fa,#edf0f4);
   background-blend-mode:normal;
 }
+
+.prose-y a.search-citation{display:inline-flex;align-items:center;justify-content:center;min-width:1.5rem;min-height:1.5rem;padding:0 .35rem;margin:0 .15rem;border:1px solid var(--line);border-radius:.5rem;background:var(--subtle);color:var(--accent);font-size:.72em;font-weight:600;text-decoration:none;vertical-align:baseline}.prose-y a.search-citation:hover{background:var(--elev);border-color:var(--accent)}

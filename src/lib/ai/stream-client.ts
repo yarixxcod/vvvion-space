@@ -1,3 +1,4 @@
+import { cleanSearchSummary, type SearchSummary } from "./search-types";
 import type { ChatTurn, Source, Usage } from "@/lib/ai/types";
 import { getBearerToken } from "@/lib/auth/client";
 
@@ -34,7 +35,7 @@ type Handlers = {
   onMeta?: (meta: { truncated?: boolean }) => void;
   onError: (message: string) => void;
   onImage?: (url: string) => void;
-  onSources?: (sources: Source[]) => void;
+  onSources?: (sources: Source[], search?: SearchSummary) => void;
 };
 
 export async function streamChat(payload: StreamPayload, handlers: Handlers): Promise<void> {
@@ -100,7 +101,7 @@ function parseEvent(raw: string, handlers: Handlers) {
     else if (line.startsWith("data:")) data += line.slice(5).trim();
   }
   if (!data) return;
-  let json: { text?: string; message?: string; usage?: Usage; truncated?: boolean; url?: string; sources?: Source[]; remainingPct?: number };
+  let json: { text?: string; message?: string; usage?: Usage; truncated?: boolean; url?: string; sources?: Source[]; search?: SearchSummary; remainingPct?: number };
   try {
     json = JSON.parse(data) as typeof json;
   } catch {
@@ -113,7 +114,7 @@ function parseEvent(raw: string, handlers: Handlers) {
   else if (event === "meta" && json.truncated) handlers.onMeta?.({ truncated: true });
   else if (event === "error" && json.message) handlers.onError(json.message);
   else if (event === "image" && json.url) handlers.onImage?.(json.url);
-  else if (event === "sources" && Array.isArray(json.sources)) handlers.onSources?.(json.sources);
+  else if (event === "sources" && Array.isArray(json.sources)) handlers.onSources?.(json.sources, cleanSearchSummary(json.search));
   return event;
 }
 

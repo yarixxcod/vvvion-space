@@ -1,5 +1,6 @@
 import { createProviderRouter, recoverChatStream } from "@/lib/ai/provider-router";
 import { AGENT_GUIDE, runAgentLoop } from "@/lib/ai/agent-loop";
+import type { SearchSummary } from "@/lib/ai/search-types";
 import { memoryNote } from "@/lib/ai/memory";
 import { prepareDiskTools } from "@/lib/ai/disk-tools.server";
 import { mcpUrlsOf, prepareMcp } from "@/lib/ai/mcp.server";
@@ -16,7 +17,7 @@ import { explainApiError, readApiFailure } from "@/lib/ai/api-error";
 import { ACCOUNT_REQUIRED_MESSAGE } from "@/lib/ai/guest-limit";
 import { peekGuest, takeGuestQuestion, withGuestCookie } from "@/lib/ai/guest.server";
 import { extractPieces, reasoningFields, softenReasoning, ThinkGate } from "@/lib/ai/reasoning";
-import { formatSearch, searchQuery, searchWeb } from "@/lib/ai/search.server";
+import { formatSearch, searchWeb } from "@/lib/ai/search.server";
 import { isSearchEngine } from "@/lib/ai/search-engine";
 import type { ChatPart, Source, Usage } from "@/lib/ai/types";
 
@@ -83,7 +84,7 @@ function readTrack(body: ChatBody) {
 	return { chatId, messageId };
 }
 function blankSink() {
-	return { text: "", reason: "", error: "", imageUrl: "", truncated: false };
+	return { text: "", reason: "", error: "", imageUrl: "", truncated: false, sources: undefined as Source[] | undefined, search: undefined as SearchSummary | undefined };
 }
 function armRun(userId: string | null, track: { chatId: string } | null, request: Request, timeoutMs: number) {
 	const timeout = AbortSignal.timeout(timeoutMs);
@@ -96,7 +97,7 @@ function disarmRun(userId: string | null, track: { chatId: string } | null) {
 	if (!userId || !track) return;
 	chatRuns.delete(chatRunKey(userId, track.chatId));
 }
-function settleReply(request: Request, userId: string | null, track: { chatId: string; messageId: string } | null, sink: { text: string; reason: string; error: string; imageUrl: string; truncated: boolean }, clientGone = false) {
+function settleReply(request: Request, userId: string | null, track: { chatId: string; messageId: string } | null, sink: ReturnType<typeof blankSink>, clientGone = false) {
 	disarmRun(userId, track);
 	if (!userId || !track) return Promise.resolve();
 	const stopped = takeStop(userId, track.chatId);
@@ -109,7 +110,7 @@ function settleReply(request: Request, userId: string | null, track: { chatId: s
 		content,
 		reasoning,
 		error,
-		imageUrl: sink.imageUrl,
+		imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search,
 		live: false,
 		sync: 2_000_000_000,
 		unread: left && !stopped,
@@ -165,7 +166,7 @@ function holdStream(stream: ReadableStream<Uint8Array>, request: Request, userId
 		lastFlush = now;
 		sync += 1;
 		const mine = sync;
-		const snap = { content: sink.text, reasoning: sink.reason, imageUrl: sink.imageUrl };
+		const snap = { content: sink.text, reasoning: sink.reason, imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search };
 		tail = tail.then(() => finishCloudReply(userId, track.chatId, track.messageId, {
 			...snap,
 			live: true,
@@ -932,27 +933,7 @@ export async function handleChat(request: Request): Promise<Response> {
 		});
 		if (!messages.some((item) => item.role === "user")) return json(400, { message: "Нет сообщения для отправки" });
 		let sources: Source[] = [];
-		if (body.webSearch === true) {
-			const rawQuery = contentToText([...messages].reverse().find((item) => item.role === "user")?.content);
-			const engine = isSearchEngine(typeof body.searchEngine === "string" ? body.searchEngine : "") ? body.searchEngine : "duck";
-			try {
-				sources = await searchWeb(searchQuery(rawQuery), engine);
-			} catch {
-				sources = [];
-			}
-			const note = formatSearch(sources);
-			if (note) {
-			const systemIndex = messages.findIndex((item) => item.role === "system");
-			if (systemIndex >= 0) messages[systemIndex] = {
-				role: "system",
-				content: `${contentToText(messages[systemIndex]?.content)}\n\n${note}`.slice(0, 20e3)
-			};
-			else messages.unshift({
-				role: "system",
-				content: note
-			});
-			}
-		}
+        let searchSummary: SearchSummary | undefined;
 		const lengthRule = "Длина соразмерна вопросу: коротко, если вопрос короткий; развёрнуто — только когда просят объяснить, сравнить, написать код, таблицу или план. Без вступлений, повторов и лишних списков.";
 		const systemIndex = messages.findIndex((item) => item.role === "system");
 		const currentSystem = systemIndex >= 0 ? contentToText(messages[systemIndex]?.content) : "";
@@ -1040,6 +1021,22 @@ export async function handleChat(request: Request): Promise<Response> {
 		try {
 		const signal = armRun(actorUser, track, request, 24e4);
         const providerRouter = createProviderRouter(targets, callChat, signal);
+        if (body.webSearch === true) {
+          const rawQuery = contentToText([...messages].reverse().find(item => item.role === "user")?.content);
+          const engine = isSearchEngine(typeof body.searchEngine === "string" ? body.searchEngine : "") ? body.searchEngine : "duck";
+          const result = await searchWeb(rawQuery, engine, signal);
+          sources = result.sources;
+          searchSummary = result.summary;
+          sink.sources = sources;
+          sink.search = searchSummary;
+          const note = formatSearch(sources, result.summary.query, result.summary.status === "unavailable");
+          if (note) {
+            const at = messages.findIndex(item => item.role === "system");
+            if (at >= 0) messages[at] = { role: "system", content: `${contentToText(messages[at].content)}\n\n${note}` };
+            else messages.unshift({ role: "system", content: note });
+          }
+          console.info("[search]", { requested: engine, status: result.summary.status, engines: result.summary.used, count: sources.length, ms: result.summary.durationMs, cached: Boolean(result.summary.cached) });
+        }
 		const mcpUrls = mcpUrlsOf(body.mcp);
 		if (mcpUrls.length || (body.diskAccess === true && actorUser)) {
 			try {
@@ -1096,7 +1093,7 @@ export async function handleChat(request: Request): Promise<Response> {
 						if (direct.usage?.total_tokens) void storeTokens(attemptId, direct.usage.total_tokens);
 						let stream = streamFromText(direct.text, direct.usage, reasoningOn ? direct.reason : "", sink);
 						if (limitNotice) stream = withLead(stream, sse("limit", limitNotice));
-						const lead = body.webSearch === true ? sse("sources", { sources }) : null;
+						const lead = body.webSearch === true ? sse("sources", { sources, search: searchSummary }) : null;
 						return seal(sseResponse(holdStream(withLead(stream, lead), request, actorUser, track, sink)));
 					}
 					if (wire.some((item) => item.role === "tool")) {
@@ -1138,7 +1135,7 @@ export async function handleChat(request: Request): Promise<Response> {
 				return seal(spent.blocked);
 			}
 		}
-		const lead = body.webSearch === true ? sse("sources", { sources }) : null;
+		const lead = body.webSearch === true ? sse("sources", { sources, search: searchSummary }) : null;
 		const type = upstream.response.headers.get("content-type") || "";
 		if (!upstream.response.body) {
 			disarmRun(actorUser, track);
@@ -1211,7 +1208,7 @@ export async function handleChat(request: Request): Promise<Response> {
 					content: sink.text,
 					reasoning: sink.reason,
 					error: sink.error || (/timeout|aborted/i.test(message) ? "Провайдер не ответил вовремя" : "Не удалось дождаться ответа"),
-					imageUrl: sink.imageUrl,
+					imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search,
 					live: false,
 					sync: 2_000_000_000,
 					unread: true
@@ -1415,7 +1412,7 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 					content: sink.text,
 					reasoning: sink.reason,
 					error: sink.error || (/timeout|aborted/i.test(message) ? "Картинка не успела сгенерироваться" : "Не удалось дождаться картинки"),
-					imageUrl: sink.imageUrl,
+					imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search,
 					live: false,
 					sync: 2_000_000_000,
 					unread: true

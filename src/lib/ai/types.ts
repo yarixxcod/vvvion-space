@@ -1,3 +1,4 @@
+import type { SearchProvider, SearchSummary } from "./search-types";
 export type ProviderKind = "builtin" | "custom";
 
 export type HeaderPair = {
@@ -30,6 +31,8 @@ export type Usage = {
 };
 
 export type Source = {
+  engine?: SearchProvider;
+  publishedAt?: string;
   title: string;
   url: string;
   snippet: string;
@@ -73,6 +76,7 @@ export type ChatMessage = {
   ask?: boolean;
   imageUrl?: string;
   sources?: Source[];
+  search?: SearchSummary;
   files?: ChatFile[];
   reasoning?: string;
 };

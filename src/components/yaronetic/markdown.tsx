@@ -1,4 +1,6 @@
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { Source } from "@/lib/ai/types";
+import { httpUrl, sourceKey } from "@/lib/ai/search-rank";
+import { createContext, useContext, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,6 +14,9 @@ import { parseQuestionBlock, splitQuestionText } from "@/lib/ai/question";
 import { splitRich, type StepCard } from "@/lib/ai/steps";
 import { fenceAscii, isAsciiLang, looksLikeAscii } from "@/lib/ascii";
 import { pushBackLayer } from "@/lib/app-back";
+
+const EMPTY_SOURCES: Source[] = [];
+const CitationSources = createContext<Source[]>(EMPTY_SOURCES);
 
 type HL = {
   registerLanguage: (name: string, def: unknown) => void;
@@ -312,7 +317,7 @@ function CodeBlock({ code, lang, live }: { code: string; lang?: string; live?: b
   );
 }
 
-function markdownComponents(live: boolean | undefined, slots: MathSlot[]): Components {
+function markdownComponents(live: boolean | undefined, slots: MathSlot[], sources: Source[] = []): Components {
   return {
     pre: ({ children }) => <>{children}</>,
     span({ className, children }) {
@@ -334,6 +339,10 @@ function markdownComponents(live: boolean | undefined, slots: MathSlot[]): Compo
       return <CodeBlock code={raw} lang={lang} live={live} />;
     },
     a({ href, children }) {
+      const target = httpUrl(href);
+      const index = target ? sources.findIndex(source => sourceKey(source.url) === sourceKey(target)) : -1;
+      const numeric = /^\d+$/.test(String(children).trim());
+      if (index >= 0 && numeric) return <a className="search-citation" href={target} target="_blank" rel="noreferrer noopener" title={sources[index].title} aria-label={`Источник ${index + 1}: ${sources[index].title}`}>{index + 1}</a>;
       return (
         <a href={href} target="_blank" rel="noreferrer noopener">
           {children}
@@ -462,6 +471,7 @@ function AskView({
 }
 
 export function Markdown({
+  sources = EMPTY_SOURCES,
   text,
   live = false,
   askable = false,
@@ -469,6 +479,7 @@ export function Markdown({
   onAsk,
 }: {
   text: string;
+  sources?: Source[];
   live?: boolean;
   askable?: boolean;
   askNote?: string;
@@ -478,7 +489,7 @@ export function Markdown({
   const parts = useMemo(() => splitQuestionText(shown), [shown]);
   let askSeen = false;
   return (
-    <div className="prose-y">
+    <CitationSources.Provider value={sources}><div className="prose-y">
       {parts.map((part, index) => {
         if (part.kind === "ask") {
           const first = !askSeen;
@@ -503,7 +514,7 @@ export function Markdown({
           ),
         );
       })}
-    </div>
+    </div></CitationSources.Provider>
   );
 }
 
@@ -525,7 +536,8 @@ const MarkdownBody = memo(function MarkdownBody({ text, live }: { text: string; 
     const math = prepareMath(text);
     return { text: fenceAscii(math.text), slots: math.slots };
   }, [text]);
-  const components = useMemo(() => markdownComponents(live, prepared.slots), [live, prepared.slots]);
+  const sources = useContext(CitationSources);
+  const components = useMemo(() => markdownComponents(live, prepared.slots, sources), [live, prepared.slots, sources]);
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMathTokens]} components={components}>
       {prepared.text}
