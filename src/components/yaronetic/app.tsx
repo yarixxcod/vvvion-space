@@ -1,3 +1,4 @@
+import { RolePicker } from "./role-picker";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
@@ -626,6 +627,9 @@ export function App({
                 ask={studio.askMode}
                 onAsk={studio.setAskMode}
                 modelSlot={<MobileModel studio={studio} plain />}
+                roleLabel={personaShop?.items.find(item=>item.id===personaShop.activeId)?.name}
+                roleSlot={close=><RolePicker items={personaShop?.items ?? []} activeId={personaShop?.activeId ?? null} onShop={()=>{close();openPlace('shop');}} onSelect={user?async id=>{try{const shop=await setActivePersona({data:id??''});setPersonaShop(shop);writeLivePersona(shop.activeId);close();}catch(err){toast.error(err instanceof Error?err.message:ui(lang,'personaFailed'));}}:undefined}/>}
+
                 endSlot={
                   <span className="flex min-w-0 items-center gap-1">
                     <MobileModel studio={studio} fieldId="model" />

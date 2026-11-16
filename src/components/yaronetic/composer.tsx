@@ -31,6 +31,8 @@ export function Composer({
   ask,
   onAsk,
   modelSlot,
+  roleSlot,
+  roleLabel,
   endSlot,
   captureFiles = true,
 }: {
@@ -52,6 +54,8 @@ export function Composer({
   ask?: boolean;
   onAsk?: (value: boolean) => void;
   modelSlot?: ReactNode;
+  roleSlot?: ReactNode | ((close:()=>void)=>ReactNode);
+  roleLabel?: string;
   endSlot?: ReactNode;
   captureFiles?: boolean;
 }) {
@@ -278,6 +282,7 @@ export function Composer({
             </button>
           ) : null}
         </div>
+        {roleSlot ? <button type="button" aria-label="Роли и инструменты" aria-expanded={more} onClick={()=>setMore(value=>!value)} className="press hidden min-h-11 max-w-36 items-center gap-1.5 truncate rounded-2xl border border-line px-3 text-sm lg:inline-flex"><Plus className="size-4 shrink-0"/><span className="truncate">{roleLabel || "Роль"}</span></button> : null}
         {endSlot ? <div className="min-w-0 max-w-[16rem] shrink">{endSlot}</div> : null}
         <div className="shrink-0">
           {streaming ? (
@@ -400,6 +405,7 @@ export function Composer({
               {modelSlot}
             </div>
           ) : null}
+          {typeof roleSlot === "function" ? roleSlot(()=>setMore(false)) : roleSlot}
         </MoreSheet>
       ) : null}
     </form>
@@ -463,13 +469,13 @@ function MoreSheet({ onClose, children }: { onClose: () => void; children: React
   }, [onClose]);
   if (!node) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-end bg-black/50 lg:hidden" onClick={onClose}>
+    <div className="fixed inset-0 z-[80] flex items-end bg-black/50 lg:justify-end lg:p-5" onClick={onClose}>
       <div
         ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label="Ещё"
-        className="vv-enter relative max-h-[min(80dvh,32rem)] w-full overflow-y-auto rounded-t-3xl border-t border-line bg-elev px-2 pt-2 pb-[max(0.85rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
+        className="vv-enter relative max-h-[min(80dvh,32rem)] w-full overflow-y-auto rounded-t-3xl border-t border-line bg-elev px-2 pt-2 pb-[max(0.85rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)] lg:max-h-[85dvh] lg:max-w-md lg:rounded-3xl lg:border"
         onClick={(event) => event.stopPropagation()}
       >
         <div

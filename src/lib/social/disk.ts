@@ -215,7 +215,7 @@ export const readDiskFile = createServerOnlyFn(async (request: Request, id: stri
     select data, mime, name from disk_files where id = ${id} and user_id = ${ownerId} limit 1
   `;
   const row = rows[0];
-  if (!row?.data) return json(404, { message: "Файл не найден" });
+  if (!row) return json(404, { message: "Файл не найден" });
   const download = new URL(request.url).searchParams.get("dl") === "1";
   return fileResponse(request, row, download);
 });

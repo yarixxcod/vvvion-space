@@ -1,5 +1,11 @@
+import { DiskImports } from "./disk-imports";
+import { readSiteAsset } from "@/lib/files/documents.fn";
+import { isSiteAsset } from "@/lib/files/document-kind";
+import { DocumentEditor } from "./document-editor";
+import { SitePreview, type SiteSource } from "./site-preview";
+import { documentKind } from "@/lib/files/document-kind";
 import { useEffect, useState, type ReactNode } from "react";
-import { Download, Folder, FolderPlus, Link2, Pencil, Trash2 } from "lucide-react";
+import { Monitor, Download, Folder, FolderPlus, Link2, Pencil, Trash2 } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { toast } from "sonner";
 import { ArtistNames } from "@/components/yaronetic/artist-card";
@@ -141,6 +147,8 @@ function OwnDisk() {
   const [cacheNote, setCacheNote] = useState<string | null>(null);
   const [open, setOpen] = useState<DiskFile | null>(null);
   const [edit, setEdit] = useState<DiskFile | null>(null);
+  const [document, setDocument] = useState<DiskFile | null>(null);
+  const [site, setSite] = useState<{folder:string|null;entry?:string;name:string}|null>(null);
   const [sort, setSort] = useState<SortKey>("date");
   const [dir, setDir] = useState<SortDir>("desc");
   const [query, setQuery] = useState("");
@@ -304,7 +312,9 @@ function OwnDisk() {
 
   function diskMenu(file: DiskFile) {
     const actions: FileAction[] = [
-      { label: "Изменить", icon: <Pencil className="size-4" />, disabled: busy, onClick: () => setEdit(file) },
+      { label: documentKind(file.name) ? "Редактировать" : "Изменить", icon: <Pencil className="size-4" />, disabled: busy, onClick: () => documentKind(file.name) ? setDocument(file) : setEdit(file) },
+      ...(documentKind(file.name) ? [{label:"Переименовать",icon:<Pencil className="size-4"/>,onClick:()=>setEdit(file)}] : []),
+      ...(/\.html?$/i.test(file.name) ? [{label:"Предпросмотр сайта",icon:<Monitor className="size-4"/>,onClick:()=>setSite({folder:file.folderId,entry:file.name,name:file.name})}] : []),
       {
         label: "Скачать",
         icon: <Download className="size-4" />,
@@ -367,6 +377,7 @@ function OwnDisk() {
         </div>
       </section>
 
+      <DiskImports folder={folder} onSaved={async()=>setDisk(await getDisk())}/>
       <section className="mt-3 rounded-3xl border border-line bg-bg px-3 py-3">
         {folder ? (
           <button type="button" className="press mb-2 text-sm text-muted" onClick={() => { setFolder(null); setPicked([]); setMoving(false); }}>
@@ -380,6 +391,7 @@ function OwnDisk() {
                   <Folder className="size-4 shrink-0 text-muted" />
                   <span className="truncate text-sm">{item.name}</span>
                 </button>
+                {disk.files.some(file=>file.folderId===item.id && /\.html?$/i.test(file.name)) ? <button type="button" className="min-h-11 rounded-xl border border-line px-3 text-xs" onClick={()=>setSite({folder:item.id,name:item.name})}>Открыть сайт</button> : null}
                 <button
                   type="button"
                   className="press grid size-8 place-items-center rounded-lg text-muted"
@@ -488,7 +500,7 @@ function OwnDisk() {
         </section>
       ) : null}
 
-      {documents.length > 0 ? <section className="mt-4"><h3 className="px-1 text-sm font-medium">Файлы</h3><ul className="mt-2 space-y-2">{documents.map((file) => <li key={file.id} className={cn("flex items-center gap-3 rounded-2xl border bg-bg p-3", picked.includes(file.id) ? "border-accent" : "border-line")}><button type="button" onClick={() => toggle(file.id)} aria-pressed={picked.includes(file.id)} className="press grid size-11 shrink-0 place-items-center rounded-xl bg-subtle text-accent">{picked.includes(file.id) ? "✓" : "TXT"}</button><div className="min-w-0 flex-1"><p className="truncate text-sm">{file.name}</p><p className="text-xs text-faint">{sizeLabel(file.bytes)}</p></div><button type="button" aria-label={`Скачать ${file.name}`} className="press min-h-11 rounded-xl border border-line px-3 text-xs" onClick={() => void downloadUrl(srcOf(file), file.name).catch(() => toast.error("Не удалось скачать файл"))}>Скачать</button>{diskMenu(file)}</li>)}</ul></section> : null}
+      {documents.length > 0 ? <section className="mt-4"><h3 className="px-1 text-sm font-medium">Файлы</h3><ul className="mt-2 space-y-2">{documents.map((file) => <li key={file.id} className={cn("flex items-center gap-3 rounded-2xl border bg-bg p-3", picked.includes(file.id) ? "border-accent" : "border-line")}><button type="button" onClick={() => toggle(file.id)} aria-pressed={picked.includes(file.id)} className="press grid size-11 shrink-0 place-items-center rounded-xl bg-subtle text-accent">{picked.includes(file.id) ? "✓" : "TXT"}</button><div className="min-w-0 flex-1"><button type="button" className="press block min-h-11 w-full truncate text-left text-sm" onClick={()=> /\.html?$/i.test(file.name) ? setSite({folder:file.folderId,entry:file.name,name:file.name}) : documentKind(file.name) ? setDocument(file) : void downloadUrl(srcOf(file),file.name).catch(()=>toast.error("Не удалось открыть"))}>{file.name}</button><p className="text-xs text-faint">{sizeLabel(file.bytes)}</p></div><button type="button" aria-label={`Скачать ${file.name}`} className="press min-h-11 rounded-xl border border-line px-3 text-xs" onClick={() => void downloadUrl(srcOf(file), file.name).catch(() => toast.error("Не удалось скачать файл"))}>Скачать</button>{diskMenu(file)}</li>)}</ul></section> : null}
 
       {voices.length > 0 ? (
         <section className="mt-4">
@@ -561,6 +573,8 @@ function OwnDisk() {
           </div>
         </div>
       ) : null}
+      {document ? <DocumentEditor storage="disk" file={document} onClose={()=>setDocument(null)} onSaved={async()=>{setRev(value=>value+1);setDisk(await getDisk());}}/> : null}
+      {site ? <SitePreview name={site.name} entry={site.entry} onClose={()=>setSite(null)} load={async()=>disk.files.filter(file=>file.folderId===site.folder && isSiteAsset(file.name)).map(file=>({path:file.name,url:srcOf(file),mime:file.mime,bytes:file.bytes,read:async()=>{const asset=await readSiteAsset({data:{storage:"disk",id:file.id}});return Uint8Array.from(atob(asset.data),c=>c.charCodeAt(0));}}))}/> : null}
       {edit ? (
         <FileEditor
           file={{ id: edit.id, name: edit.name, bytes: edit.bytes, src: srcOf(edit) }}

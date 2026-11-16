@@ -212,48 +212,7 @@ export function SettingsDialog({
                 </div>
               </div>
             ) : null}
-            {onPersona ? (
-              <div className="mt-4">
-                <p className="px-1 text-xs font-medium tracking-wide text-faint uppercase">{tx({ ru: "Персонаж", en: "Character", kk: "Кейіпкер" })}</p>
-                {personas && personas.length > 0 ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      aria-pressed={!activePersona}
-                      className={cn(
-                        "press h-10 rounded-xl border px-3 text-sm",
-                        !activePersona ? "border-accent bg-subtle text-fg" : "border-line text-muted",
-                      )}
-                      onClick={() => onPersona(null)}
-                    >
-                      {tx({ ru: "Без персонажа", en: "No character", kk: "Кейіпкерсіз" })}
-                    </button>
-                    {personas.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        aria-pressed={activePersona === item.id}
-                        className={cn(
-                          "press h-10 rounded-xl border px-3 text-left text-sm",
-                          activePersona === item.id ? "border-accent bg-subtle text-fg" : "border-line text-muted",
-                        )}
-                        onClick={() => onPersona(item.id)}
-                      >
-                        {item.face ? <img src={item.face} alt="" className="mr-1.5 inline size-5 rounded-full align-[-4px]" /> : null}
-                        {item.name}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 px-1 text-sm text-muted">{tx({ ru: "Купленных персонажей нет. Они продаются в лавке банка за вубли.", en: "No characters bought yet. They are sold in the bank shop for vubles.", kk: "Сатып алынған кейіпкер жоқ. Олар банк дүкенінде вубльге сатылады." })}</p>
-                )}
-                <p className="mt-1.5 px-1 text-[13px] text-muted">
-                  {activePersona
-                    ? tx({ ru: "В чат уходит текст выбранного персонажа. Свой промпт в это время не подмешивается.", en: "The chat sends the chosen character’s text. Your own prompt is not mixed in.", kk: "Чатқа таңдалған кейіпкердің мәтіні кетеді. Өз промптыңыз қосылмайды." })
-                    : tx({ ru: "Пока персонаж не выбран, ИИ слушает ваш промпт.", en: "Until a character is chosen, the AI follows your prompt.", kk: "Кейіпкер таңдалмаса, ЖИ сіздің промптыңызды тыңдайды." })}
-                </p>
-              </div>
-            ) : null}
+            <p className="mt-4 rounded-xl border border-line px-3 py-2 text-sm text-muted">Роли и персонажи теперь выбираются в меню «+» рядом с моделью в чате.</p>
             <label className="mt-5 block">
               <span className="mb-1.5 block text-sm text-muted">
                 {activePersona

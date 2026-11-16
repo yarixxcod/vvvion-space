@@ -1,3 +1,9 @@
+import { readSiteAsset } from "@/lib/files/documents.fn";
+import { isSiteAsset } from "@/lib/files/document-kind";
+import { Monitor } from "lucide-react";
+import { DocumentEditor } from "./document-editor";
+import { SitePreview, type SiteSource } from "./site-preview";
+import { documentKind } from "@/lib/files/document-kind";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileText, Folder, FolderPlus, Music2, Pencil, Share2, Trash2, X } from "lucide-react";
@@ -238,6 +244,8 @@ export function MegaDisk() {
   const [meterKind, setMeterKind] = useState<"up" | "down" | null>(null);
   const [open, setOpen] = useState<MegaEntry | null>(null);
   const [edit, setEdit] = useState<MegaEntry | null>(null);
+  const [document, setDocument] = useState<MegaEntry | null>(null);
+  const [site, setSite] = useState<{folder:string|null;entry?:string;name:string}|null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("date");
   const [dir, setDir] = useState<SortDir>("desc");
@@ -405,6 +413,14 @@ export function MegaDisk() {
     }
   }
 
+  async function uploadDirectory(files:File[]) {
+    if(!files.length || busy)return;
+    if(files.length>300){toast.error('В папке больше 300 файлов');return;}
+    if(files.some(file=>!file.webkitRelativePath)){toast.error('Выберите папку в поддерживаемом браузере или загрузите файлы отдельно');return;}
+    const ctrl=new AbortController();abortRef.current=ctrl;setBusy(true);setMeterKind('up');const folders=new Map<string,string>();let done=0;
+    try {for(const file of files){ctrl.signal.throwIfAborted();const path=file.webkitRelativePath.split('/');if(path.length>10)throw new Error('Слишком много уровней папок');let parent=folder;let key='';for(const segment of path.slice(0,-1)){key+=segment+'/';if(folders.has(key)){parent=folders.get(key)!;continue;}const before=await getMega({data:{folder:parent}});let dir=before.entries.find(item=>item.kind==='folder' && item.name===segment);if(!dir){const next=await makeMegaFolder({data:{folder:parent,name:segment}});dir=next.entries.find(item=>item.kind==='folder'&&item.name===segment);}if(!dir)throw new Error('Папка не создалась');folders.set(key,dir.id);parent=dir.id;}await uploadMegaFile(file,parent,tick=>setMeter({name:`${done+1}/${files.length} · ${file.name}`,...tick}),ctrl.signal);done++;}toast.success(`Загружено файлов: ${done}`);}catch(err){toast.error(`${err instanceof Error?err.message:'Не удалось загрузить папку'}. Сохранено файлов: ${done}`);}finally{setMeter(null);setMeterKind(null);setBusy(false);abortRef.current=null;await load();}
+  }
+
   async function answerDup(choice: "replace" | "both" | "cancel") {
     const ask = dup;
     if (!ask || busy) return;
@@ -541,12 +557,14 @@ export function MegaDisk() {
         onClick: () => setShare({ id: entry.id, name: entry.name }),
       },
       {
-        label: "Изменить",
+        label: entry.kind === "file" && documentKind(entry.name) ? "Редактировать" : "Изменить",
         icon: <Pencil className="size-4" />,
         disabled: busy,
-        onClick: () => setEdit(entry),
+        onClick: () => entry.kind === "file" && documentKind(entry.name) ? setDocument(entry) : setEdit(entry),
       },
     ];
+    if(entry.kind === "folder" || /\.html?$/i.test(entry.name)) rows.push({label:"Предпросмотр сайта",icon:<Monitor className="size-4"/>,onClick:()=>setSite({folder:entry.kind === "folder"?entry.id:folder,entry:entry.kind === "file"?entry.name:undefined,name:entry.name})});
+    if(entry.kind === "file" && documentKind(entry.name)) rows.push({label:"Переименовать",icon:<Pencil className="size-4"/>,onClick:()=>setEdit(entry)});
     if (entry.kind === "file") {
       rows.push({
         label: "Скачать",
@@ -632,6 +650,7 @@ export function MegaDisk() {
             <FolderPlus className="size-4" />
             {tx({ ru: "Папка", en: "Folder", kk: "Қалта" })}
           </button>
+          <label className="press inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-line px-3 text-sm">Загрузить папку<input type="file" multiple className="hidden" disabled={busy||!view.ready} {...{webkitdirectory:'',directory:''}} onChange={event=>{const files=[...event.target.files??[]];event.target.value='';void uploadDirectory(files);}}/></label>
           <label className="press inline-flex h-10 cursor-pointer items-center rounded-xl bg-accent px-3 text-sm font-medium text-accent-fg">
             {tx({ ru: "Загрузить", en: "Upload", kk: "Жүктеу" })}
             <input
@@ -765,7 +784,7 @@ export function MegaDisk() {
               ) : (
                 <div className="flex min-w-0 flex-1 items-start gap-2.5 py-0.5">
                   <span className="relative shrink-0">
-                    <button type="button" className="press block" onClick={() => setOpen(entry)} disabled={!view.ready}>
+                    <button type="button" className="press block" onClick={() => /\.html?$/i.test(entry.name) ? setSite({folder,entry:entry.name,name:entry.name}) : documentKind(entry.name) ? setDocument(entry) : setOpen(entry)} disabled={!view.ready}>
                       {kind === "image" ? (
                         <img src={src} alt="" className="size-11 rounded-lg object-cover" />
                       ) : (
@@ -784,7 +803,7 @@ export function MegaDisk() {
                       ✓
                     </button>
                   </span>
-                  <button type="button" className="press min-w-0 flex-1 text-left" onClick={() => setOpen(entry)} disabled={!view.ready}>
+                  <button type="button" className="press min-w-0 flex-1 text-left" onClick={() => /\.html?$/i.test(entry.name) ? setSite({folder,entry:entry.name,name:entry.name}) : documentKind(entry.name) ? setDocument(entry) : setOpen(entry)} disabled={!view.ready}>
                     <span className="block text-[0.95rem] leading-snug break-words">{entry.name}</span>
                     <span className="mt-0.5 block text-xs tabular-nums text-faint">{sizeLabel(entry.bytes)}</span>
                   </button>
@@ -798,6 +817,8 @@ export function MegaDisk() {
       {open ? (
         <MegaPreview entry={open} src={href(open.id)} busy={busy} onClose={() => setOpen(null)} onDownload={() => void download(open.id, open.name, open.bytes)} />
       ) : null}
+      {document ? <DocumentEditor storage="mega" file={document} onClose={()=>setDocument(null)} onSaved={async()=>{setRev(value=>value+1);await load();}}/> : null}
+      {site ? <SitePreview name={site.name} entry={site.entry} onClose={()=>setSite(null)} load={async signal=>{const files:SiteSource[]=[];const seen=new Set<string>();async function visit(id:string|null,prefix:string,depth:number){signal.throwIfAborted();if(depth>8 || seen.size>40)throw new Error("Слишком много вложенных папок");if(id && seen.has(id))return;if(id)seen.add(id);const page=await getMega({data:{folder:id}});for(const item of page.entries){if(item.kind === "folder")await visit(item.id,prefix+item.name+"/",depth+1);else if(isSiteAsset(item.name)) files.push({path:prefix+item.name,url:href(item.id),mime:item.mime,bytes:item.bytes,read:async()=>{const asset=await readSiteAsset({data:{storage:"mega",id:item.id}});return Uint8Array.from(atob(asset.data),c=>c.charCodeAt(0));}});if(files.length>300)throw new Error("В папке слишком много файлов для предпросмотра");}}await visit(site.folder,"",0);return files;}}/> : null}
       {edit ? (
         <FileEditor
           file={{ id: edit.id, name: edit.name, bytes: edit.bytes, src: href(edit.id) }}

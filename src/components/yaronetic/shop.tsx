@@ -26,7 +26,7 @@ const SECTIONS = [
   ["subs", "Подписки"],
   ["ai", "ИИ"],
   ["storage", "Хранилище"],
-  ["look", "Оформление"],
+  ["look", "Роли и персонажи"],
   ["gifts", "Подарки"],
 ] as const;
 
@@ -197,7 +197,7 @@ export function Shop() {
       <div className="flex h-full min-h-0 flex-col">
         <div className="px-4 pt-3">
           <button type="button" className="press mb-2 min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setPeople(false)}>← В магазин</button>
-          <h2 className="font-serif text-2xl tracking-tight">Персонажи</h2>
+          <h2 className="font-serif text-2xl tracking-tight">Роли и персонажи</h2>
           <p className="text-xs text-faint">Пока действует Premium, все уже доступны. Покупка оставляет персонажа и после.</p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
@@ -369,8 +369,8 @@ export function Shop() {
               ))}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">Персонажи</span>
-              <span className="mt-0.5 block text-xs text-faint">{shop ? `${shop.items.length} собеседников` : "Загрузка"}</span>
+              <span className="block text-sm font-medium">Роли и персонажи</span>
+              <span className="mt-0.5 block text-xs text-faint">{shop ? `${shop.items.length} ролей и собеседников` : "Загрузка"}</span>
             </span>
           </button>
         ) : null}
