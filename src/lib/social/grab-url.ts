@@ -1,4 +1,4 @@
-import { hostInList } from "../security/net-guard.ts";
+import { hostInList } from "../security/net-host.ts";
 
 export type ClipHost = "youtube" | "instagram" | "tiktok" | "pinterest" | "vk";
 

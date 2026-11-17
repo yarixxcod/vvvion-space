@@ -344,14 +344,14 @@ function Home({
         <nav ref={mobileNavRef} className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
           <span
             className="circle-drop"
-            style={{ transform: `translateX(${(mainTabs.indexOf(tab) >= 0 ? mainTabs.indexOf(tab) : 4) * 100}%)` }}
+            style={{ "--tab-index": mainTabs.indexOf(tab) >= 0 ? mainTabs.indexOf(tab) : 4 } as import("react").CSSProperties}
             aria-hidden="true"
           />
           {mainTabs.map((id) => (
             <button
               key={id}
               type="button"
-              className={cn("press flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-[13px] leading-none", tab === id ? "text-fg" : "text-muted")}
+              className={cn("circle-nav-item press flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-none min-[400px]:text-xs", tab === id ? "text-fg" : "text-muted")}
               aria-current={tab === id ? "page" : undefined}
               onClick={() => {
                 if (tab === id) scrollTop();
@@ -364,7 +364,8 @@ function Home({
           ))}
           <button
             type="button"
-            className={cn("press flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-[13px] leading-none", moreTabs.includes(tab) ? "text-fg" : "text-muted")}
+            className={cn("circle-nav-item press flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-none min-[400px]:text-xs", moreTabs.includes(tab) ? "text-fg" : "text-muted")}
+            aria-current={moreTabs.includes(tab) ? "page" : undefined}
             aria-expanded={more}
             onClick={() => {
               if (moreTabs.includes(tab)) scrollTop();

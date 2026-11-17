@@ -50,11 +50,16 @@ function imageUrl(value: unknown): string | null {
 function clip(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
   // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
-  return value.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  return value
+    .replace(/[\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
 }
 
 export function parseNews(payload: unknown): NewsItem[] {
-  const results = payload && typeof payload === "object" ? (payload as { results?: unknown }).results : null;
+  const results =
+    payload && typeof payload === "object" ? (payload as { results?: unknown }).results : null;
   if (!Array.isArray(results)) return [];
   const items: NewsItem[] = [];
   const seen = new Set<string>();
@@ -65,8 +70,14 @@ export function parseNews(payload: unknown): NewsItem[] {
     const title = clip(item.title, 220);
     if (!url || title.length < 2 || seen.has(url)) continue;
     seen.add(url);
-    const country = typeof item.country === "string" && CODES.has(item.country.toUpperCase()) ? (item.country.toUpperCase() as NewsCode) : "";
-    const published = typeof item.published_at === "string" && !Number.isNaN(Date.parse(item.published_at)) ? item.published_at : "";
+    const country =
+      typeof item.country === "string" && CODES.has(item.country.toUpperCase())
+        ? (item.country.toUpperCase() as NewsCode)
+        : "";
+    const published =
+      typeof item.published_at === "string" && !Number.isNaN(Date.parse(item.published_at))
+        ? item.published_at
+        : "";
     const description = clip(item.description, 240);
     const id = clip(item.id, 64) || url;
     items.push({
@@ -84,23 +95,38 @@ export function parseNews(payload: unknown): NewsItem[] {
   return items;
 }
 
+function xmlEntities(value: string): string {
+  return value.replace(
+    /&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
+    (whole, entity: string) => {
+      const key = entity.toLowerCase();
+      const named: Record<string, string> = {
+        amp: "&",
+        lt: "<",
+        gt: ">",
+        quot: '"',
+        apos: "'",
+        nbsp: " ",
+      };
+      if (named[key]) return named[key];
+      const code = key.startsWith("#x") ? parseInt(key.slice(2), 16) : Number(key.slice(1));
+      return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
+        ? String.fromCodePoint(code)
+        : whole;
+    },
+  );
+}
 function xmlText(block: string, tag: string): string {
   const match = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i").exec(block);
   if (!match) return "";
-  return match[1]
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&/g, "&")
-    .replace(/"/g, '"')
-    .replace(/&#39;|'/g, "'")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
+  return xmlEntities(match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1"))
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 /** Google News RSS items. The headline is "title - source". */
-export function parseRss(xml: string, country: NewsCode): NewsItem[] {
+export function parseRss(xml: string, country: NewsCode, sourceName = ""): NewsItem[] {
   const items: NewsItem[] = [];
   const seen = new Set<string>();
   for (const match of xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)) {
@@ -109,11 +135,12 @@ export function parseRss(xml: string, country: NewsCode): NewsItem[] {
     const url = pageUrl(xmlText(block, "link"));
     if (!rawTitle || !url || seen.has(url)) continue;
     seen.add(url);
-    const split = rawTitle.lastIndexOf(" - ");
+    const split = sourceName ? -1 : rawTitle.lastIndexOf(" - ");
     const title = (split > 0 ? rawTitle.slice(0, split) : rawTitle).trim();
-    const source = split > 0 ? rawTitle.slice(split + 3).trim() : "Новости";
+    const source = split > 0 ? rawTitle.slice(split + 3).trim() : sourceName || "Новости";
     const published = xmlText(block, "pubDate");
-    const publishedAt = published && !Number.isNaN(Date.parse(published)) ? new Date(published).toISOString() : "";
+    const publishedAt =
+      published && !Number.isNaN(Date.parse(published)) ? new Date(published).toISOString() : "";
     if (title.length < 2) continue;
     items.push({
       id: xmlText(block, "guid") || url,
@@ -122,8 +149,14 @@ export function parseRss(xml: string, country: NewsCode): NewsItem[] {
       source: source.slice(0, 80) || "Новости",
       country,
       publishedAt,
-      image: null,
-      description: null,
+      image: imageUrl(
+        xmlEntities(
+          /<(?:enclosure|media:content|media:thumbnail)\b[^>]*?\burl=["']([^"']+)["']/i.exec(
+            block,
+          )?.[1] || "",
+        ),
+      ),
+      description: clip(xmlText(block, "description"), 240) || null,
     });
   }
   return items;

@@ -10,15 +10,8 @@ const DEFAULT_LOOKUP: LookupFn = async (host) => {
   return rows.map((row) => ({ address: row.address, family: row.family }));
 };
 
-export function hostMatches(host: string, domain: string): boolean {
-  const name = host.toLowerCase().replace(/\.$/, "").replace(/^\[|\]$/g, "");
-  const root = domain.toLowerCase().replace(/\.$/, "");
-  return name === root || name.endsWith(`.${root}`);
-}
-
-export function hostInList(host: string, domains: readonly string[]): boolean {
-  return domains.some((domain) => hostMatches(host, domain));
-}
+export { hostMatches, hostInList } from "./net-host.ts";
+import { hostMatches, hostInList } from "./net-host.ts";
 
 function ipv4Blocked(parts: number[]): boolean {
   if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;

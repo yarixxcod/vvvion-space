@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { clipHost } from "./grab-url.ts";
+import { youtubeFormat, type GrabMode } from "./grab-options.ts";
 import { instagramTarget, pkToCode, rewriteInstagram } from "./grab-url.ts";
 
 const MAX = 40 * 1024 * 1024;
@@ -28,12 +30,15 @@ function binPath(): string | null {
   return candidates.find((item) => existsSync(item)) ?? null;
 }
 
-function run(bin: string, args: string[], ms: number, maxOut = 4000): Promise<{ code: number; stdout: string; stderr: string }> {
+function run(bin: string, args: string[], ms: number, maxOut = 4000, signal?: AbortSignal): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill("SIGKILL"), ms);
+    const stop = () => child.kill("SIGKILL");
+    if (signal?.aborted) stop();
+    else signal?.addEventListener("abort", stop, { once: true });
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -44,10 +49,12 @@ function run(bin: string, args: string[], ms: number, maxOut = 4000): Promise<{ 
     });
     child.on("error", () => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", stop);
       resolve({ code: 127, stdout, stderr });
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", stop);
       resolve({ code: code ?? 1, stdout, stderr });
     });
   });
@@ -267,7 +274,7 @@ async function grabInstagram(bin: string, raw: string, onProgress?: (tick: GrabT
   return { files: null, note: noteFor(url, stderr) };
 }
 
-export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) => void): Promise<{ files: GrabFile[] | null; note: string }> {
+export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) => void, mode: GrabMode = "video", signal?: AbortSignal): Promise<{ files: GrabFile[] | null; note: string }> {
   const bin = binPath();
   if (!bin) {
     console.error("[grab] yt-dlp missing");
@@ -295,26 +302,38 @@ export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) =
     "-o",
     out,
     "-f",
-    "b[ext=mp4]/b",
+    clipHost(url) === "youtube" ? youtubeFormat(mode) : "b[ext=mp4]/b",
   ];
-  if (/youtu\.be|youtube\.com|youtube-nocookie\.com/i.test(url)) {
-    args.push("--extractor-args", "youtube:player_client=android_vr,ios,web_safari");
-  }
+  if (clipHost(url) === "youtube") args.push("--js-runtimes", `node:${process.execPath}`);
   const cookies = process.env.YTDLP_COOKIES?.trim();
   if (cookies && existsSync(cookies)) args.push("--cookies", cookies);
   args.push(url);
-  const result = await run(bin, args, 70_000);
+  onProgress?.({ phase: "fetch", pct: 18, loaded: 0, total: 0 });
+  // Read actual output bytes while yt-dlp writes; no invented download percentage.
+  let polling = false;
+  const progress = setInterval(async () => {
+    if (polling) return; polling = true;
+    try {
+      const names = await readdir(dir);
+      const sizes = await Promise.all(names.map(name => stat(join(dir, name)).then(row => row.size).catch(() => 0)));
+      const loaded = sizes.reduce((sum, size) => sum + size, 0);
+      onProgress?.({ phase: "fetch", pct: 18, loaded, total: 0 });
+    } catch { /* download may have finished */ } finally { polling = false; }
+  }, 800);
+  const result = await run(bin, args, 70_000, 4000, signal).finally(() => clearInterval(progress));
   if (/max-filesize|File is larger/i.test(result.stderr) && result.code !== 0) {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     throw new Error("Файл слишком большой для временного файла");
   }
   try {
+    signal?.throwIfAborted();
     const names = (await readdir(dir)).filter((name) => mimeOf(name) && !name.endsWith(".part"));
     const title = result.stdout.split("\n").map((line) => line.trim()).filter(Boolean)[0] || "Файл";
     const files: GrabFile[] = [];
     for (const [index, name] of names.slice(0, 8).entries()) {
       const info = await stat(join(dir, name));
-      const mime = mimeOf(name);
+      const detected = mimeOf(name);
+      const mime = mode === "audio" && detected === "video/webm" ? "audio/webm" : detected;
       if (!mime || info.size < 400 || info.size > MAX) continue;
       files.push({
         bytes: new Uint8Array(await readFile(join(dir, name))),
@@ -325,7 +344,8 @@ export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) =
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     if (!files.length) {
       if (result.code !== 0) console.error("[grab] yt-dlp", result.code);
-      return { files: null, note: "" };
+      const note = /not a bot|sign in to confirm|LOGIN_REQUIRED/i.test(result.stderr) ? "YouTube просит подтверждение входа. Этот ролик сейчас недоступен для загрузки." : /private video|members.only|age.restricted/i.test(result.stderr) ? "Ролик закрыт или требует входа на YouTube." : "";
+      return { files: null, note };
     }
     return { files, note: "" };
   } catch (error) {

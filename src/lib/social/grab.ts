@@ -4,6 +4,7 @@ import { authMiddleware } from "@/lib/auth/middleware";
 import { assertActive } from "@/lib/social/access";
 import { storeMegaBytes } from "@/lib/social/mega";
 import { clipHost, instagramTarget, pkToCode, rewriteInstagram, GRAB_HOSTS, type ClipHost, type InstagramTarget } from "./grab-url.ts";
+import { normalizeGrabUrl, youtubeId, type GrabMode } from "./grab-options.ts";
 import { publicFetch } from "@/lib/security/net-guard";
 
 export { clipHost, instagramTarget, pkToCode, rewriteInstagram };
@@ -32,10 +33,7 @@ function logGrab(host: string, status: number, detail: string) {
 }
 
 function cleanUrl(input: unknown): string {
-  const raw = typeof input === "string" ? input.trim() : "";
-  if (!/^https:\/\/\S{8,500}$/i.test(raw)) clipFail(400, "Нужна ссылка");
-  if (!clipHost(raw)) clipFail(400, "Нужна ссылка из Instagram, YouTube, TikTok, Pinterest или VK");
-  return raw;
+  try { return normalizeGrabUrl(input); } catch (error) { clipFail(400, error instanceof Error ? error.message : "Нужна ссылка"); }
 }
 
 function unescapeUrl(value: string): string {
@@ -47,21 +45,6 @@ function unescapeUrl(value: string): string {
     .replace(/&/g, "&");
 }
 
-function youtubeId(raw: string): string | null {
-  try {
-    const url = new URL(raw);
-    const host = url.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") return url.pathname.split("/").filter(Boolean)[0]?.slice(0, 11) || null;
-    const fromQuery = url.searchParams.get("v");
-    if (fromQuery && /^[A-Za-z0-9_-]{11}$/.test(fromQuery)) return fromQuery;
-    const parts = url.pathname.split("/").filter(Boolean);
-    const at = parts.findIndex((part) => part === "shorts" || part === "embed" || part === "live");
-    const id = at >= 0 ? parts[at + 1] : "";
-    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
-  } catch {
-    return null;
-  }
-}
 
 type YtFormat = { url?: string; mimeType?: string; height?: number };
 type YtPlayer = { playabilityStatus?: { status?: string; reason?: string }; videoDetails?: { title?: string }; streamingData?: { formats?: YtFormat[] } };
@@ -158,6 +141,7 @@ async function youtube(raw: string): Promise<{ url: string; title: string; refer
   let blocked = "";
   for (const client of clients) {
     const ua = "userAgent" in client && client.userAgent ? client.userAgent : DESKTOP;
+    try {
     const res = await fetch("https://www.youtube.com/youtubei/v1/player?prettyPrint=false", {
       method: "POST",
       headers: {
@@ -189,6 +173,7 @@ async function youtube(raw: string): Promise<{ url: string; title: string; refer
     if (data.videoDetails?.title) title = data.videoDetails.title;
     const found = playerOf(data);
     if (found) return { url: found.url, title: found.title || title, referer: "https://www.youtube.com/" };
+    } catch { logGrab("youtube", 0, `${client.clientName} unavailable`); }
   }
   try {
     const { html } = await pageText(`https://www.youtube.com/watch?v=${id}&hl=en`);
@@ -532,17 +517,22 @@ function fileName(title: string, mime: string): string {
   return `${clean || "Файл"}.${ext}`;
 }
 
-export async function runGrab(userId: string, raw: string, onProgress?: (tick: GrabTick) => void): Promise<Grabbed[]> {
+export async function runGrab(userId: string, raw: string, onProgress?: (tick: GrabTick) => void, mode: GrabMode = "video", signal?: AbortSignal): Promise<Grabbed[]> {
+  signal?.throwIfAborted();
   const data = cleanUrl(raw);
+  if (mode !== "video" && clipHost(data) !== "youtube") clipFail(400, "Выбор формата доступен для YouTube");
   await assertActive(userId);
   const link = clipHost(data) === "instagram" ? rewriteInstagram(data) : data;
   onProgress?.({ phase: "open", pct: 8, loaded: 0, total: 0 });
   try {
     const { grabWithYtDlp } = await import("@/lib/social/ytdlp.server");
-    const via = await grabWithYtDlp(link, (tick) => onProgress?.(tick));
+    const via = await grabWithYtDlp(link, (tick) => onProgress?.(tick), mode, signal);
     let files = via.files;
+    if (!files?.length && via.note && /подтверждение входа|требует входа/.test(via.note)) clipFail(502, via.note);
     if (!files?.length && via.note && /не отдал|не отвечает/.test(via.note)) clipFail(503, via.note);
     if (!files?.length) {
+      signal?.throwIfAborted();
+      if (mode !== "video") clipFail(502, "Этот формат сейчас недоступен. Попробуйте обычное видео.");
       try {
         onProgress?.({ phase: "fetch", pct: 30, loaded: 0, total: 0 });
         files = await Promise.all((await resolve(link)).map(async (item) => ({ ...(await takeBytes(item.url, item.referer)), title: item.title })));
@@ -553,8 +543,10 @@ export async function runGrab(userId: string, raw: string, onProgress?: (tick: G
       }
     }
     if (!files?.length) clipFail(502, via.note || "По этой ссылке ничего не нашлось");
+    signal?.throwIfAborted();
     const saved: Grabbed[] = [];
     for (const [index, file] of files.slice(0, 8).entries()) {
+      signal?.throwIfAborted();
       onProgress?.({ phase: "save", pct: 90 + index, loaded: index, total: Math.min(files.length, 8) });
       try {
         const row = await storeMegaBytes(userId, fileName(file.title, file.mime), file.mime, file.bytes, TTL);

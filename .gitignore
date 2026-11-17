@@ -30,3 +30,6 @@ android/app/src/main/assets/index.txt
 *.p12
 
 attachments/google-services.json
+
+# Downloaded, checksum-verified media engine (packaged during build)
+.bin/

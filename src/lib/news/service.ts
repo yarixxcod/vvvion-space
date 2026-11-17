@@ -1,7 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { assertActive } from "@/lib/social/access";
-import { cleanCountries, parseNews, parseRss, type NewsCode, type NewsItem } from "@/lib/news/parse";
+import {
+  cleanCountries,
+  parseNews,
+  parseRss,
+  type NewsCode,
+  type NewsItem,
+} from "@/lib/news/parse";
 
 const TTL = 5 * 60 * 1000;
 
@@ -15,34 +21,80 @@ const GOOGLE: Record<NewsCode, string> = {
   BY: "https://news.google.com/rss/search?q=%D0%91%D0%B5%D0%BB%D0%B0%D1%80%D1%83%D1%81%D1%8C+when:1d&hl=ru&gl=BY&ceid=BY:ru",
 };
 
+// Direct publisher feeds keep selected countries usable if the aggregator is down.
+const PUBLISHERS: Partial<Record<NewsCode, { url: string; name: string }>> = {
+  UZ: { url: "https://www.gazeta.uz/ru/rss/", name: "Газета.uz" },
+  KG: { url: "https://24.kg/rss/", name: "24.kg" },
+};
+async function publisherNews(country: NewsCode): Promise<NewsItem[]> {
+  const feed = PUBLISHERS[country];
+  if (!feed) return [];
+  try {
+    const response = await fetch(feed.url, {
+      headers: {
+        accept: "application/rss+xml,application/xml,text/xml",
+        "user-agent": "vvvion.space",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return [];
+    const xml = await response.text();
+    if (xml.length > 1_500_000 || !xml.includes("<item")) return [];
+    return parseRss(xml, country, feed.name)
+      .filter(
+        (item) =>
+          item.publishedAt && Date.parse(item.publishedAt) > Date.now() - 36 * 60 * 60 * 1000,
+      )
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
 async function fetchFreeNews(countries: NewsCode[], token: string): Promise<NewsItem[]> {
   const url = `https://freenewsapi.ai/v1/search?country=${countries.join(",")}&lang=ru&date=today&size=20`;
   const response = await fetch(url, {
-    headers: { accept: "application/json", authorization: `Bearer ${token}`, "user-agent": "vvvion.space" },
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${token}`,
+      "user-agent": "vvvion.space",
+    },
     signal: AbortSignal.timeout(12_000),
   });
   if (!response.ok) throw new Error("Новости сейчас не отвечают");
   const text = await response.text();
-  if (text.length > 1_500_000 || text.trim().startsWith("<")) throw new Error("Новости сейчас не отвечают");
+  if (text.length > 1_500_000 || text.trim().startsWith("<"))
+    throw new Error("Новости сейчас не отвечают");
   return parseNews(JSON.parse(text) as unknown);
 }
 
 async function fetchGoogle(countries: NewsCode[]): Promise<NewsItem[]> {
-  const settled = await Promise.all(
+  const settled = await Promise.allSettled(
     countries.map(async (country) => {
-      const response = await fetch(GOOGLE[country], {
-        headers: { accept: "application/rss+xml, application/xml, text/xml", "user-agent": "Mozilla/5.0" },
-        signal: AbortSignal.timeout(12_000),
-      });
-      if (!response.ok) return [] as NewsItem[];
-      const xml = await response.text();
-      if (!xml.includes("<item")) return [];
-      return parseRss(xml, country).slice(0, 8);
+      try {
+        const response = await fetch(GOOGLE[country], {
+          headers: {
+            accept: "application/rss+xml, application/xml, text/xml",
+            "user-agent": "Mozilla/5.0",
+          },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (response.ok) {
+          const xml = await response.text();
+          if (xml.length <= 1_500_000 && xml.includes("<item")) {
+            const items = parseRss(xml, country).slice(0, 8);
+            if (items.length) return items;
+          }
+        }
+      } catch {
+        /* try the country's direct publisher */
+      }
+      return publisherNews(country);
     }),
   );
   const seen = new Set<string>();
   return settled
-    .flat()
+    .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
     .filter((item) => {
       if (seen.has(item.url)) return false;
       seen.add(item.url);
@@ -84,7 +136,8 @@ async function fetchNews(countries: NewsCode[]): Promise<NewsItem[]> {
 export const loadNews = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { countries?: unknown }).countries : input;
+    const raw =
+      input && typeof input === "object" ? (input as { countries?: unknown }).countries : input;
     const countries = cleanCountries(raw);
     if (!countries.length) throw new Error("Выберите страну");
     return { countries };

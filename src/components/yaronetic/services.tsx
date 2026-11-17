@@ -1,17 +1,17 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { ChevronLeft, Plus, X } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ExternalLink, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCircleNest } from "@/lib/circle-history";
 import { forgetCity, loadWeather, watchCity } from "@/lib/weather/service";
 import { setWidgetCity } from "@/lib/app-bridge";
 import { weatherKind, type WeatherCard, type WeatherKind } from "@/lib/weather/parse";
-import { StoryPlate } from "@/components/yaronetic/story-plate";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { loadNews } from "@/lib/news/service";
 import { NEWS_COUNTRIES, type NewsCode, type NewsItem } from "@/lib/news/parse";
 import { loadRates } from "@/lib/fx/service";
 import { FX_CODES, type FxBoard, type FxCode } from "@/lib/fx/parse";
 import { VpnService } from "@/components/yaronetic/vpn";
+import { SpeedTest } from "@/components/yaronetic/speed-test";
 import { Grabber } from "@/components/yaronetic/grabber";
 import { useTx } from "@/lib/lang";
 import { loadError } from "@/lib/load-error";
@@ -59,7 +59,9 @@ const FX_COIN: Record<FxCode, { paper: string; ink: string }> = {
 
 export function Services() {
   const tx = useTx();
-  const [view, setView] = useState<"weather" | "news" | "fx" | "vpn" | "grab" | null>(null);
+  const [view, setView] = useState<"weather" | "news" | "fx" | "vpn" | "grab" | "speed" | null>(
+    null,
+  );
   useCircleNest(view !== null, () => setView(null));
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("vv-circle-nested", { detail: view !== null }));
@@ -71,106 +73,122 @@ export function Services() {
   if (view === "news") return <News onBack={() => setView(null)} />;
   if (view === "fx") return <Rates onBack={() => setView(null)} />;
   if (view === "vpn") return <VpnService onBack={() => setView(null)} />;
+  if (view === "speed") return <SpeedTest onBack={() => setView(null)} />;
   if (view === "grab") return <Grabber onBack={() => setView(null)} />;
+  const tiles = [
+    {
+      id: "weather",
+      title: tx({ ru: "Погода", en: "Weather", kk: "Ауа райы" }),
+      desc: tx({ ru: "Прогноз и советы", en: "Forecast & advice", kk: "Болжам мен кеңес" }),
+    },
+    {
+      id: "news",
+      title: tx({ ru: "Новости", en: "News", kk: "Жаңалықтар" }),
+      desc: tx({ ru: "Главное по странам", en: "Headlines by country", kk: "Елдер жаңалықтары" }),
+    },
+    {
+      id: "fx",
+      title: tx({ ru: "Курсы валют", en: "Exchange rates", kk: "Валюта бағамы" }),
+      desc: tx({ ru: "Курсы и конвертер", en: "Rates & converter", kk: "Бағам мен айырбастау" }),
+    },
+    {
+      id: "vpn",
+      title: "VPN",
+      desc: tx({ ru: "Ваше подключение", en: "Your connection", kk: "Сіздің байланысыңыз" }),
+    },
+    {
+      id: "grab",
+      title: tx({ ru: "Загрузчик", en: "Downloader", kk: "Жүктеуіш" }),
+      desc: "YouTube · Instagram · VK",
+    },
+    {
+      id: "speed",
+      title: tx({ ru: "Скорость", en: "Speed test", kk: "Жылдамдық" }),
+      desc: tx({
+        ru: "Интернет под контролем",
+        en: "Check your internet",
+        kk: "Интернетті тексеру",
+      }),
+    },
+  ] as const;
   return (
-    <div className="h-full overflow-y-auto px-4 py-4">
-      <h3 className="font-serif text-2xl tracking-tight">{tx({ ru: "Сервисы", en: "Services", kk: "Сервистер" })}</h3>
-      <p className="mt-1 max-w-md text-sm text-muted">
-        {tx({
-          ru: "Погода, выпуск, курсы, VPN и загрузчик. Города погоды остаются в аккаунте.",
-          en: "Weather, the bulletin, rates, VPN and a downloader. Weather cities stay on the account.",
-          kk: "Ауа райы, шығарылым, бағам, VPN және жүктеуіш. Қалалар аккаунтта қалады.",
-        })}
-      </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          className="press group relative w-full overflow-hidden rounded-[1.6rem] border border-line bg-elev p-4 text-left"
-          onClick={() => setView("weather")}
-        >
-          <SkyArt />
-          <p className="relative mt-3 font-serif text-3xl tracking-tight">{tx({ ru: "Погода", en: "Weather", kk: "Ауа райы" })}</p>
-          <p className="relative mt-1 max-w-xs text-sm text-muted">{tx({ ru: "Добавьте город. Покажем небо и совет, что лучше надеть.", en: "Add a city. We show the sky and what to wear.", kk: "Қала қосыңыз. Аспан мен киім кеңесін көрсетеміз." })}</p>
-        </button>
-        <button
-          type="button"
-          className="press group relative w-full overflow-hidden rounded-[1.6rem] border border-line bg-elev p-4 text-left"
-          onClick={() => setView("news")}
-        >
-          <NewsArt />
-          <p className="relative mt-3 font-serif text-3xl tracking-tight">{tx({ ru: "Новости", en: "News", kk: "Жаңалықтар" })}</p>
-          <p className="relative mt-1 max-w-xs text-sm text-muted">{tx({ ru: "Сегодня по странам. Нажмите заголовок — откроется источник.", en: "Today by country. Tap a headline to open the source.", kk: "Бүгін елдер бойынша. Тақырыпты бассаңыз, дереккөз ашылады." })}</p>
-        </button>
-        <button
-          type="button"
-          className="press group relative w-full overflow-hidden rounded-[1.6rem] border border-line bg-elev p-4 text-left"
-          onClick={() => setView("fx")}
-        >
-          <FxArt />
-          <p className="relative mt-3 font-serif text-3xl tracking-tight">{tx({ ru: "Курсы", en: "Rates", kk: "Бағам" })}</p>
-          <p className="relative mt-1 max-w-xs text-sm text-muted">{tx({ ru: "Доллар, евро и деньги соседних стран. Нажмите строку — сменится основа.", en: "Dollar, euro and neighbouring money. Tap a row to change the base.", kk: "Доллар, еуро және көрші ақша. Жолды бассаңыз, негіз ауысады." })}</p>
-        </button>
-        <button
-          type="button"
-          className="press group relative w-full overflow-hidden rounded-[1.6rem] border border-line bg-elev p-4 text-left"
-          onClick={() => setView("vpn")}
-        >
-          <VpnTile />
-          <p className="relative mt-3 font-serif text-3xl tracking-tight">VPN</p>
-          <p className="relative mt-1 max-w-xs text-sm text-muted">{tx({ ru: "Ссылка для Happ, Incy и Karing. Локации, срок и трафик.", en: "A link for Happ, Incy and Karing. Locations, term and traffic.", kk: "Happ, Incy және Karing сілтемесі. Локация, мерзім және трафик." })}</p>
-        </button>
-        <button
-          type="button"
-          className="press group relative w-full overflow-hidden rounded-[1.6rem] border border-line bg-elev p-4 text-left sm:col-span-2"
-          onClick={() => setView("grab")}
-        >
-          <GrabTile />
-          <p className="relative mt-3 font-serif text-3xl tracking-tight">{tx({ ru: "Загрузчик", en: "Downloader", kk: "Жүктеуіш" })}</p>
-          <p className="relative mt-1 max-w-md text-sm text-muted">
+    <div className="h-full overflow-y-auto px-4 py-4" data-services-grid>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h3 className="font-serif text-2xl tracking-tight">
+            {tx({ ru: "На каждый день", en: "Everyday essentials", kk: "Күн сайын" })}
+          </h3>
+          <p className="mt-1 text-sm text-muted">
             {tx({
-              ru: "Ролик по ссылке из Instagram, YouTube, TikTok, Pinterest или VK. На мегадиске он живёт пять минут.",
-              en: "A clip from Instagram, YouTube, TikTok, Pinterest or VK. It lives on the megadisk for five minutes.",
-              kk: "Instagram, YouTube, TikTok, Pinterest немесе VK сілтемесінен ролик. Мегадискте бес минут тұрады.",
+              ru: "Полезное — в одном месте",
+              en: "Useful tools in one place",
+              kk: "Пайдалы құралдар бір жерде",
             })}
           </p>
-        </button>
+        </div>
+        <span className="pb-1 text-xs tabular-nums text-faint">
+          {tiles.length} {tx({ ru: "сервисов", en: "tools", kk: "сервис" })}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 min-[600px]:grid-cols-3">
+        {tiles.map((tile) => (
+          <button
+            key={tile.id}
+            type="button"
+            onClick={() => setView(tile.id)}
+            className="service-tile press group relative flex aspect-square min-w-0 flex-col overflow-hidden rounded-[1.4rem] border border-line bg-elev text-left"
+            aria-label={tile.title}
+          >
+            <img
+              src={`/services/${tile.id}-v2.webp`}
+              alt=""
+              width="512"
+              height="512"
+              className="service-tile-art absolute inset-0 h-full w-full object-cover"
+              draggable={false}
+            />
+            <span className="service-tile-shade absolute inset-0" />
+            {tile.id === "speed" ? (
+              <span className="absolute top-2.5 left-2.5 rounded-full bg-[#d6f4e9] px-2 py-0.5 text-[10px] font-semibold text-[#153b2e]">
+                {tx({ ru: "НОВОЕ", en: "NEW", kk: "ЖАҢА" })}
+              </span>
+            ) : null}
+            <ArrowUpRight
+              className="absolute top-3 right-3 size-4 text-white/70"
+              aria-hidden="true"
+            />
+            <span className="relative mt-auto block w-full px-3 pb-3 pt-12">
+              <span className="block text-[16px] font-semibold leading-tight text-white sm:text-lg">
+                {tile.title}
+              </span>
+              <span className="mt-1 block truncate text-[11px] text-white/75 sm:text-xs">
+                {tile.desc}
+              </span>
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-function GrabTile() {
+function ServiceBanner({ kind }: { kind: "weather" | "news" | "fx" }) {
   return (
-    <div className="relative h-28 overflow-hidden rounded-2xl bg-[color-mix(in_oklab,var(--accent)_18%,var(--bg))]" aria-hidden="true">
-      <svg viewBox="0 0 320 120" className="absolute inset-0 h-full w-full">
-        <rect x="36" y="28" width="118" height="68" rx="14" fill="#f7f3ec" stroke="#1c1b19" strokeOpacity="0.2" />
-        <path d="M36 46h118" stroke="#1c1b19" strokeOpacity="0.15" />
-        <circle cx="52" cy="37" r="3" fill="#e7a19c" />
-        <circle cx="64" cy="37" r="3" fill="#e8c98a" />
-        <circle cx="76" cy="37" r="3" fill="#9dccb6" />
-        <path d="M78 62h34M78 74h22" stroke="#1c1b19" strokeOpacity="0.35" strokeWidth="3" strokeLinecap="round" />
-        <circle cx="230" cy="58" r="28" fill="#c4b5e8" />
-        <path d="M230 44v22M221 58h18" stroke="#1b1526" strokeWidth="3" strokeLinecap="round" />
-        <path d="M214 78c8 10 24 10 32 0" fill="none" stroke="#1b1526" strokeWidth="2" strokeLinecap="round" />
-      </svg>
+    <div className="relative h-24 overflow-hidden rounded-2xl bg-[#21182d]" aria-hidden="true">
+      <img
+        src={`/services/${kind}-v2.webp`}
+        alt=""
+        className="h-full w-full object-cover object-[center_42%]"
+      />
+      <span className="absolute inset-0 bg-black/10" />
     </div>
   );
 }
-
-function VpnTile() {
-  return (
-    <div className="relative h-28 overflow-hidden rounded-2xl bg-[color-mix(in_oklab,var(--accent)_18%,var(--bg))]" aria-hidden="true">
-      <svg viewBox="0 0 320 120" className="absolute inset-0 h-full w-full">
-        <circle cx="214" cy="60" r="34" fill="none" stroke="#c4b5e8" strokeWidth="2" />
-        <ellipse cx="214" cy="60" rx="14" ry="34" fill="none" stroke="#c4b5e8" strokeWidth="1.5" />
-        <path d="M180 60h68M214 26v68" stroke="#c4b5e8" strokeWidth="1.2" opacity="0.7" />
-        <circle cx="232" cy="46" r="4" fill="#e8c98a" />
-        <path d="M70 86h48v6a24 24 0 0 1-48 0z" fill="#c4b5e8" />
-        <path d="M84 86v-12a10 10 0 0 1 20 0v12" fill="none" stroke="#1b1526" strokeWidth="3" />
-        <path d="M86 62c10-16 28-16 38 0" fill="none" stroke="#1c1b19" strokeOpacity="0.35" strokeWidth="2" />
-      </svg>
-    </div>
-  );
+function SkyArt() {
+  return <ServiceBanner kind="weather" />;
+}
+function FxArt({ compact }: { compact?: boolean }) {
+  return <ServiceBanner kind="fx" />;
 }
 
 function Weather({ onBack }: { onBack: () => void }) {
@@ -178,9 +196,13 @@ function Weather({ onBack }: { onBack: () => void }) {
   const [cards, setCards] = useState<WeatherCard[] | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [weatherError, setWeatherError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setWeatherError(false);
+    setCards(null);
     void loadWeather()
       .then((rows) => {
         if (cancelled) return;
@@ -190,13 +212,20 @@ function Weather({ onBack }: { onBack: () => void }) {
       .catch(() => {
         if (!cancelled) {
           setCards([]);
-          toast.error(tx({ ru: "Погода сейчас не открылась", en: "Weather did not open", kk: "Ауа райы ашылмады" }));
+          setWeatherError(true);
+          toast.error(
+            tx({
+              ru: "Погода сейчас не открылась",
+              en: "Weather did not open",
+              kk: "Ауа райы ашылмады",
+            }),
+          );
         }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refresh]);
 
   async function add(event: FormEvent) {
     event.preventDefault();
@@ -206,14 +235,20 @@ function Weather({ onBack }: { onBack: () => void }) {
     try {
       const card = await watchCity({ data: { city } });
       setCards((current) => {
-        const rest = (current ?? []).filter((item) => item.city.toLocaleLowerCase("ru") !== card.city.toLocaleLowerCase("ru"));
+        const rest = (current ?? []).filter(
+          (item) => item.city.toLocaleLowerCase("ru") !== card.city.toLocaleLowerCase("ru"),
+        );
         const next = [card, ...rest];
         setWidgetCity(next[0]?.city || "Алматы");
         return next;
       });
       setDraft("");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : tx({ ru: "Город не нашёлся", en: "The city was not found", kk: "Қала табылмады" }));
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : tx({ ru: "Город не нашёлся", en: "The city was not found", kk: "Қала табылмады" }),
+      );
     } finally {
       setBusy(false);
     }
@@ -229,45 +264,92 @@ function Weather({ onBack }: { onBack: () => void }) {
     } catch (err) {
       setCards(previous);
       setWidgetCity(previous?.[0]?.city || "Алматы");
-      toast.error(err instanceof Error ? err.message : tx({ ru: "Не удалось убрать город", en: "The city stayed", kk: "Қала кетпеді" }));
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : tx({ ru: "Не удалось убрать город", en: "The city stayed", kk: "Қала кетпеді" }),
+      );
     }
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3">
-        <button type="button" className="press inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm text-muted" onClick={onBack}>
+        <button
+          type="button"
+          className="press inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm text-muted"
+          onClick={onBack}
+        >
           <ChevronLeft className="size-4" />
           {tx({ ru: "Сервисы", en: "Services", kk: "Сервистер" })}
         </button>
-        <h3 className="font-serif text-xl tracking-tight">{tx({ ru: "Погода", en: "Weather", kk: "Ауа райы" })}</h3>
+        <h3 className="flex-1 font-serif text-xl tracking-tight">
+          {tx({ ru: "Погода", en: "Weather", kk: "Ауа райы" })}
+        </h3>
+        <button
+          type="button"
+          className="press grid size-11 place-items-center rounded-xl text-muted"
+          disabled={cards === null || busy}
+          onClick={() => setRefresh((n) => n + 1)}
+          aria-label={tx({ ru: "Обновить погоду", en: "Refresh weather", kk: "Ауа райын жаңарту" })}
+        >
+          <RefreshCw className={cards === null ? "size-4 animate-spin" : "size-4"} />
+        </button>
       </div>
       <form className="flex gap-2 px-4 pt-3" onSubmit={(event) => void add(event)}>
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder={tx({ ru: "Город, например Алматы", en: "A city, for example Almaty", kk: "Қала, мысалы Алматы" })}
+          placeholder={tx({
+            ru: "Город, например Алматы",
+            en: "A city, for example Almaty",
+            kk: "Қала, мысалы Алматы",
+          })}
           className="field"
           maxLength={60}
           aria-label={tx({ ru: "Город", en: "City", kk: "Қала" })}
         />
         <button
           type="submit"
-          disabled={busy || !draft.trim()}
+          disabled={busy || cards === null || !draft.trim()}
           className="press inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-40"
         >
-          <Plus className="size-4" />
+          {busy ? <RefreshCw className="size-4 animate-spin" /> : <Plus className="size-4" />}
           {tx({ ru: "Следить", en: "Watch", kk: "Бақылау" })}
         </button>
       </form>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {cards === null ? (
           <PageLoader />
+        ) : weatherError ? (
+          <div className="rounded-2xl border border-line p-5">
+            <p className="text-sm text-muted">
+              {tx({
+                ru: "Прогноз не загрузился. Сохранённые города остаются в аккаунте.",
+                en: "Forecast did not load. Your cities are still saved.",
+                kk: "Болжам жүктелмеді. Қалалар аккаунтта сақталған.",
+              })}
+            </p>
+            <button
+              className="press mt-3 min-h-11 rounded-xl bg-accent px-4 text-accent-fg"
+              onClick={() => setRefresh((n) => n + 1)}
+            >
+              {tx({ ru: "Повторить", en: "Retry", kk: "Қайталау" })}
+            </button>
+          </div>
         ) : cards.length === 0 ? (
           <div className="mx-auto mt-6 max-w-sm rounded-3xl border border-dashed border-line px-5 py-10 text-center">
             <SkyArt />
-            <p className="mt-4 font-serif text-xl">{tx({ ru: "Пока ни одного города", en: "No city yet", kk: "Әзірге қала жоқ" })}</p>
-            <p className="mt-2 text-sm text-muted">{tx({ ru: "Напишите город сверху. Он останется в аккаунте после перезапуска.", en: "Type a city above. It stays on the account after a restart.", kk: "Жоғарыға қала жазыңыз. Қайта іске қосқанда аккаунтта қалады." })}</p>
+            <p className="mt-4 font-serif text-xl">
+              {tx({ ru: "Пока ни одного города", en: "No city yet", kk: "Әзірге қала жоқ" })}
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              {tx({
+                ru: "Напишите город сверху. Он останется в аккаунте после перезапуска.",
+                en: "Type a city above. It stays on the account after a restart.",
+                kk: "Жоғарыға қала жазыңыз. Қайта іске қосқанда аккаунтта қалады.",
+              })}
+            </p>
           </div>
         ) : (
           <ul className="space-y-3">
@@ -288,11 +370,18 @@ function CityCard({ card, onRemove }: { card: WeatherCard; onRemove: () => void 
   const failed = !card.advice && card.hours.length === 0;
   const kind = weatherKind(card.code);
   return (
-    <article className="relative overflow-hidden rounded-[1.6rem] border border-line bg-elev p-4">
+    <article
+      className="weather-card relative overflow-hidden rounded-[1.6rem] border border-line bg-elev p-4"
+      data-weather-kind={kind}
+    >
       <button
         type="button"
         className="press absolute top-3 right-3 inline-flex size-11 items-center justify-center rounded-2xl border border-line text-muted"
-        aria-label={tx({ ru: `Убрать ${card.city}`, en: `Remove ${card.city}`, kk: `${card.city} алу` })}
+        aria-label={tx({
+          ru: `Убрать ${card.city}`,
+          en: `Remove ${card.city}`,
+          kk: `${card.city} алу`,
+        })}
         onClick={onRemove}
       >
         <X className="size-4" />
@@ -307,21 +396,58 @@ function CityCard({ card, onRemove }: { card: WeatherCard; onRemove: () => void 
           <div className="flex items-start justify-between gap-3 pr-12">
             <div className="min-w-0">
               <p className="truncate text-xs tracking-wide text-muted uppercase">{card.city}</p>
-              <p className="mt-1 font-serif text-6xl leading-none tracking-tight">{card.temp}°</p>
+              <p className="mt-1 font-serif text-7xl leading-none tracking-tight">{card.temp}°</p>
               <p className="mt-2 text-sm">{card.desc}</p>
+              <p className="mt-1 text-xs text-faint">{card.place}</p>
             </div>
             <WeatherArt kind={kind} />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Pill>{tx({ ru: `ощущается ${card.feels}°`, en: `feels ${card.feels}°`, kk: `сезіледі ${card.feels}°` })}</Pill>
-            <Pill>{tx({ ru: `ветер ${card.wind} км/ч`, en: `wind ${card.wind} km/h`, kk: `жел ${card.wind} км/сағ` })}</Pill>
-            <Pill>{tx({ ru: `влажность ${card.humidity}%`, en: `humidity ${card.humidity}%`, kk: `ылғал ${card.humidity}%` })}</Pill>
-            {card.precip > 0 ? <Pill>{tx({ ru: `осадки ${card.precip} мм`, en: `rain ${card.precip} mm`, kk: `жауын ${card.precip} мм` })}</Pill> : null}
+            <Pill>
+              {tx({
+                ru: `ощущается ${card.feels}°`,
+                en: `feels ${card.feels}°`,
+                kk: `сезіледі ${card.feels}°`,
+              })}
+            </Pill>
+            <Pill>
+              {tx({
+                ru: `ветер ${card.wind} км/ч`,
+                en: `wind ${card.wind} km/h`,
+                kk: `жел ${card.wind} км/сағ`,
+              })}
+            </Pill>
+            <Pill>
+              {tx({
+                ru: `влажность ${card.humidity}%`,
+                en: `humidity ${card.humidity}%`,
+                kk: `ылғал ${card.humidity}%`,
+              })}
+            </Pill>
+            {card.precip > 0 ? (
+              <Pill>
+                {tx({
+                  ru: `осадки ${card.precip} мм`,
+                  en: `rain ${card.precip} mm`,
+                  kk: `жауын ${card.precip} мм`,
+                })}
+              </Pill>
+            ) : null}
           </div>
           {card.hours.length > 0 ? (
-            <div className="snap-row mt-3 flex gap-2 pb-1">
+            <div
+              className="snap-row mt-4 flex gap-2 rounded-2xl border border-line bg-elev/60 p-2"
+              aria-label={tx({
+                ru: "Почасовой прогноз",
+                en: "Hourly forecast",
+                kk: "Сағаттық болжам",
+              })}
+            >
               {card.hours.map((hour) => (
-                <div key={hour.label} className="w-14 shrink-0 snap-start rounded-2xl bg-subtle px-1 py-2 text-center">
+                <div
+                  key={hour.label}
+                  className="w-14 shrink-0 snap-start rounded-2xl bg-subtle px-1 py-2 text-center"
+                >
                   <p className="text-xs text-faint">{hour.label}</p>
                   <MiniArt kind={weatherKind(hour.code)} />
                   <p className="text-sm tabular-nums">{hour.temp}°</p>
@@ -332,7 +458,10 @@ function CityCard({ card, onRemove }: { card: WeatherCard; onRemove: () => void 
           {card.days.length > 0 ? (
             <div className="mt-3 grid grid-cols-3 gap-2">
               {card.days.map((day) => (
-                <div key={day.label} className="rounded-2xl border border-line px-2 py-2 text-center">
+                <div
+                  key={day.label}
+                  className="rounded-2xl border border-line px-2 py-2 text-center"
+                >
                   <p className="text-xs text-faint">{day.label}</p>
                   <MiniArt kind={weatherKind(day.code)} />
                   <p className="text-xs tabular-nums text-muted">
@@ -343,7 +472,9 @@ function CityCard({ card, onRemove }: { card: WeatherCard; onRemove: () => void 
             </div>
           ) : null}
           <div className="mt-3 rounded-2xl bg-subtle px-3 py-3">
-            <p className="text-xs tracking-wide text-accent">{tx({ ru: "Что надеть", en: "What to wear", kk: "Не кию керек" })}</p>
+            <p className="text-xs tracking-wide text-accent">
+              {tx({ ru: "Что надеть", en: "What to wear", kk: "Не кию керек" })}
+            </p>
             <p className="mt-1 text-sm text-pretty">{card.advice}</p>
           </div>
         </>
@@ -364,7 +495,9 @@ function readCountries(): NewsCode[] {
       .split(",")
       .map((item) => item.trim().toUpperCase())
       .filter((item): item is NewsCode => (NEWS_COUNTRIES as readonly string[]).includes(item));
-    return picked.length ? NEWS_COUNTRIES.filter((code) => picked.includes(code)) : [...NEWS_COUNTRIES];
+    return picked.length
+      ? NEWS_COUNTRIES.filter((code) => picked.includes(code))
+      : [...NEWS_COUNTRIES];
   } catch {
     return [...NEWS_COUNTRIES];
   }
@@ -373,13 +506,19 @@ function readCountries(): NewsCode[] {
 function when(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function News({ onBack }: { onBack: () => void }) {
   const tx = useTx();
   const [countries, setCountries] = useState<NewsCode[]>(() => [...NEWS_COUNTRIES]);
   const [ready, setReady] = useState(false);
+  const [refresh, setRefresh] = useState(0);
   const [items, setItems] = useState<NewsItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -401,19 +540,34 @@ function News({ onBack }: { onBack: () => void }) {
       .catch((err) => {
         if (!cancelled) {
           setItems([]);
-          setError(loadError(err instanceof Error ? err.message : "", tx({ ru: "Новости сейчас не открылись", en: "The bulletin did not open", kk: "Жаңалық ашылмады" })));
+          setError(
+            loadError(
+              err instanceof Error ? err.message : "",
+              tx({
+                ru: "Новости сейчас не открылись",
+                en: "The bulletin did not open",
+                kk: "Жаңалық ашылмады",
+              }),
+            ),
+          );
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [ready, countries]);
+  }, [ready, countries, refresh]);
 
   function toggle(code: NewsCode) {
     setCountries((current) => {
       const has = current.includes(code);
       if (has && current.length === 1) {
-        toast(tx({ ru: "Нужна хотя бы одна страна", en: "Keep at least one country", kk: "Кемінде бір ел керек" }));
+        toast(
+          tx({
+            ru: "Нужна хотя бы одна страна",
+            en: "Keep at least one country",
+            kk: "Кемінде бір ел керек",
+          }),
+        );
         return current;
       }
       const next = NEWS_COUNTRIES.filter((item) => (item === code ? !has : current.includes(item)));
@@ -429,14 +583,42 @@ function News({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3">
-        <button type="button" className="press inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm text-muted" onClick={onBack}>
+        <button
+          type="button"
+          className="press inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm text-muted"
+          onClick={onBack}
+        >
           <ChevronLeft className="size-4" />
           {tx({ ru: "Сервисы", en: "Services", kk: "Сервистер" })}
         </button>
-        <h3 className="font-serif text-xl tracking-tight">{tx({ ru: "Новости", en: "News", kk: "Жаңалық" })}</h3>
+        <h3 className="flex-1 font-serif text-xl tracking-tight">
+          {tx({ ru: "Новости", en: "News", kk: "Жаңалық" })}
+        </h3>
+        <button
+          type="button"
+          aria-label={tx({
+            ru: "Обновить новости",
+            en: "Refresh news",
+            kk: "Жаңалықтарды жаңарту",
+          })}
+          className="press grid size-11 place-items-center rounded-xl text-muted"
+          disabled={items === null}
+          onClick={() => setRefresh((n) => n + 1)}
+        >
+          <RefreshCw className={items === null ? "size-4 animate-spin" : "size-4"} />
+        </button>
       </div>
       <div className="px-4 pt-3">
-        <NewsArt compact />
+        <div className="flex items-center justify-between text-xs text-faint">
+          <span>
+            {tx({
+              ru: "Лента по вашим странам",
+              en: "News from your countries",
+              kk: "Таңдалған елдер жаңалықтары",
+            })}
+          </span>
+          <span>{tx({ ru: "Последние новости", en: "Latest", kk: "Соңғы жаңалықтар" })}</span>
+        </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           {NEWS_COUNTRIES.map((code) => {
             const on = countries.includes(code);
@@ -452,7 +634,23 @@ function News({ onBack }: { onBack: () => void }) {
                 }
                 onClick={() => toggle(code)}
               >
-                {tx({ ru: COUNTRY_NAME[code], en: { KZ: "Kazakhstan", RU: "Russia", UZ: "Uzbekistan", KG: "Kyrgyzstan", BY: "Belarus" }[code], kk: { KZ: "Қазақстан", RU: "Ресей", UZ: "Өзбекстан", KG: "Қырғызстан", BY: "Беларусь" }[code] })}
+                {tx({
+                  ru: COUNTRY_NAME[code],
+                  en: {
+                    KZ: "Kazakhstan",
+                    RU: "Russia",
+                    UZ: "Uzbekistan",
+                    KG: "Kyrgyzstan",
+                    BY: "Belarus",
+                  }[code],
+                  kk: {
+                    KZ: "Қазақстан",
+                    RU: "Ресей",
+                    UZ: "Өзбекстан",
+                    KG: "Қырғызстан",
+                    BY: "Беларусь",
+                  }[code],
+                })}
               </button>
             );
           })}
@@ -460,16 +658,42 @@ function News({ onBack }: { onBack: () => void }) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {items === null ? (
-          <PageLoader />
+          <div
+            className="space-y-3"
+            role="status"
+            aria-label={tx({
+              ru: "Загружаем новости",
+              en: "Loading news",
+              kk: "Жаңалықтар жүктелуде",
+            })}
+          >
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse rounded-2xl border border-line p-4">
+                <div className="h-3 w-24 rounded bg-subtle" />
+                <div className="mt-3 h-5 w-full rounded bg-subtle" />
+                <div className="mt-2 h-5 w-3/4 rounded bg-subtle" />
+              </div>
+            ))}
+          </div>
         ) : error ? (
           <div>
             <p className="text-sm text-danger">{error}</p>
-            <button type="button" className="press mt-3 h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setCountries((current) => [...current])}>
+            <button
+              type="button"
+              className="press mt-3 h-10 rounded-xl border border-line px-3 text-sm"
+              onClick={() => setCountries((current) => [...current])}
+            >
               {tx({ ru: "Повторить", en: "Try again", kk: "Қайталау" })}
             </button>
           </div>
         ) : items.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted">{tx({ ru: "За сегодня по этим странам пока тихо.", en: "Quiet for these countries today.", kk: "Бүгін бұл елдер бойынша тыныш." })}</p>
+          <p className="py-8 text-center text-sm text-muted">
+            {tx({
+              ru: "За сегодня по этим странам пока тихо.",
+              en: "Quiet for these countries today.",
+              kk: "Бүгін бұл елдер бойынша тыныш.",
+            })}
+          </p>
         ) : (
           <ul className="space-y-2">
             {items.map((item, index) => {
@@ -483,15 +707,40 @@ function News({ onBack }: { onBack: () => void }) {
                     className={
                       lead
                         ? "press block overflow-hidden rounded-[1.6rem] border border-line bg-elev"
-                        : "press flex min-h-[7.5rem] overflow-hidden rounded-[1.4rem] border border-line bg-elev"
+                        : "press flex min-h-[6rem] overflow-hidden rounded-[1.4rem] border border-line bg-elev"
                     }
                   >
-                    <StoryPlate seed={item.url} index={index} wide={lead} />
+                    <NewsImage item={item} lead={lead} />
                     <span className={lead ? "block p-3.5" : "min-w-0 flex-1 p-3"}>
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-faint">
-                        <span className="truncate">{item.source}</span>
-                        {item.country ? <span>{tx({ ru: COUNTRY_NAME[item.country], en: { KZ: "Kazakhstan", RU: "Russia", UZ: "Uzbekistan", KG: "Kyrgyzstan", BY: "Belarus" }[item.country], kk: { KZ: "Қазақстан", RU: "Ресей", UZ: "Өзбекстан", KG: "Қырғызстан", BY: "Беларусь" }[item.country] })}</span> : null}
-                        {item.publishedAt ? <time className="tabular-nums">{when(item.publishedAt)}</time> : null}
+                        <span className="inline-flex items-center gap-1 font-medium text-muted">
+                          {item.source}
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </span>
+                        {item.country ? (
+                          <span>
+                            {tx({
+                              ru: COUNTRY_NAME[item.country],
+                              en: {
+                                KZ: "Kazakhstan",
+                                RU: "Russia",
+                                UZ: "Uzbekistan",
+                                KG: "Kyrgyzstan",
+                                BY: "Belarus",
+                              }[item.country],
+                              kk: {
+                                KZ: "Қазақстан",
+                                RU: "Ресей",
+                                UZ: "Өзбекстан",
+                                KG: "Қырғызстан",
+                                BY: "Беларусь",
+                              }[item.country],
+                            })}
+                          </span>
+                        ) : null}
+                        {item.publishedAt ? (
+                          <time className="tabular-nums">{when(item.publishedAt)}</time>
+                        ) : null}
                       </span>
                       <span
                         className={
@@ -502,7 +751,11 @@ function News({ onBack }: { onBack: () => void }) {
                       >
                         {item.title}
                       </span>
-                      {item.description ? <span className="mt-1 line-clamp-2 block text-sm text-muted">{item.description}</span> : null}
+                      {item.description ? (
+                        <span className="mt-1 line-clamp-2 block text-sm text-muted">
+                          {item.description}
+                        </span>
+                      ) : null}
                     </span>
                   </a>
                 </li>
@@ -515,32 +768,23 @@ function News({ onBack }: { onBack: () => void }) {
   );
 }
 
-function NewsArt({ compact = false }: { compact?: boolean }) {
+function NewsImage({ item, lead }: { item: NewsItem; lead: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (!item.image || failed)
+    return lead ? <div className="h-1 bg-accent/60" aria-hidden="true" /> : null;
   return (
-    <div
-      className={compact ? "relative h-24 overflow-hidden rounded-2xl bg-[#f3efe6]" : "relative h-28 overflow-hidden rounded-2xl bg-[#f3efe6]"}
-      aria-hidden="true"
-    >
-      <svg viewBox="0 0 320 120" className="absolute inset-0 h-full w-full">
-        <rect x="0" y="0" width="320" height="120" fill="#f3efe6" />
-        <path d="M18 28h150" stroke="#1c1b19" strokeWidth="3" />
-        <path d="M18 34h110" stroke="#1c1b19" strokeWidth="1" />
-        <text x="18" y="58" fill="#1c1b19" fontFamily="Georgia, serif" fontSize="22">
-          Сегодня
-        </text>
-        <g fill="#1c1b19" opacity="0.72">
-          <rect x="18" y="70" width="92" height="3" rx="1" />
-          <rect x="18" y="78" width="78" height="3" rx="1" />
-          <rect x="18" y="86" width="86" height="3" rx="1" />
-          <rect x="116" y="70" width="70" height="3" rx="1" />
-          <rect x="116" y="78" width="58" height="3" rx="1" />
-          <rect x="116" y="86" width="64" height="3" rx="1" />
-        </g>
-        <circle cx="252" cy="58" r="28" fill="#c4b5e8" />
-        <path d="M252 40v8M252 68v8M234 58h8M262 58h8" stroke="#1b1526" strokeWidth="2" strokeLinecap="round" />
-        <circle cx="252" cy="58" r="8" fill="#1b1526" />
-      </svg>
-    </div>
+    <img
+      src={item.image}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className={
+        lead
+          ? "aspect-[2/1] max-h-52 w-full object-cover"
+          : "m-3 size-20 shrink-0 rounded-xl object-cover"
+      }
+    />
   );
 }
 
@@ -596,7 +840,16 @@ function Rates({ onBack }: { onBack: () => void }) {
       .catch((err) => {
         if (!cancelled) {
           setBoard(null);
-          setError(loadError(err instanceof Error ? err.message : "", tx({ ru: "Курсы сейчас не открылись", en: "Rates did not open", kk: "Бағам ашылмады" })));
+          setError(
+            loadError(
+              err instanceof Error ? err.message : "",
+              tx({
+                ru: "Курсы сейчас не открылись",
+                en: "Rates did not open",
+                kk: "Бағам ашылмады",
+              }),
+            ),
+          );
         }
       });
     return () => {
@@ -621,11 +874,17 @@ function Rates({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3">
-        <button type="button" className="press inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm text-muted" onClick={onBack}>
+        <button
+          type="button"
+          className="press inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm text-muted"
+          onClick={onBack}
+        >
           <ChevronLeft className="size-4" />
           {tx({ ru: "Сервисы", en: "Services", kk: "Сервистер" })}
         </button>
-        <h3 className="font-serif text-xl tracking-tight">{tx({ ru: "Курсы", en: "Rates", kk: "Бағам" })}</h3>
+        <h3 className="font-serif text-xl tracking-tight">
+          {tx({ ru: "Курсы", en: "Rates", kk: "Бағам" })}
+        </h3>
       </div>
       <div className="px-4 pt-3">
         <FxArt compact />
@@ -642,7 +901,27 @@ function Rates({ onBack }: { onBack: () => void }) {
               }
               onClick={() => select(code)}
             >
-              {tx({ ru: FX_NAME[code], en: { USD: "Dollar", EUR: "Euro", RUB: "Ruble", KZT: "Tenge", UZS: "Som", KGS: "Kyrgyz som", BYN: "Belarusian ruble" }[code], kk: { USD: "Доллар", EUR: "Еуро", RUB: "Рубль", KZT: "Теңге", UZS: "Сом", KGS: "Сом", BYN: "Бел. рубль" }[code] })}
+              {tx({
+                ru: FX_NAME[code],
+                en: {
+                  USD: "Dollar",
+                  EUR: "Euro",
+                  RUB: "Ruble",
+                  KZT: "Tenge",
+                  UZS: "Som",
+                  KGS: "Kyrgyz som",
+                  BYN: "Belarusian ruble",
+                }[code],
+                kk: {
+                  USD: "Доллар",
+                  EUR: "Еуро",
+                  RUB: "Рубль",
+                  KZT: "Теңге",
+                  UZS: "Сом",
+                  KGS: "Сом",
+                  BYN: "Бел. рубль",
+                }[code],
+              })}
             </button>
           ))}
         </div>
@@ -659,15 +938,29 @@ function Rates({ onBack }: { onBack: () => void }) {
             aria-label={tx({ ru: "Сколько единиц", en: "How many units", kk: "Қанша бірлік" })}
             onChange={(event) => setAmount(event.target.value.replace(/[^\d.,]/g, "").slice(0, 12))}
           />
-          <span className="truncate text-sm text-muted">{tx({ ru: "единиц валюты", en: "currency units", kk: "валюта бірлігі" })}</span>
+          <span className="truncate text-sm text-muted">
+            {tx({ ru: "единиц валюты", en: "currency units", kk: "валюта бірлігі" })}
+          </span>
         </div>
-        {board?.date ? <p className="mt-2 text-xs text-faint">{tx({ ru: `Курс на ${fxDate(board.date)}`, en: `Rate on ${fxDate(board.date)}`, kk: `${fxDate(board.date)} бағамы` })}</p> : null}
+        {board?.date ? (
+          <p className="mt-2 text-xs text-faint">
+            {tx({
+              ru: `Курс на ${fxDate(board.date)}`,
+              en: `Rate on ${fxDate(board.date)}`,
+              kk: `${fxDate(board.date)} бағамы`,
+            })}
+          </p>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {error ? (
           <div>
             <p className="text-sm text-danger">{error}</p>
-            <button type="button" className="press mt-3 h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setTick((value) => value + 1)}>
+            <button
+              type="button"
+              className="press mt-3 h-10 rounded-xl border border-line px-3 text-sm"
+              onClick={() => setTick((value) => value + 1)}
+            >
               {tx({ ru: "Повторить", en: "Try again", kk: "Қайталау" })}
             </button>
           </div>
@@ -686,11 +979,39 @@ function Rates({ onBack }: { onBack: () => void }) {
                   >
                     <Coin code={quote.code} />
                     <span className="min-w-0 flex-1">
-                      <span className="block font-medium">{tx({ ru: FX_NAME[quote.code], en: { USD: "Dollar", EUR: "Euro", RUB: "Ruble", KZT: "Tenge", UZS: "Som", KGS: "Kyrgyz som", BYN: "Belarusian ruble" }[quote.code], kk: { USD: "Доллар", EUR: "Еуро", RUB: "Рубль", KZT: "Теңге", UZS: "Сом", KGS: "Сом", BYN: "Бел. рубль" }[quote.code] })}</span>
-                      <span className="text-xs text-faint">{count === null || count === 1 ? quote.code : `${formatQty(count)} ${quote.code}`}</span>
+                      <span className="block font-medium">
+                        {tx({
+                          ru: FX_NAME[quote.code],
+                          en: {
+                            USD: "Dollar",
+                            EUR: "Euro",
+                            RUB: "Ruble",
+                            KZT: "Tenge",
+                            UZS: "Som",
+                            KGS: "Kyrgyz som",
+                            BYN: "Belarusian ruble",
+                          }[quote.code],
+                          kk: {
+                            USD: "Доллар",
+                            EUR: "Еуро",
+                            RUB: "Рубль",
+                            KZT: "Теңге",
+                            UZS: "Сом",
+                            KGS: "Сом",
+                            BYN: "Бел. рубль",
+                          }[quote.code],
+                        })}
+                      </span>
+                      <span className="text-xs text-faint">
+                        {count === null || count === 1
+                          ? quote.code
+                          : `${formatQty(count)} ${quote.code}`}
+                      </span>
                     </span>
                     <span className="text-right">
-                      <span className="block font-serif text-2xl leading-none tracking-tight tabular-nums">{home === null ? "—" : formatRate(home)}</span>
+                      <span className="block font-serif text-2xl leading-none tracking-tight tabular-nums">
+                        {home === null ? "—" : formatRate(home)}
+                      </span>
                       <span className="text-xs text-faint">{FX_SIGN[base]}</span>
                     </span>
                   </button>
@@ -715,49 +1036,6 @@ function Coin({ code }: { code: FxCode }) {
     >
       <span className={mark.length > 2 ? "text-xs tracking-tight" : "text-xl"}>{mark}</span>
     </span>
-  );
-}
-
-function FxArt({ compact = false }: { compact?: boolean }) {
-  return (
-    <div className={compact ? "relative h-24 overflow-hidden rounded-2xl bg-[#f3efe6]" : "relative h-28 overflow-hidden rounded-2xl bg-[#f3efe6]"} aria-hidden="true">
-      <svg viewBox="0 0 320 120" className="absolute inset-0 h-full w-full">
-        <rect width="320" height="120" fill="#f3efe6" />
-        <g stroke="#1c1b19" strokeWidth="1" opacity="0.28">
-          <path d="M0 28h320M0 52h320M0 76h320M0 100h320" />
-          <path d="M28 0v120M64 0v120" />
-        </g>
-        <text x="78" y="62" fill="#1c1b19" fontFamily="Georgia, serif" fontSize="28">
-          Курс
-        </text>
-        <circle cx="248" cy="58" r="30" fill="#c4b5e8" />
-        <text x="236" y="66" fill="#1b1526" fontFamily="Georgia, serif" fontSize="22">
-          ₸
-        </text>
-        <circle cx="278" cy="36" r="16" fill="#1c1b19" />
-        <text x="270" y="42" fill="#f3efe6" fontFamily="Georgia, serif" fontSize="14">
-          $
-        </text>
-      </svg>
-    </div>
-  );
-}
-
-function SkyArt() {
-  return (
-    <div className="relative h-28 overflow-hidden rounded-2xl bg-[color-mix(in_oklab,var(--accent)_18%,var(--bg))]" aria-hidden="true">
-      <svg viewBox="0 0 320 120" className="absolute inset-0 h-full w-full">
-        <circle cx="250" cy="42" r="26" fill="#e8c98a" />
-        <g stroke="#e8c98a" strokeWidth="3" strokeLinecap="round" opacity="0.85">
-          <path d="M250 6v10M250 68v10M214 42h10M276 42h10M224 16l7 7M269 61l7 7M276 16l-7 7M231 61l-7 7" />
-        </g>
-        <g fill="#f7f3ec" stroke="color-mix(in oklab, var(--fg) 12%, transparent)" strokeWidth="2">
-          <ellipse cx="92" cy="78" rx="46" ry="22" />
-          <ellipse cx="128" cy="70" rx="34" ry="22" />
-          <ellipse cx="62" cy="74" rx="28" ry="16" />
-        </g>
-      </svg>
-    </div>
   );
 }
 
@@ -797,7 +1075,12 @@ function Sun({ dim }: { dim: boolean }) {
 function Cloud({ rainy }: { rainy: boolean }) {
   const y = rainy ? 8 : 18;
   return (
-    <g transform={`translate(0 ${y})`} fill="#f7f3ec" stroke="color-mix(in oklab, var(--fg) 14%, transparent)" strokeWidth="2">
+    <g
+      transform={`translate(0 ${y})`}
+      fill="#f7f3ec"
+      stroke="color-mix(in oklab, var(--fg) 14%, transparent)"
+      strokeWidth="2"
+    >
       <ellipse cx="48" cy="58" rx="22" ry="14" />
       <ellipse cx="68" cy="54" rx="18" ry="14" />
       <ellipse cx="86" cy="60" rx="16" ry="11" />
@@ -830,7 +1113,11 @@ function Bolt() {
 
 function FogBars() {
   return (
-    <g stroke="color-mix(in oklab, var(--fg) 35%, transparent)" strokeWidth="4" strokeLinecap="round">
+    <g
+      stroke="color-mix(in oklab, var(--fg) 35%, transparent)"
+      strokeWidth="4"
+      strokeLinecap="round"
+    >
       <path d="M28 78h64M34 90h52M40 102h40" />
     </g>
   );
