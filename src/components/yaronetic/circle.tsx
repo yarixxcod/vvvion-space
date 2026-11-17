@@ -103,6 +103,27 @@ function Home({
   const [nested, setNested] = useState(false);
   const armed = useRef(0);
   const tabsRef = useRef<HTMLDivElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = mobileNavRef.current;
+    if (!nav) return;
+    const root = document.documentElement;
+    const update = () => {
+      const height = nav.getBoundingClientRect().height;
+      if (height > 0) root.style.setProperty("--player-bottom", `calc(${Math.ceil(height)}px + .5rem)`);
+      else root.style.removeProperty("--player-bottom");
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(nav);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      root.style.removeProperty("--player-bottom");
+    };
+  }, [nested]);
+
 
   useEffect(() => {
     setTab(initialTab);
@@ -244,7 +265,7 @@ function Home({
   }
 
   return (
-    <div className="flex h-full min-h-0 bg-elev pb-[var(--player-dock,0px)]">
+    <div className="flex h-full min-h-0 bg-elev">
       <nav className="hidden w-60 shrink-0 flex-col border-r border-line xl:flex" aria-label={ui(lang, "circle")}>
         <div className="p-3">
           {onClose ? <ToChat onClick={onClose} wide /> : null}
@@ -298,7 +319,7 @@ function Home({
           ) : null}
         </div>
         <SectionSwipe tabs={order} active={order.includes(tab) ? tab : "chat"} paused={nested} onChange={(id) => pick(id, true)}>
-          <div ref={paneRef} data-circle-pane className={cn("mx-auto flex h-full min-h-0 w-full flex-col", column)}>
+          <div ref={paneRef} data-circle-pane className={cn("mx-auto flex h-full min-h-0 w-full flex-col pb-[var(--player-dock,0px)]", column)}>
             {banned ? (
               <p className="p-4 text-sm text-danger">{ui(lang, "banned")}</p>
             ) : tab === "admin" && admin ? (
@@ -320,7 +341,7 @@ function Home({
             )}
           </div>
         </SectionSwipe>
-        <nav className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
+        <nav ref={mobileNavRef} className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
           <span
             className="circle-drop"
             style={{ transform: `translateX(${(mainTabs.indexOf(tab) >= 0 ? mainTabs.indexOf(tab) : 4) * 100}%)` }}

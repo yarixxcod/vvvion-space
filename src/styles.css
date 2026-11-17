@@ -360,3 +360,6 @@ html.light[data-paper="graphite"] .chat-paper, html.light .paper-swatch[data-pap
 }
 
 .prose-y a.search-citation{display:inline-flex;align-items:center;justify-content:center;min-width:1.5rem;min-height:1.5rem;padding:0 .35rem;margin:0 .15rem;border:1px solid var(--line);border-radius:.5rem;background:var(--subtle);color:var(--accent);font-size:.72em;font-weight:600;text-decoration:none;vertical-align:baseline}.prose-y a.search-citation:hover{background:var(--elev);border-color:var(--accent)}
+
+/* Compact player sits above Circle navigation and below sheets/dialogs. */
+.player-mini-position { bottom: var(--player-bottom, max(0.75rem, env(safe-area-inset-bottom))); }

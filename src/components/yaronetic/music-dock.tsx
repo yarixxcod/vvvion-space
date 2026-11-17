@@ -960,6 +960,7 @@ export function MusicDock() {
       setPlaying(false);
       return;
     }
+    if (deck.mode !== "full") return;
     const pull = () => {
       const pos = positionNow();
       const span = lengthNow();
@@ -978,7 +979,7 @@ export function MusicDock() {
     pull();
     const id = window.setInterval(pull, 80);
     return () => window.clearInterval(id);
-  }, [trackSrc]);
+  }, [trackSrc, deck.mode]);
 
   useEffect(() => {
     if (deck.mode !== "full") return;
@@ -996,7 +997,7 @@ export function MusicDock() {
       root.style.removeProperty("--player-dock");
       return;
     }
-    root.style.setProperty("--player-dock", "calc(6.75rem + max(0.75rem, env(safe-area-inset-bottom)))");
+    root.style.setProperty("--player-dock", "calc(4rem + max(0.75rem, env(safe-area-inset-bottom)))");
     return () => {
       root.style.removeProperty("--player-dock");
     };
@@ -1107,13 +1108,8 @@ export function MusicDock() {
           </div>
         </div>
       ) : (
-        <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[90] rounded-2xl border border-line bg-elev px-2 pt-1.5 pb-2 shadow-[var(--shadow)]">
-          <ClassicSeek at={at} duration={dur} spans={cache} onSeek={seek} tone="paper" />
-          <div className="mb-1 flex justify-between px-1 text-[11px] tabular-nums text-faint">
-            <span>{clock(at)}</span>
-            <span>{dur > 0 ? clock(dur) : "—:—"}</span>
-          </div>
-          <div className="flex items-center gap-2">
+        <div role="region" aria-label="Мини-плеер" data-player-mini className="player-mini-position fixed inset-x-2 z-[60] mx-auto flex h-16 max-w-2xl items-center rounded-2xl border border-line bg-elev px-2 shadow-[var(--shadow)] sm:inset-x-3">
+          <div className="flex w-full min-w-0 items-center gap-1">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <button type="button" className="press shrink-0" onClick={() => setMode("full")} aria-label={current.title}>
                 {current.cover ? <img src={current.cover} alt="" className="size-11 rounded-xl object-cover" /> : (
@@ -1129,16 +1125,16 @@ export function MusicDock() {
                 </span>
               </span>
             </div>
-            <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Назад" onClick={prev}>
+            <button type="button" className="press hidden size-11 shrink-0 place-items-center rounded-full text-muted sm:grid" aria-label="Назад" onClick={prev}>
               <SkipBack className="size-4 fill-current" />
             </button>
-            <button type="button" className="press grid size-10 place-items-center rounded-full bg-accent text-accent-fg" aria-label={playing ? "Пауза" : "Слушать"} onClick={toggle}>
+            <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full bg-accent text-accent-fg" aria-label={playing ? "Пауза" : "Слушать"} onClick={toggle}>
               {playing ? <Pause className="size-4" /> : <Play className="size-4 fill-current" />}
             </button>
-            <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Дальше" onClick={next}>
+            <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full text-muted" aria-label="Дальше" onClick={next}>
               <SkipForward className="size-4 fill-current" />
             </button>
-            <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Закрыть" onClick={clearTrack}>
+            <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-full text-muted" aria-label="Закрыть" onClick={clearTrack}>
               <X className="size-4" />
             </button>
           </div>
