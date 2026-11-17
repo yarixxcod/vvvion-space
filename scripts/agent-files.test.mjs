@@ -196,3 +196,99 @@ test("a weak model creates a folder, saves, reads and versions a disk file acros
     await db.close();
   }
 });
+
+function reply(content, calls = []) {
+  return {
+    failed: false,
+    response: Response.json({
+      choices: [{ message: { content, tool_calls: calls }, finish_reason: calls.length ? "tool_calls" : "stop" }],
+    }),
+  };
+}
+
+test("a saved file releases the forced tool call so the model can finish", async () => {
+  const seen = [];
+  let saved = false;
+  const result = await runAgentLoop({
+    wire: [{ role: "user", content: "Собери сайт" }],
+    payload: { model: "ernie", tool_choice: "required" },
+    send: async (payload) => {
+      seen.push(payload.tool_choice);
+      if (!saved)
+        return reply("", [
+          { id: "1", type: "function", function: { name: "save_my_text", arguments: "{\"name\":\"index.html\"}" } },
+        ]);
+      return reply("Сайт сохранён. Откройте index.html.");
+    },
+    invoke: async () => {
+      saved = true;
+      return JSON.stringify({ saved: true, name: "index.html" });
+    },
+    split: (body) => ({ text: body.choices[0].message.content ?? "", reason: "" }),
+    calls: (body) =>
+      (body.choices[0].message.tool_calls ?? []).map((call) => ({
+        id: call.id,
+        name: call.function.name,
+        args: call.function.arguments,
+      })),
+    usage: () => undefined,
+    signal: new AbortController().signal,
+    writeRequested: true,
+    filesRequested: true,
+    hasChanges: () => saved,
+    hasFiles: () => saved,
+  });
+  assert.deepEqual(seen, ["required", "auto"]);
+  assert.equal(result.text, "Сайт сохранён. Откройте index.html.");
+});
+
+test("an exhausted save reports success instead of an unfinished answer", async () => {
+  const result = await runAgentLoop({
+    wire: [{ role: "user", content: "Собери сайт" }],
+    payload: { tool_choice: "required" },
+    send: async () =>
+      reply("", [
+        { id: "1", type: "function", function: { name: "save_my_text", arguments: "{}" } },
+      ]),
+    invoke: async () => JSON.stringify({ saved: true, name: "index.html" }),
+    split: (body) => ({ text: body.choices[0].message.content ?? "", reason: "" }),
+    calls: (body) =>
+      (body.choices[0].message.tool_calls ?? []).map((call) => ({
+        id: call.id,
+        name: call.function.name,
+        args: call.function.arguments,
+      })),
+    usage: () => undefined,
+    signal: new AbortController().signal,
+    writeRequested: true,
+    filesRequested: true,
+    hasChanges: () => true,
+    hasFiles: () => true,
+  });
+  assert.match(result.text, /^Готово/);
+  assert.doesNotMatch(result.text, /не завершила/);
+});
+
+test("a clarifying question stops the disk agent instead of a fake failure", async () => {
+  let sends = 0;
+  const result = await runAgentLoop({
+    wire: [{ role: "user", content: "Сделай сайт" }],
+    payload: { tool_choice: "required" },
+    send: async () => {
+      sends += 1;
+      return reply("Какой цвет фона сделать?");
+    },
+    invoke: async () => "{}",
+    split: (body) => ({ text: body.choices[0].message.content ?? "", reason: "" }),
+    calls: () => [],
+    usage: () => undefined,
+    signal: new AbortController().signal,
+    writeRequested: true,
+    filesRequested: true,
+    hasChanges: () => false,
+    hasFiles: () => false,
+  });
+  assert.equal(sends, 1);
+  assert.equal(result.text, "Какой цвет фона сделать?");
+});
+

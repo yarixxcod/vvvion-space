@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sitePath, siteMime, rewriteSiteImports } from "./site-bundle.ts";
+import { sitePath, siteMime, rewriteSiteImports, folderStyles } from "./site-bundle.ts";
 import { documentKind, isSiteAsset } from "./document-kind.ts";
 test("site paths resolve relative to HTML or module, including a root path", () => {
   assert.equal(sitePath("../styles/main.css", "pages/about.html"), "styles/main.css");
@@ -40,4 +40,14 @@ test("module imports support multiline, side effects, dynamic imports and re-exp
   assert.match(rewritten, /import '@vvvion\/scripts\/setup.js'/);
   assert.match(rewritten, /from '@vvvion\/scripts\/helper.js'/);
   assert.match(rewritten, /import\('@vvvion\/scripts\/helper.js'\)/);
+});
+
+test("preview attaches only css that sits beside the html file", () => {
+  assert.deepEqual(folderStyles(["styles.css", "index.html", "app.js", "README.md"], "index.html"), [
+    "styles.css",
+  ]);
+  assert.deepEqual(folderStyles(["a/page.html", "a/a.css", "b/b.css", "root.css"], "a/page.html"), [
+    "a/a.css",
+  ]);
+  assert.deepEqual(folderStyles(["a/page.html", "root.css"], "a/page.html"), []);
 });
