@@ -184,6 +184,15 @@ export function reasoningFields(model: string, enabled: boolean): Record<string,
   return { reasoning_effort: enabled ? "high" : "none" };
 }
 
+/** Tool turns must not send reasoning_effort=none: Ernie and other gateways then drop tool_calls and answer with text. */
+export function toolReasoningFields(model: string): Record<string, unknown> {
+  const id = model.toLowerCase();
+  if (id.includes("deepseek")) return { thinking: { type: "disabled" } };
+  if (/qwen|qwq/.test(id)) return { enable_thinking: false, chat_template_kwargs: { enable_thinking: false } };
+  if (id.includes("grok")) return { reasoning_effort: "low" };
+  return {};
+}
+
 /** One retry when a provider rejects the reasoning switch. Returns true if the body changed. */
 export function softenReasoning(payload: Record<string, unknown>, errorText: string): boolean {
   const lower = errorText.toLowerCase();

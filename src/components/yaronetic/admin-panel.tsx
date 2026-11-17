@@ -839,7 +839,7 @@ function TtsForm({
       </label>
       <label className="mt-2 block text-xs text-faint">
         Голос
-        <input className="field mt-1 font-mono text-sm" value={draft.voice} maxLength={40} placeholder="alloy" onChange={(event) => onChange({ voice: event.target.value })} />
+        <input className="field mt-1 font-mono text-sm" value={draft.voice} maxLength={80} placeholder="alloy" onChange={(event) => onChange({ voice: event.target.value })} />
       </label>
       <label className="mt-2 block text-xs text-faint">
         Эндпойнт

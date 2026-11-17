@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ThinkGate, extractPieces, reasoningFields, softenReasoning } from "./reasoning.ts";
+import { ThinkGate, extractPieces, reasoningFields, softenReasoning, toolReasoningFields } from "./reasoning.ts";
 
 test("reasoning_content stays out of the answer", () => {
   const pieces = extractPieces({
@@ -34,6 +34,8 @@ test("grok cannot take none, so off is the lowest accepted effort", () => {
   assert.equal(reasoningFields("grok-4.5", false).reasoning_effort, "low");
   assert.equal(reasoningFields("gpt-4.1", false).reasoning_effort, "none");
   assert.deepEqual(reasoningFields("deepseek-chat", false).thinking, { type: "disabled" });
+  assert.deepEqual(toolReasoningFields("ernie-5.5-flash"), {});
+  assert.equal(toolReasoningFields("grok-4").reasoning_effort, "low");
 });
 
 test("a rejected none is retried as low, an unknown field is dropped", () => {

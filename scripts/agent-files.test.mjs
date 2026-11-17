@@ -64,11 +64,12 @@ test("a weak model creates a folder, saves, reads and versions a disk file acros
       "@/lib/social/access": { assertActive: async (id) => assert.equal(id, "owner") },
       "@/lib/music/tags": {},
     });
-    const pack = await prepareDiskTools(
-      "owner",
-      "Создай папку и файл, прочитай и измени его",
-      () => {},
-    );
+    const pack = await prepareDiskTools("owner", "Создай папку и файл, прочитай и измени его", () => {});
+    assert.equal(pack.writeRequested, true);
+    assert.equal(pack.filesRequested, true);
+    const poem = await prepareDiskTools("owner", "Напиши короткое стихотворение про море", () => {});
+    assert.equal(poem.writeRequested, false);
+    assert.equal(poem.filesRequested, false);
     let step = 0;
     const used = [];
     const targets = [0, 1].map((i) => ({

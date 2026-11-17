@@ -163,6 +163,9 @@ export function createProviderRouter(
     failCurrent() {
       if (selected >= 0) failed.add(selected);
     },
+    forcePlain() {
+      if (selected >= 0) plain.add(selected);
+    },
     async send(payload: Record<string, unknown>): Promise<ChatAttempt> {
       for (let i = 0; i < targets.length; i++) {
         if (failed.has(i)) continue;
@@ -187,7 +190,7 @@ export function createProviderRouter(
           let result = await request();
           if (result.failed && payload.tools && [400, 404, 422].includes(result.response.status)) {
             const error = await result.response.clone().text();
-            if (result.unsupportedTools || /tool|function|unsupported parameter|инструмент|функци/i.test(error)) {
+            if (result.unsupportedTools || /tool|function|additionalproperties|unsupported parameter|инструмент|функци/i.test(error)) {
               plain.add(i);
               result = await request();
             }

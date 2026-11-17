@@ -739,7 +739,7 @@ type TtsSaveInput = ImageSaveInput & { voice: string };
 function voiceOf(value: unknown) {
   const voice = typeof value === "string" ? value.trim() : "";
   if (!voice) return "alloy";
-  if (!/^[A-Za-z0-9_-]{1,40}$/.test(voice)) throw new Error("Голос: латиница, цифры, _ и -");
+  if (!/^[\w./:-]{1,80}$/.test(voice)) throw new Error("Голос: латиница, цифры и символы . _ : / -");
   return voice;
 }
 

@@ -11,6 +11,15 @@ const TEXT =
   /^(text\/|application\/(json|xml|javascript|csv))|\.(txt|md|csv|json|xml|log|ts|js|py|yaml|yml)$/i;
 type FileRow = { id: string; name: string; mime: string; bytes: number; storage: "disk" | "mega" };
 
+/** A real save request. «Напиши стих» is not one — otherwise the answer is replaced by a disk error. */
+export function diskWriteIntent(text: string) {
+  const value = text || "";
+  if (/(сохран|запиш|записать|\bsave\b|\bwrite\b)/i.test(value)) return true;
+  const verb = /(созда|сдела|добав|напиш|написать|помести|полож|редакт|измени|дополн|update|append|edit|\bcreate\b)/i.test(value);
+  const target = /(файл|папк|диск|мега|html|сайт|страниц|документ|каталог|\bfile\b|\bfolder\b|\bdisk\b|\.(?:md|txt|json|html|csv)\b)/i.test(value);
+  return verb && target;
+}
+
 export async function prepareDiskTools(
   userId: string,
   requestText: string,
@@ -28,11 +37,7 @@ export async function prepareDiskTools(
   >();
   const writable = () => {
     signal?.throwIfAborted();
-    if (
-      !/(сохран|запиш|записать|созда|сдела.{0,80}(файл|папк)|редакт|измени|дополни|добавь|save|write|create|update|append|edit)/i.test(
-        requestText,
-      )
-    )
+    if (!diskWriteIntent(requestText))
       throw new Error("Для записи нужна прямая просьба пользователя в текущем сообщении");
     if (mutations >= 8)
       throw new Error(
@@ -357,14 +362,10 @@ export async function prepareDiskTools(
   };
   return {
     tools,
-    writeRequested:
-      /(сохран|запиш|напиш|написать|созда|сдела|помести|полож|добав|редакт|измени|дополн|save|write|create|update|append|edit)/i.test(
-        requestText,
-      ),
+    writeRequested: diskWriteIntent(requestText),
     filesRequested:
-      /(сохран|запиш|напиш|написать|созда|сдела|помести|полож|добав|редакт|измени|дополн|save|write|create|update|append|edit)/i.test(
-        requestText,
-      ) && /(файл|сайт|html|страниц|код|документ|\bfile\b|\bpage\b|\bsite\b)/i.test(requestText),
+      diskWriteIntent(requestText) &&
+      /(файл|сайт|html|страниц|код|документ|\bfile\b|\bpage\b|\bsite\b|\.(?:md|txt|html|json|csv)\b)/i.test(requestText),
     changes: () =>
       [...completed.values()].map(
         (value) =>

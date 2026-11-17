@@ -618,7 +618,7 @@ function AssistantBubble({
                 label="Озвучить"
                 onClick={() => {
                   setMore(false);
-                  void playSpeech(message.content);
+                  void playSpeech(message.content, unlockSpeech());
                 }}
               />
             ) : null}
@@ -781,12 +781,49 @@ let speechAudio: HTMLAudioElement | null = null;
 let speechGen = 0;
 const speechUrls = new Map<string, string>();
 const speechWatch = new Set<() => void>();
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
 function speechEmit() {
   for (const fn of speechWatch) fn();
 }
 
-async function playSpeech(text: string) {
+function unlockSpeech() {
+  const audio = new Audio();
+  audio.setAttribute("playsinline", "true");
+  audio.preload = "auto";
+  audio.src = SILENT_WAV;
+  void audio.play().then(() => {
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      /* some browsers reject a seek on a silent wav */
+    }
+  }).catch(() => undefined);
+  return audio;
+}
+
+async function rememberSpeech(clean: string, res: Response) {
+  const blob = await res.blob();
+  if (blob.size < 32) throw new Error("Голос не ответил");
+  const type = blob.type || "audio/mpeg";
+  if (type.includes("json") || type.startsWith("text/")) {
+    const message = await blob.text();
+    throw new Error(message.slice(0, 180) || "Голос не ответил");
+  }
+  try {
+    if ("caches" in window) {
+      const key = new Request(new URL(`/__vvvion_tts__/${speechHash(clean)}`, window.location.origin));
+      const cache = await caches.open("vvvion-tts");
+      await cache.put(key, new Response(blob.slice(0), { headers: { "content-type": type } }));
+    }
+  } catch {
+    /* playback does not depend on the cache */
+  }
+  return URL.createObjectURL(blob);
+}
+
+async function playSpeech(text: string, armed?: HTMLAudioElement) {
   const clean = speakable(text);
   if (clean.length < 2) return;
   if (speechNow === clean) {
@@ -798,17 +835,30 @@ async function playSpeech(text: string) {
   }
   const mine = ++speechGen;
   speechAudio?.pause();
+  const audio = armed ?? unlockSpeech();
+  speechAudio = audio;
   speechNow = clean;
   speechEmit();
   try {
     let url = speechUrls.get(clean);
     if (!url) {
-      const key = new Request(new URL(`/__vvvion_tts__/${speechHash(clean)}`, window.location.origin));
-      const cache = await caches.open("vvvion-tts");
-      let hit = await cache.match(key);
-      if (!hit) {
+      let hit: Response | undefined;
+      try {
+        if ("caches" in window) {
+          const key = new Request(new URL(`/__vvvion_tts__/${speechHash(clean)}`, window.location.origin));
+          hit = await (await caches.open("vvvion-tts")).match(key);
+        }
+      } catch {
+        hit = undefined;
+      }
+      if (hit) {
+        const blob = await hit.blob();
+        if (blob.size >= 32) url = URL.createObjectURL(blob);
+      }
+      if (!url) {
         const res = await fetch("/api/tts", {
           method: "POST",
+          credentials: "same-origin",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ text: clean }),
         });
@@ -816,13 +866,8 @@ async function playSpeech(text: string) {
           const body = (await res.json().catch(() => ({}))) as { message?: string };
           throw new Error(body.message || "Голос не ответил");
         }
-        const blob = await res.blob();
-        await cache.put(key, new Response(blob, { headers: { "content-type": blob.type || "audio/mpeg" } }));
-        hit = await cache.match(key);
+        url = await rememberSpeech(clean, res);
       }
-      const blob = hit ? await hit.blob() : null;
-      if (!blob) throw new Error("Голос не ответил");
-      url = URL.createObjectURL(blob);
       speechUrls.set(clean, url);
       if (speechUrls.size > 8) {
         const first = speechUrls.keys().next().value;
@@ -834,8 +879,7 @@ async function playSpeech(text: string) {
       }
     }
     if (mine !== speechGen) return;
-    const audio = new Audio(url);
-    speechAudio = audio;
+    audio.src = url;
     audio.onended = () => {
       if (speechAudio === audio) {
         speechNow = "";
@@ -848,7 +892,8 @@ async function playSpeech(text: string) {
     if (mine !== speechGen) return;
     speechNow = "";
     speechEmit();
-    toast.error(err instanceof Error ? err.message : "Голос не ответил");
+    const message = err instanceof Error ? err.message : "Голос не ответил";
+    toast.error(/notallowed|user gesture|interact/i.test(message) ? "Браузер заблокировал звук. Нажмите ещё раз." : message);
   }
 }
 
@@ -865,7 +910,7 @@ function SpeakButton({ text }: { text: string }) {
   if (clean.length < 2) return null;
   const on = speechNow === clean;
   return (
-    <Ghost label={on ? "Стоп" : "Озвучить"} onClick={() => void playSpeech(text)}>
+    <Ghost label={on ? "Стоп" : "Озвучить"} onClick={() => void playSpeech(text, on ? undefined : unlockSpeech())}>
       {on ? <Square className="size-3.5 fill-current" /> : <Volume2 className="size-4" />}
     </Ghost>
   );

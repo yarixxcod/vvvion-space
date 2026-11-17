@@ -11,7 +11,7 @@ function load(name) {
   return exports;
 }
 const { createProviderRouter } = load("provider-router");
-const { plainAgentReply, parseToolArguments } = load("agent-loop");
+const { plainAgentReply, parseToolArguments, embeddedToolCalls, toolCallsFromMessage } = load("agent-loop");
 const targets = [0, 1, 2].map((i) => ({
   url: String(i),
   headers: new Headers(),
@@ -176,6 +176,18 @@ test("weak-model JSON parser accepts only explicit action objects and rejects ma
       .call.name,
     "save_my_text",
   );
+  const tagged = embeddedToolCalls('<tool_call>{"name":"save_my_text","arguments":{"name":"a.md","text":"x"}}</tool_call>');
+  assert.equal(tagged[0].name, "save_my_text");
+  assert.equal(JSON.parse(tagged[0].args).text, "x");
+  const xml = embeddedToolCalls("<tool_call>\n<function=create_my_folder>\n<parameter=name>\nПланы\n</parameter>\n<parameter=storage>\ndisk\n</parameter>\n</function>\n</tool_call>");
+  assert.equal(xml[0].name, "create_my_folder");
+  assert.equal(JSON.parse(xml[0].args).storage, "disk");
+  assert.equal(embeddedToolCalls("Просто расскажу, без вызова.").length, 0);
+  const legacy = toolCallsFromMessage({ function_call: { name: "my_files", arguments: {} } });
+  assert.equal(legacy[0].name, "my_files");
+  const flat = toolCallsFromMessage({ tool_calls: [{ id: "call_1", name: "my_folders", arguments: "{\"storage\":\"disk\"}" }] });
+  assert.equal(flat[0].id, "call_1");
+  assert.equal(flat[0].name, "my_folders");
 });
 
 test('a provider error after visible text continues once without exposing an intermediate error', async()=>{
