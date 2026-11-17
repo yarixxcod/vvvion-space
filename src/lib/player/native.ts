@@ -66,6 +66,11 @@ export function nativeDuration(): number {
   return (last?.durationMs ?? 0) / 1000;
 }
 
+export function nativeBuffered(): number {
+  const ms = last?.bufferedMs ?? 0;
+  return Number.isFinite(ms) && ms > 0 ? ms / 1000 : 0;
+}
+
 function artOf(cover: string | null): string | undefined {
   if (!cover) return undefined;
   if (cover.startsWith("data:image/") || cover.startsWith("https://")) return cover;

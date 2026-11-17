@@ -131,3 +131,34 @@ export function subCopy(product: SubProduct, window: SubWindow) {
 export function subKind(product: SubProduct, window: SubWindow) {
   return `${product}_${window}`;
 }
+
+export function plainText(value: string) {
+  return value
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[[^\]]*]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]+)]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/[*_~]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The app loads notification pictures only from this site, and without cookies. */
+export function publicNotifyIcon(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const raw = value.trim();
+  if (!raw || raw.length > 300) return undefined;
+  const path = raw.startsWith("/api/avatar/") ? `https://vvvion.space${raw}` : raw;
+  let url: URL;
+  try {
+    url = new URL(path);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "https:") return undefined;
+  const host = url.hostname.toLowerCase();
+  if (host !== "vvvion.space" && !host.endsWith(".vvvion.space")) return undefined;
+  return url.toString();
+}
+

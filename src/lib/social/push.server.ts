@@ -6,6 +6,8 @@ import { stickerCode } from "@/lib/stickers";
 import {
   clipText,
   inQuietHours,
+  plainText,
+  publicNotifyIcon,
   pushPriority,
   pushTtl,
   PUSH_DEFAULTS,
@@ -253,7 +255,20 @@ async function claimOnce(userId: string, kind: string, refId: string) {
 export async function sendPush(
   userId: string,
   kind: PushKind,
-  payload: { id: string; title: string; body: string; url: string },
+  payload: {
+    id: string;
+    title: string;
+    body: string;
+    url: string;
+    preview?: string;
+    model?: string;
+    chat?: string;
+    ts?: string | number;
+    icon?: string;
+    group?: string;
+    kind?: string;
+    actions?: { title: string; url: string }[];
+  },
 ) {
   if (!validPushPath(payload.url)) return;
   const settings = await getPushSettings(userId);
@@ -271,13 +286,38 @@ export async function sendPush(
   const tokens = await sql<{ token: string }>`
     select token from push_tokens where user_id = ${userId} order by last_seen_at desc limit 10
   `;
-  const data = {
+  const data: Record<string, string> = {
     id: clipText(payload.id, 120),
     channel: kind,
-    title: clipText(payload.title, 80) || "vvvion",
-    body: clipText(payload.body, 180),
+    title: clipText(payload.title, 120) || "vvvion",
+    body: clipText(payload.body, 600),
     url: payload.url,
   };
+  const preview = payload.preview ? clipText(payload.preview, 600) : "";
+  const model = payload.model ? clipText(payload.model, 60) : "";
+  const chat = payload.chat ? clipText(payload.chat, 80) : "";
+  const icon = payload.icon ? publicNotifyIcon(payload.icon) : undefined;
+  const note = payload.kind ? clipText(payload.kind, 20) : "";
+  const group = payload.group ? clipText(payload.group, 80) : "";
+  if (preview) data.preview = preview;
+  if (model) data.model = model;
+  if (chat) data.chat = chat;
+  if (payload.ts != null && Number.isFinite(Number(payload.ts))) data.ts = String(Math.floor(Number(payload.ts)));
+  if (icon) data.icon = icon;
+  if (note) data.kind = note;
+  if (group) data.group = group;
+  const actions = payload.actions
+    ?.slice(0, 2)
+    .flatMap((item) => {
+      const title = clipText(item.title, 24);
+      return title && validPushPath(item.url) ? [{ title, url: item.url }] : [];
+    });
+  if (actions?.length) data.actions = JSON.stringify(actions);
+  const packed = new TextEncoder().encode(JSON.stringify(data)).byteLength;
+  if (packed > 3800 && data.preview) {
+    data.preview = data.preview.slice(0, 180);
+    if (new TextEncoder().encode(JSON.stringify(data)).byteLength > 3800) delete data.preview;
+  }
   for (const row of tokens) {
     try {
       const res = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(project)}/messages:send`, {
@@ -323,6 +363,10 @@ export async function pushRoomMessage(roomId: string, fromUserId: string, body: 
   const name = clipText(await senderName(fromUserId), 80) || "Участник";
   const raw = stickerCode(body) ? "Стикер" : body.trim() || (attached ? "Вложение" : "Сообщение");
   const text = clipText(raw, 120) || "Новое сообщение";
+  const room = await sql<{ title: string | null; kind: string }>`select title, kind from rooms where id = ${roomId} limit 1`;
+  const face = await sql<{ image: string | null }>`select image from "user" where id = ${fromUserId} limit 1`;
+  const chat = room[0]?.kind === "group" ? clipText(room[0]?.title || "", 80) : "";
+  const icon = publicNotifyIcon(face[0]?.image);
   await Promise.all(
     members.map(async (member) => {
       const settings = await getPushSettings(member.user_id);
@@ -331,15 +375,26 @@ export async function pushRoomMessage(roomId: string, fromUserId: string, body: 
       if (!(await claimDialog(member.user_id, roomId))) return;
       await sendPush(member.user_id, "messages", {
         id: `msg:${roomId}`,
+        kind: "message",
         title: name,
         body: settings.preview ? text : "Новое сообщение",
+        chat: chat || undefined,
+        preview: settings.preview ? text : undefined,
+        ts: Date.now(),
+        icon,
         url: `/messages/${roomId}`,
       });
     }),
   );
 }
 
-export async function pushAiReady(userId: string, chatId: string, messageId: string, clientGone: boolean) {
+export async function pushAiReady(
+  userId: string,
+  chatId: string,
+  messageId: string,
+  clientGone: boolean,
+  extra?: { model?: string; preview?: string },
+) {
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(chatId) || !/^[A-Za-z0-9_-]{8,80}$/.test(messageId)) return;
   if (!clientGone && (await seenRecently(userId))) return;
   const sql = await getSql();
@@ -347,10 +402,18 @@ export async function pushAiReady(userId: string, chatId: string, messageId: str
     select title from saved_chats where id = ${chatId} and user_id = ${userId} limit 1
   `;
   const title = clipText(rows[0]?.title || "", 80) || "Чат с ИИ";
+  const settings = await getPushSettings(userId);
+  const preview = settings.preview ? clipText(plainText(extra?.preview || ""), 600) : "";
+  const model = clipText(extra?.model || "", 60);
   await sendPush(userId, "ai", {
     id: `ai:${chatId}:${messageId}`,
+    kind: "ai_ready",
     title,
+    model: model || undefined,
+    chat: title,
     body: "Ответ готов",
+    preview: preview || undefined,
+    ts: Date.now(),
     url: `/?chat=${chatId}`,
   });
 }
@@ -360,6 +423,7 @@ export async function pushAiFail(userId: string, chatId: string, messageId: stri
   if (!clientGone && (await seenRecently(userId))) return;
   await sendPush(userId, "ai", {
     id: `ai-fail:${chatId}:${messageId}`,
+    kind: "ai_fail",
     title: "Не удалось получить ответ",
     body: "Попробуйте ещё раз или выберите другую модель",
     url: `/?chat=${chatId}`,

@@ -97,7 +97,7 @@ function disarmRun(userId: string | null, track: { chatId: string } | null) {
 	if (!userId || !track) return;
 	chatRuns.delete(chatRunKey(userId, track.chatId));
 }
-function settleReply(request: Request, userId: string | null, track: { chatId: string; messageId: string } | null, sink: ReturnType<typeof blankSink>, clientGone = false) {
+function settleReply(request: Request, userId: string | null, track: { chatId: string; messageId: string } | null, sink: ReturnType<typeof blankSink>, clientGone = false, note?: { model?: string }) {
 	disarmRun(userId, track);
 	if (!userId || !track) return Promise.resolve();
 	const stopped = takeStop(userId, track.chatId);
@@ -122,7 +122,10 @@ function settleReply(request: Request, userId: string | null, track: { chatId: s
 				.then((mod) => {
 					const failed = Boolean(error) && !content && !sink.imageUrl;
 					if (failed) return mod.pushAiFail(userId, track.chatId, track.messageId, left);
-					return mod.pushAiReady(userId, track.chatId, track.messageId, left);
+					return mod.pushAiReady(userId, track.chatId, track.messageId, left, {
+						model: note?.model,
+						preview: content,
+					});
 				})
 				.catch(() => undefined),
 		);
@@ -144,7 +147,7 @@ function keep(work: Promise<unknown>, request?: Request) {
 	}
 	return pending;
 }
-function holdStream(stream: ReadableStream<Uint8Array>, request: Request, userId: string | null, track: { chatId: string; messageId: string } | null, sink: ReturnType<typeof blankSink>) {
+function holdStream(stream: ReadableStream<Uint8Array>, request: Request, userId: string | null, track: { chatId: string; messageId: string } | null, sink: ReturnType<typeof blankSink>, note?: { model?: string }) {
 	let release = () => {};
 	const done = new Promise<void>((resolve) => {
 		release = resolve;
@@ -185,7 +188,7 @@ function holdStream(stream: ReadableStream<Uint8Array>, request: Request, userId
 		} catch {
 			markGone();
 		} finally {
-			void tail.then(() => settleReply(request, userId, track, sink, clientGone)).finally(release);
+			void tail.then(() => settleReply(request, userId, track, sink, clientGone, note)).finally(release);
 		}
 	})();
 	return drainToClient(forClient, markGone);
@@ -1094,7 +1097,7 @@ export async function handleChat(request: Request): Promise<Response> {
 						let stream = streamFromText(direct.text, direct.usage, reasoningOn ? direct.reason : "", sink);
 						if (limitNotice) stream = withLead(stream, sse("limit", limitNotice));
 						const lead = body.webSearch === true ? sse("sources", { sources, search: searchSummary }) : null;
-						return seal(sseResponse(holdStream(withLead(stream, lead), request, actorUser, track, sink)));
+						return seal(sseResponse(holdStream(withLead(stream, lead), request, actorUser, track, sink, { model })));
 					}
 					if (wire.some((item) => item.role === "tool")) {
 						const note = "Ниже результаты инструментов файлового агента/MCP. Ответь пользователю по ним и не выдумывай то, чего в результатах нет.";
@@ -1193,7 +1196,7 @@ export async function handleChat(request: Request): Promise<Response> {
 			stream = streamFromText(parts.text, usage, reasoningOn ? parts.reason : "", sink);
 		}
 		if (limitNotice) stream = withLead(stream, sse("limit", limitNotice));
-		const outgoing = holdStream(withLead(stream, lead), request, actorUser, track, sink);
+		const outgoing = holdStream(withLead(stream, lead), request, actorUser, track, sink, { model });
 		return seal(sseResponse(outgoing));
 		} finally {
 			releaseWork();
@@ -1398,7 +1401,7 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 				unread: true
 			}), request);
 		}
-		return seal(sseResponse(holdStream(stream, request, userId, track, sink)));
+		return seal(sseResponse(holdStream(stream, request, userId, track, sink, { model })));
 		} finally {
 			releaseWork();
 		}

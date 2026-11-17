@@ -1,6 +1,10 @@
 import { getBearerToken } from "@/lib/auth/client";
+import { publicNotifyIcon } from "@/lib/social/push-policy";
 
 type NotifyChannel = "messages" | "ai" | "subs" | "player" | "money" | "security" | "system";
+
+type NotifyAction = { title: string; url: string };
+type NotifyKind = "ai_ready" | "ai_fail" | "message" | "info";
 
 type VvvionApp = {
   isApp?: boolean;
@@ -12,6 +16,14 @@ type VvvionApp = {
     body?: string;
     url?: string;
     onlyWhenBackground?: boolean;
+    preview?: string;
+    model?: string;
+    chat?: string;
+    ts?: number;
+    icon?: string;
+    group?: string;
+    actions?: NotifyAction[];
+    kind?: NotifyKind;
   }) => boolean;
   cancelNotification?: (id: string) => void;
   requestNotificationPermission?: () => void;
@@ -168,13 +180,35 @@ export function appNotify(payload: {
   body?: string;
   url?: string;
   onlyWhenBackground?: boolean;
+  preview?: string;
+  model?: string;
+  chat?: string;
+  ts?: number;
+  icon?: string;
+  group?: string;
+  actions?: NotifyAction[];
+  kind?: NotifyKind;
 }) {
   if (!isApp()) return false;
   try {
+    const icon = payload.icon ? publicNotifyIcon(payload.icon) : undefined;
+    const group = payload.group?.trim().slice(0, 80);
+    const actions = payload.actions?.slice(0, 2).flatMap((item) => {
+      const title = item.title?.trim().slice(0, 24);
+      if (!title || typeof item.url !== "string" || !item.url.startsWith("/")) return [];
+      return [{ title, url: item.url }];
+    });
     return appHas("notify") && !!window.VvvionApp?.notify?.({
       ...payload,
+      id: payload.id.slice(0, 80),
       title: payload.title.slice(0, 80),
       body: payload.body?.slice(0, 180),
+      preview: payload.preview ? payload.preview.slice(0, 1500) : undefined,
+      model: payload.model?.slice(0, 60),
+      chat: payload.chat?.slice(0, 80),
+      icon,
+      group: group || undefined,
+      actions: actions?.length ? actions : undefined,
     });
   } catch {
     return false;

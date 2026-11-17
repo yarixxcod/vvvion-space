@@ -9,6 +9,7 @@ const js = ts.transpileModule(readFileSync("src/lib/app-bridge.ts", "utf8"), {
 const exports = {};
 new Function("require", "exports", js)((id) => {
   if (id === "@/lib/auth/client") return { getBearerToken: () => "" };
+  if (id === "@/lib/social/push-policy") return { publicNotifyIcon: () => undefined };
   throw new Error(id);
 }, exports);
 

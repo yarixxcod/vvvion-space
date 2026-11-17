@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { LoaderMark, PageLoader } from "@/components/yaronetic/page-loader";
 import { playSound } from "@/lib/sounds";
 import { appBadge, appNotify, cancelAppNotification, isApp, messagePreviewOn } from "@/lib/app-bridge";
+import { publicNotifyIcon } from "@/lib/social/push-policy";
 import { haptic } from "@/lib/haptic";
 import { loadError } from "@/lib/load-error";
 import { useCircleNest } from "@/lib/circle-history";
@@ -136,11 +137,17 @@ export function useCircleUnread(enabled: boolean) {
             if (prev == null) continue;
             if (document.hidden && room.unread > prev) {
               const text = (room.preview || "Новое сообщение").slice(0, 120);
+              const shown = messagePreviewOn();
               appNotify({
                 id: `msg:${room.id}`,
                 channel: "messages",
+                kind: "message",
                 title: room.title.slice(0, 80) || "Сообщение",
-                body: messagePreviewOn() ? text : "Новое сообщение",
+                body: shown ? text : "Новое сообщение",
+                preview: shown ? text : undefined,
+                chat: room.kind === "group" ? room.title : undefined,
+                icon: publicNotifyIcon(room.image),
+                ts: Date.parse(room.at) || Date.now(),
                 url: `/messages/${room.id}`,
               });
             } else if (room.unread === 0 && prev > 0) {

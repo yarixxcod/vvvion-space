@@ -196,6 +196,8 @@ function bindSpeaker(node: HtmlNode) {
   speaker.addEventListener("playing", pokeTrack);
   speaker.removeEventListener("loadedmetadata", pokeTrack);
   speaker.addEventListener("loadedmetadata", pokeTrack);
+  speaker.removeEventListener("progress", pokeTrack);
+  speaker.addEventListener("progress", pokeTrack);
 }
 
 function mountSpeaker(node: HtmlNode) {
@@ -218,6 +220,7 @@ function ownSpeaker(): HtmlNode {
   node.addEventListener("ended", onSpeakerEnded);
   node.addEventListener("playing", pokeTrack);
   node.addEventListener("loadedmetadata", pokeTrack);
+  node.addEventListener("progress", pokeTrack);
   return node;
 }
 
@@ -324,6 +327,25 @@ export function trackLength(): number {
   const node = elementOf(live?.howl);
   const value = node?.duration ?? 0;
   return Number.isFinite(value) ? value : 0;
+}
+
+export type BufferSpan = { start: number; end: number };
+
+export function trackBuffered(): BufferSpan[] {
+  const node = elementOf(live?.howl) ?? (live ? speaker : null);
+  const ranges = node?.buffered;
+  if (!ranges) return [];
+  const spans: BufferSpan[] = [];
+  try {
+    for (let i = 0; i < ranges.length; i += 1) {
+      const start = ranges.start(i);
+      const end = ranges.end(i);
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) spans.push({ start, end });
+    }
+  } catch {
+    return [];
+  }
+  return spans;
 }
 
 export function trackIsPlaying(): boolean {

@@ -7,10 +7,11 @@ import { coverUrl, musicBits, type MusicTags } from "@/lib/music/tags";
 import { loadTags } from "@/lib/music/load";
 import { parseLrc, type LrcLine } from "@/lib/music/lrc";
 import { findLyrics } from "@/lib/music/lyrics";
-import { setTrackEnded, setTrackFailed, trackFormat, trackIsPlaying, trackLength, trackPlay, trackSeek, trackStart, trackStop, trackToggle, watchTrack } from "@/lib/sounds";
+import { setTrackEnded, setTrackFailed, trackBuffered, trackFormat, trackIsPlaying, trackLength, trackPlay, trackSeek, trackStart, trackStop, trackToggle, watchTrack, type BufferSpan } from "@/lib/sounds";
 import { initMediaSessionHandlers, syncMediaSession } from "@/lib/player/media-session";
 import {
   nativeAttach,
+  nativeBuffered,
   nativeDuration,
   nativeMeta,
   nativeNext,
@@ -661,81 +662,80 @@ function clock(value: number) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
-const WAVE_W = 360;
-const PERIOD = 48;
-
-function ribbonPath(): string {
-  const top: string[] = [];
-  const bot: string[] = [];
-  const span = WAVE_W + PERIOD;
-  const mid = 24;
-  const thick = 5.5;
-  for (let x = 0; x <= span; x += 4) {
-    const y = Math.sin((x / PERIOD) * Math.PI * 2) * 7 + Math.sin((x / PERIOD) * Math.PI * 4) * 2.4;
-    top.push(`${x.toFixed(1)} ${(mid + y - thick).toFixed(1)}`);
-    bot.push(`${x.toFixed(1)} ${(mid + y + thick).toFixed(1)}`);
-  }
-  return `M ${top.join(" L ")} L ${[...bot].reverse().join(" L ")} Z`;
+function sameSpans(prev: BufferSpan[], next: BufferSpan[]) {
+  if (prev.length !== next.length) return false;
+  return prev.every((span, index) => span.start === next[index]?.start && span.end === next[index]?.end);
 }
 
-const RIBBON = ribbonPath();
+function bufferLayout(duration: number, spans: BufferSpan[]) {
+  if (!(duration > 0)) return [];
+  return spans.flatMap((span) => {
+    const left = Math.min(100, Math.max(0, (span.start / duration) * 100));
+    const right = Math.min(100, Math.max(0, (span.end / duration) * 100));
+    const width = right - left;
+    return width > 0.4 ? [{ left, width }] : [];
+  });
+}
 
-function WaveSeek({ progress, onSeek }: { progress: number; onSeek: (value: number) => void }) {
-  const [motion, setMotion] = useState(true);
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const apply = () => setMotion(!media.matches);
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, []);
-  function at(event: ReactPointerEvent<HTMLDivElement>) {
+function ClassicSeek({
+  at,
+  duration,
+  spans,
+  onSeek,
+  tone,
+}: {
+  at: number;
+  duration: number;
+  spans: BufferSpan[];
+  onSeek: (value: number) => void;
+  tone: "ink" | "paper";
+}) {
+  const progress = duration > 0 ? Math.min(1, Math.max(0, at / duration)) : 0;
+  const cached = bufferLayout(duration, spans);
+  const ink = tone === "ink";
+  function atRatio(event: ReactPointerEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = rect.width ? (event.clientX - rect.left) / rect.width : 0;
     onSeek(Math.min(1, Math.max(0, ratio)));
   }
-  const width = Math.max(0, Math.min(WAVE_W, progress * WAVE_W));
   return (
     <div
       role="slider"
       tabIndex={0}
       aria-label="Место в треке"
       aria-valuemin={0}
-      aria-valuemax={1000}
-      aria-valuenow={Math.round(progress * 1000)}
-      className="relative h-12 touch-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      aria-valuemax={duration > 0 ? Math.round(duration) : 0}
+      aria-valuenow={Math.round(at)}
+      aria-valuetext={duration > 0 ? `${clock(at)} из ${clock(duration)}` : clock(at)}
+      className="relative flex h-8 touch-none items-center outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        at(event);
+        atRatio(event);
       }}
       onPointerMove={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) at(event);
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) atRatio(event);
       }}
       onKeyDown={(event) => {
         if (event.key === "ArrowRight") onSeek(Math.min(1, progress + 0.02));
         if (event.key === "ArrowLeft") onSeek(Math.max(0, progress - 0.02));
       }}
     >
-      <svg viewBox={`0 0 ${WAVE_W} 48`} preserveAspectRatio="none" className="h-full w-full overflow-hidden" aria-hidden="true">
-        <defs>
-          <clipPath id="vvvion-played">
-            <rect x="0" y="0" width={width} height="48" />
-          </clipPath>
-        </defs>
-        <g>
-          {motion ? <animateTransform attributeName="transform" type="translate" from="0 0" to={`-${PERIOD} 0`} dur="1.8s" repeatCount="indefinite" /> : null}
-          <path d={RIBBON} fill="rgb(255 255 255 / 0.28)" />
-        </g>
-        <g clipPath="url(#vvvion-played)">
-          <g>
-            {motion ? <animateTransform attributeName="transform" type="translate" from="0 0" to={`-${PERIOD} 0`} dur="1.8s" repeatCount="indefinite" /> : null}
-            <path d={RIBBON} fill="#c4b5e8" />
-          </g>
-        </g>
-      </svg>
+      <div className={cn("relative h-1.5 w-full overflow-hidden rounded-full", ink ? "bg-white/20" : "bg-line")}>
+        {cached.map((span) => (
+          <span
+            key={`${span.left}-${span.width}`}
+            className={cn("absolute inset-y-0", ink ? "bg-white/45" : "bg-faint/55")}
+            style={{ left: `${span.left}%`, width: `${span.width}%` }}
+          />
+        ))}
+        <span className={cn("absolute inset-y-0 left-0", ink ? "bg-[#c4b5e8]" : "bg-accent")} style={{ width: `${progress * 100}%` }} />
+      </div>
       <span
-        className="pointer-events-none absolute top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-[#c4b5e8] bg-white shadow-[0_0_0_6px_rgb(196_181_232_/_0.28)]"
-        style={{ left: `${Math.min(100, Math.max(0, progress * 100))}%` }}
+        className={cn(
+          "pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow",
+          ink ? "border-[#c4b5e8] bg-white" : "border-accent bg-bg",
+        )}
+        style={{ left: `${progress * 100}%` }}
       />
     </div>
   );
@@ -931,6 +931,7 @@ export function MusicDock() {
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const [dur, setDur] = useState(0);
+  const [cache, setCache] = useState<BufferSpan[]>([]);
   const trackSrc = deck.track?.src ?? "";
 
   useEffect(() => {
@@ -955,6 +956,7 @@ export function MusicDock() {
     if (!trackSrc) {
       setAt(0);
       setDur(0);
+      setCache([]);
       setPlaying(false);
       return;
     }
@@ -963,6 +965,14 @@ export function MusicDock() {
       const span = lengthNow();
       if (Number.isFinite(pos)) setAt(pos);
       if (span > 0) setDur(span);
+      if (nativeOwns()) {
+        const end = nativeBuffered();
+        const next = end > 0 ? [{ start: 0, end }] : [];
+        setCache((prev) => sameSpans(prev, next) ? prev : next);
+      } else {
+        const next = trackBuffered();
+        setCache((prev) => sameSpans(prev, next) ? prev : next);
+      }
       setPlaying(playingNow());
     };
     pull();
@@ -986,7 +996,7 @@ export function MusicDock() {
       root.style.removeProperty("--player-dock");
       return;
     }
-    root.style.setProperty("--player-dock", "calc(4.75rem + max(0.75rem, env(safe-area-inset-bottom)))");
+    root.style.setProperty("--player-dock", "calc(6.75rem + max(0.75rem, env(safe-area-inset-bottom)))");
     return () => {
       root.style.removeProperty("--player-dock");
     };
@@ -995,7 +1005,6 @@ export function MusicDock() {
   if (!booted) return null;
   if (!deck.track) return <SavedQueueBar />;
   const current = deck.track;
-  const progress = dur > 0 ? Math.min(1, at / dur) : 0;
   const facts = [current.album, current.genre, musicBits(current, 0)].filter(Boolean).join(" · ");
 
   function toggle() {
@@ -1066,10 +1075,10 @@ export function MusicDock() {
               </div>
             )}
             <div className="px-6 pb-8">
-              <WaveSeek progress={progress} onSeek={seek} />
-              <div className="mt-1 flex justify-between text-xs tabular-nums text-white/60">
+              <ClassicSeek at={at} duration={dur} spans={cache} onSeek={seek} tone="ink" />
+              <div className="mt-1 flex justify-between text-xs tabular-nums text-white/70">
                 <span>{clock(at)}</span>
-                <span>{clock(dur)}</span>
+                <span>{dur > 0 ? clock(dur) : "—:—"}</span>
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <button type="button" className={cn("press grid size-11 place-items-center rounded-full", deck.shuffle ? "text-white" : "text-white/40")} aria-label="Перемешать" aria-pressed={deck.shuffle} onClick={toggleShuffle}>
@@ -1098,34 +1107,41 @@ export function MusicDock() {
           </div>
         </div>
       ) : (
-        <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[90] flex items-center gap-2 rounded-2xl border border-line bg-elev px-2 py-2 shadow-[var(--shadow)]">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button type="button" className="press shrink-0" onClick={() => setMode("full")} aria-label={current.title}>
-              {current.cover ? <img src={current.cover} alt="" className="size-11 rounded-xl object-cover" /> : (
-                <span className="grid size-11 place-items-center rounded-xl bg-subtle">
-                  <Music2 className="size-4" />
-                </span>
-              )}
-            </button>
-            <span className="min-w-0 flex-1">
-              <button type="button" className="press block max-w-full truncate text-left text-sm" onClick={() => setMode("full")}>{current.title}</button>
-              <span className="block truncate text-xs leading-snug text-faint">
-                {current.artist ? <ArtistNames name={current.artist} className="text-faint" /> : tx({ ru: "Музыка", en: "Music", kk: "Музыка" })}
-              </span>
-            </span>
+        <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[90] rounded-2xl border border-line bg-elev px-2 pt-1.5 pb-2 shadow-[var(--shadow)]">
+          <ClassicSeek at={at} duration={dur} spans={cache} onSeek={seek} tone="paper" />
+          <div className="mb-1 flex justify-between px-1 text-[11px] tabular-nums text-faint">
+            <span>{clock(at)}</span>
+            <span>{dur > 0 ? clock(dur) : "—:—"}</span>
           </div>
-          <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Назад" onClick={prev}>
-            <SkipBack className="size-4 fill-current" />
-          </button>
-          <button type="button" className="press grid size-10 place-items-center rounded-full bg-accent text-accent-fg" aria-label={playing ? "Пауза" : "Слушать"} onClick={toggle}>
-            {playing ? <Pause className="size-4" /> : <Play className="size-4 fill-current" />}
-          </button>
-          <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Дальше" onClick={next}>
-            <SkipForward className="size-4 fill-current" />
-          </button>
-          <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Закрыть" onClick={clearTrack}>
-            <X className="size-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <button type="button" className="press shrink-0" onClick={() => setMode("full")} aria-label={current.title}>
+                {current.cover ? <img src={current.cover} alt="" className="size-11 rounded-xl object-cover" /> : (
+                  <span className="grid size-11 place-items-center rounded-xl bg-subtle">
+                    <Music2 className="size-4" />
+                  </span>
+                )}
+              </button>
+              <span className="min-w-0 flex-1">
+                <button type="button" className="press block max-w-full truncate text-left text-sm" onClick={() => setMode("full")}>{current.title}</button>
+                <span className="block truncate text-xs leading-snug text-faint">
+                  {current.artist ? <ArtistNames name={current.artist} className="text-faint" /> : tx({ ru: "Музыка", en: "Music", kk: "Музыка" })}
+                </span>
+              </span>
+            </div>
+            <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Назад" onClick={prev}>
+              <SkipBack className="size-4 fill-current" />
+            </button>
+            <button type="button" className="press grid size-10 place-items-center rounded-full bg-accent text-accent-fg" aria-label={playing ? "Пауза" : "Слушать"} onClick={toggle}>
+              {playing ? <Pause className="size-4" /> : <Play className="size-4 fill-current" />}
+            </button>
+            <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Дальше" onClick={next}>
+              <SkipForward className="size-4 fill-current" />
+            </button>
+            <button type="button" className="press grid size-9 place-items-center rounded-full text-muted" aria-label="Закрыть" onClick={clearTrack}>
+              <X className="size-4" />
+            </button>
+          </div>
         </div>
       )}
     </>

@@ -32,7 +32,8 @@ import { applyPaper, readStoredPaper, PREF_PAPER, type PaperId } from "@/lib/ai/
 import { readLivePersona } from "@/lib/social/persona-live";
 import { listImageModels, listModels } from "@/lib/social/admin";
 import { getBearerToken } from "@/lib/auth/client";
-import { appNotify, isApp } from "@/lib/app-bridge";
+import { appNotify, isApp, messagePreviewOn } from "@/lib/app-bridge";
+import { plainText } from "@/lib/social/push-policy";
 import { haptic } from "@/lib/haptic";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
@@ -1025,11 +1026,18 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         setStreaming(false);
         setStreamId(null);
         if (isApp() && document.hidden && !stopped && !left) {
+          const chatTitle = chatsRef.current.find((item) => item.id === chatId)?.title?.trim();
+          const preview = messagePreviewOn() ? plainText(acc).slice(0, 1500) : "";
           appNotify({
             id: `ai:${chatId}:${asstId}`,
             channel: "ai",
+            kind: "ai_ready",
             title: (modelLabel || "Чат с ИИ").slice(0, 80),
+            model: modelLabel || undefined,
+            chat: chatTitle || undefined,
             body: "Ответ готов",
+            preview: preview || undefined,
+            ts: Date.now(),
             url: `/?chat=${chatId}`,
           });
         }

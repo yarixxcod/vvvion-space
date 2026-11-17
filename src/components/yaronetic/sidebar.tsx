@@ -426,8 +426,13 @@ function HistoryItem({
 }) {
   const lang = useLang();
   const [menu, setMenu] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const row = useRef<HTMLDivElement>(null);
   const item = useRef<HTMLLIElement>(null);
+  const hideTimer = useRef(0);
+  useEffect(() => {
+    return () => window.clearTimeout(hideTimer.current);
+  }, []);
   useEffect(() => {
     if (!menu) return;
     function dismiss(event: PointerEvent) {
@@ -444,12 +449,20 @@ function HistoryItem({
     };
   }, [menu]);
   const mode = useRef<"open" | "delete" | "close">("close");
+  function showSwipe() {
+    setRevealed(true);
+  }
+  function hideSwipe() {
+    window.clearTimeout(hideTimer.current);
+    setRevealed(false);
+  }
   const swipe = useSwipe({
     enabled: surface && !editing,
     onMove(dx) {
       const x = Math.max(-144, Math.min(0, dx));
       if (!row.current) return;
       if (document.documentElement.classList.contains("vv-reduce-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (dx < -2) showSwipe();
       row.current.style.transform = `translateX(${x}px)`;
     },
     commit(dx, velocity) {
@@ -460,23 +473,27 @@ function HistoryItem({
       if (mode.current === "delete") {
         haptic("heavy");
         if (row.current) row.current.style.transform = "";
+        hideSwipe();
         onAskDelete();
         return;
       }
+      showSwipe();
       if (row.current) row.current.style.transform = "translateX(-144px)";
     },
     onCancel() {
       if (!row.current) return;
       row.current.style.transition = "transform .18s";
       row.current.style.transform = "";
-      window.setTimeout(() => {
+      window.clearTimeout(hideTimer.current);
+      hideTimer.current = window.setTimeout(() => {
         if (row.current) row.current.style.transition = "";
+        if (mode.current === "close") setRevealed(false);
       }, 200);
     },
   });
   return (
-    <li ref={item} className={cn("group relative mb-0.5 rounded-xl", menu ? "z-10" : "")}>
-      {surface ? (
+    <li ref={item} className={cn("group relative isolate mb-0.5 overflow-hidden rounded-xl", menu ? "z-10" : "")}>
+      {surface && revealed ? (
         <div className="absolute inset-y-0 right-0 flex">
           <button type="button" className="w-[72px] bg-subtle text-xs" onClick={onPin}>
             {pinned ? (lang === "en" ? "Unpin" : "Открепить") : lang === "en" ? "Pin" : "Закрепить"}

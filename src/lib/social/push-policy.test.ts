@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clipText, subCopy, subRef, subWindow, validPushPath, validPushToken } from "./push-policy.ts";
+import { clipText, plainText, publicNotifyIcon, subCopy, subRef, subWindow, validPushPath, validPushToken } from "./push-policy.ts";
 
 test("push token length and control characters", () => {
   assert.equal(validPushToken("a".repeat(99)), false);
@@ -30,4 +30,8 @@ test("subscription windows do not overlap and the end date is the dedup key", ()
   assert.equal(subCopy("mega", "3d").url, "/disk");
   assert.equal(subCopy("premium", "1d").body, "Премиум закончится завтра");
   assert.equal(clipText("  привет\nмир  ", 20), "привет мир");
+  assert.equal(plainText("**Ответ** [сайт](https://vvvion.space) `код`"), "Ответ сайт код");
+  assert.equal(publicNotifyIcon("/api/avatar/user-1?v=2"), "https://vvvion.space/api/avatar/user-1?v=2");
+  assert.equal(publicNotifyIcon("https://vvvion.space/icon-192.png"), "https://vvvion.space/icon-192.png");
+  assert.equal(publicNotifyIcon("https://evil.example/a.png"), undefined);
 });
