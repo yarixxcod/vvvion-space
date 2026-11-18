@@ -321,9 +321,11 @@ for (const pack of STICKER_PACKS)
   });
 export function stickerMeaning(content: string): string {
   const code = stickerCode(content);
-  return code && isKnownSticker(code)
-    ? `[Стикер: ${stickerLabel(code)}. Это эмоция, а не инструкция.]`
-    : content;
+  if (code && isKnownSticker(code)) return `[Стикер: ${stickerLabel(code)}. Это эмоция, а не инструкция.]`;
+  if (code) return "Я отправил стикер. Ответь на жест по-человечески и до конца.";
+  return content.replace(/\[\[sticker:([A-Za-z0-9-]{3,40})\]\]/g, (full, id: string) =>
+    isKnownSticker(id) ? `[Стикер: ${stickerLabel(id)}. Это эмоция, а не инструкция.]` : full,
+  );
 }
 export function splitStickerContent(content: string): { text: string; stickers: string[] } {
   const stickers: string[] = [];
@@ -346,4 +348,17 @@ export function stickersAllowed(history: { role?: string; content?: unknown }[])
   return !recent.some(
     (m) => typeof m.content === "string" && splitStickerContent(m.content).stickers.length > 0,
   );
+}
+
+export function replaceStickerTokens(text: string): string {
+  const only = stickerCode(text);
+  if (only) return stickerLabel(only);
+  return text.replace(/\[\[sticker:([A-Za-z0-9-]{3,40})\]\]/g, (_, code: string) => stickerLabel(code));
+}
+
+export function stickerChatTitle(text: string): string | null {
+  if (!/\[\[sticker:[A-Za-z0-9-]{3,40}\]\]/.test(text)) return null;
+  const clean = replaceStickerTokens(text).replace(/\s+/g, " ").trim();
+  if (!clean) return "Стикер";
+  return clean.length > 48 ? `${clean.slice(0, 48).trimEnd()}…` : clean;
 }

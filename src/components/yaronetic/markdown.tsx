@@ -1,6 +1,6 @@
 import type { Source } from "@/lib/ai/types";
 import { httpUrl, sourceKey } from "@/lib/ai/search-rank";
-import { createContext, useContext, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -414,52 +414,6 @@ function MathView({ tex, display, raw }: { tex: string; display: boolean; raw: s
   return <span className={display ? "math-display" : "math-inline"} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-function useStreamText(text: string, live?: boolean) {
-  const target = useRef(text);
-  const liveRef = useRef(Boolean(live));
-  const started = useRef(false);
-  target.current = text;
-  liveRef.current = Boolean(live);
-  if (live) started.current = true;
-  const [shown, setShown] = useState(() => (live ? "" : text));
-  useEffect(() => {
-    if (!started.current) {
-      setShown(target.current);
-      return;
-    }
-    let raf = 0;
-    let stop = false;
-    const tick = () => {
-      if (stop) return;
-      let more = false;
-      setShown((current) => {
-        const goal = target.current;
-        if (!goal.startsWith(current)) {
-          more = liveRef.current;
-          return goal;
-        }
-        const behind = goal.length - current.length;
-        if (!behind) {
-          more = liveRef.current;
-          return current;
-        }
-        const step = Math.min(behind, behind > 2000 ? 36 : behind > 800 ? 18 : 8);
-        const next = goal.slice(0, current.length + step);
-        more = liveRef.current || next.length < goal.length;
-        return next;
-      });
-      if (more) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      stop = true;
-      cancelAnimationFrame(raf);
-    };
-  }, [live]);
-  if (!started.current) return text;
-  return shown;
-}
-
 function AskView({
   raw,
   closed,
@@ -516,8 +470,7 @@ export function Markdown({
   askNote?: string;
   onAsk?: (text: string) => void;
 }) {
-  const shown = useStreamText(text, live);
-  const parts = useMemo(() => splitQuestionText(shown), [shown]);
+  const parts = useMemo(() => splitQuestionText(text), [text]);
   let askSeen = false;
   return (
     <CitationSources.Provider value={sources}><div className="prose-y">

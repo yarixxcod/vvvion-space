@@ -3,6 +3,8 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { Download, FileJson, MoreHorizontal, Pencil, Pin, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Chat } from "@/lib/ai/types";
+import { showChatTitle } from "@/lib/ai/defaults";
+import { replaceStickerTokens } from "@/lib/stickers";
 import { pushBackLayer, useGestureSurface } from "@/lib/app-back";
 import { useSwipe } from "@/lib/gestures/use-swipe";
 import { fill, ui, type Lang } from "@/lib/i18n";
@@ -41,16 +43,17 @@ function slug(title: string) {
 }
 
 export function exportChat(chat: Chat, format: "md" | "json") {
-  const name = slug(chat.title);
+  const title = showChatTitle(chat.title);
+  const name = slug(title);
   if (format === "json") {
     download(`${name}.json`, JSON.stringify(chat, null, 2), "application/json");
     toast(txNow({ ru: "Диалог экспортирован", en: "Chat exported", kk: "Диалог экспортталды" }));
     return;
   }
-  const lines = [`# ${chat.title}`, ""];
+  const lines = [`# ${title}`, ""];
   for (const message of chat.messages) {
     const who = message.role === "user" ? txNow({ ru: "Вы", en: "You", kk: "Сіз" }) : message.providerName || "vvvion.space";
-    lines.push(`## ${who}`, "", message.content || message.error || "", "");
+    lines.push(`## ${who}`, "", replaceStickerTokens(message.content || message.error || ""), "");
   }
   download(`${name}.md`, lines.join("\n"), "text/markdown");
   toast(txNow({ ru: "Диалог экспортирован", en: "Chat exported", kk: "Диалог экспортталды" }));
@@ -126,8 +129,8 @@ export function Sidebar({
     if (!q) return chats;
     return chats.filter(
       (chat) =>
-        chat.title.toLowerCase().includes(q) ||
-        chat.messages.some((message) => message.content.toLowerCase().includes(q)),
+        showChatTitle(chat.title).toLowerCase().includes(q) ||
+        chat.messages.some((message) => replaceStickerTokens(message.content).toLowerCase().includes(q)),
     );
   }, [chats, query]);
 
@@ -279,7 +282,7 @@ export function Sidebar({
                     onTitle={setTitle}
                     onStartEdit={() => {
                       setEditing(chat.id);
-                      setTitle(chat.title);
+                      setTitle(showChatTitle(chat.title));
                     }}
                     onFinish={() => {
                       onRename(chat.id, title);
@@ -321,7 +324,7 @@ export function Sidebar({
                       onTitle={setTitle}
                       onStartEdit={() => {
                         setEditing(chat.id);
-                        setTitle(chat.title);
+                        setTitle(showChatTitle(chat.title));
                       }}
                       onFinish={() => {
                         onRename(chat.id, title);
@@ -541,7 +544,7 @@ function HistoryItem({
                   !
                 </span>
               ) : null}
-              <span className="truncate">{chat.title}</span>
+              <span className="truncate">{showChatTitle(chat.title)}</span>
             </span>
           </button>
           <button

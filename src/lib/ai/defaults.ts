@@ -1,5 +1,6 @@
 import type { Provider } from "@/lib/ai/types";
 import type { Lang } from "@/lib/i18n";
+import { stickerChatTitle } from "@/lib/stickers";
 
 export const BUILTIN_ID = "yaronetic";
 export const DB_NAME = "yaronetic-ai";
@@ -152,7 +153,13 @@ export function blankProvider(): Provider {
 }
 
 export function makeTitle(text: string): string {
+  const sticker = stickerChatTitle(text);
+  if (sticker) return sticker;
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return "Новый диалог";
   return clean.length > 48 ? `${clean.slice(0, 48).trimEnd()}…` : clean;
+}
+
+export function showChatTitle(title: string): string {
+  return stickerChatTitle(title) ?? title;
 }

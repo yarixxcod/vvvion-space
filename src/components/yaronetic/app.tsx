@@ -20,7 +20,7 @@ import { Wordmark } from "@/components/yaronetic/wordmark";
 import { useCircleUnread } from "@/components/yaronetic/messenger";
 import { GUEST_QUESTION_LIMIT } from "@/lib/ai/guest-limit";
 import { personalSuggestions, topicLabel } from "@/lib/ai/interest-topics";
-import { suggestionsFor } from "@/lib/ai/defaults";
+import { suggestionsFor, showChatTitle } from "@/lib/ai/defaults";
 import { thinkKind } from "@/lib/ai/reasoning";
 import { getInterests, type InterestProfile } from "@/lib/ai/interests";
 import { getMailStatus } from "@/lib/mail/codes";
@@ -252,7 +252,7 @@ export function App({
     setSharing(true);
     try {
       const { id } = await publishChat({
-        data: { title: activeChat?.title || "Диалог", messages: studio.messages },
+        data: { title: showChatTitle(activeChat?.title || "") || "Диалог", messages: studio.messages },
       });
       const prefix = previewPathPrefix(window.location.hostname, window.location.pathname) ?? "";
       const url = `${window.location.origin}${prefix}/s/${id}`;
@@ -471,7 +471,7 @@ export function App({
               V
             </p>
             <p className="min-w-0 flex-1 truncate text-base font-medium">
-              {activeChat?.title ?? ui(lang, "newDialog")}
+              {activeChat ? showChatTitle(activeChat.title) : ui(lang, "newDialog")}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -611,7 +611,6 @@ export function App({
                 </p>
               ) : null}
               <Composer
-                onSticker={body=>void studio.send(body)}
                 value={studio.draft}
                 onChange={studio.setDraft}
                 streaming={streamingHere}
@@ -652,6 +651,7 @@ export function App({
                   </span>
                 }
                 onSend={() => void studio.send(studio.draft, { image: studio.imageMode, web: studio.webMode, ask: studio.askMode })}
+                onSticker={(body) => void studio.send(body, { image: false, web: false, ask: false })}
                 captureFiles={!circle}
               />
             </div>

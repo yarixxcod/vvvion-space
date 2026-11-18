@@ -73,7 +73,6 @@ export async function streamChat(payload: StreamPayload, handlers: Handlers): Pr
     const event = parseEvent(raw, handlers);
     if (event === "done") completed = true;
     if (event === "error") failed = true;
-    return event === "delta" || event === "reason";
   }
 
   try {
@@ -83,15 +82,11 @@ export async function streamChat(payload: StreamPayload, handlers: Handlers): Pr
     buffer += decoder.decode(value, { stream: true });
     buffer = buffer.replace(/\r\n/g, "\n");
     let split = buffer.indexOf("\n\n");
-    let saw = false;
     while (split >= 0) {
       const raw = buffer.slice(0, split);
       buffer = buffer.slice(split + 2);
-      if (consume(raw)) saw = true;
+      consume(raw);
       split = buffer.indexOf("\n\n");
-    }
-    if (saw && !handlers.signal.aborted && typeof requestAnimationFrame === "function") {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     }
   }
   if (buffer.trim()) consume(buffer);

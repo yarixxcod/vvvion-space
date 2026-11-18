@@ -12,6 +12,7 @@ import { isDiskPath } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { copyText, Markdown } from "@/components/yaronetic/markdown";
 import { looksLikeAscii } from "@/lib/ascii";
+import { replaceStickerTokens } from "@/lib/stickers";
 import { ModelFace, usePassingMood, type FaceVariant } from "@/components/yaronetic/model-face";
 import { LiveLine } from "@/components/yaronetic/live-status";
 import { formatTime } from "@/lib/format-time";
@@ -348,7 +349,7 @@ function UserBubble({
     onCommit() {
       resetSwipe();
       haptic("light");
-      if (message.content) onQuote?.(message.content.replace(/\s+/g, " ").trim().slice(0, 240));
+      if (message.content) onQuote?.(replaceStickerTokens(message.content).replace(/\s+/g, " ").trim().slice(0, 240));
     },
     onCancel: resetSwipe,
   });
@@ -415,14 +416,14 @@ function UserBubble({
             looksLikeAscii(message.content) ? (
               <pre className="ascii-art ascii-in-bubble">{message.content}</pre>
             ) : (
-              <p className="whitespace-pre-wrap text-pretty">{message.content}</p>
+              <p className="whitespace-pre-wrap text-pretty">{replaceStickerTokens(message.content)}</p>
             )
           ) : null}
         </div>
       )}
       {!editing ? (
         <div className="msg-actions mt-1 flex justify-end gap-1">
-          <Ghost label="Копировать" onClick={() => void copyText(message.content)}><Copy className="size-4" /></Ghost>
+          <Ghost label="Копировать" onClick={() => void copyText(replaceStickerTokens(message.content))}><Copy className="size-4" /></Ghost>
           {readonly ? null : <Ghost label="Изменить" disabled={disabled} onClick={onEdit}><span className="text-xs">Изм</span></Ghost>}
           {onDelete ? <Ghost label="Удалить" disabled={disabled} onClick={onDelete}><Trash2 className="size-4" /></Ghost> : null}
         </div>
@@ -433,7 +434,7 @@ function UserBubble({
             label="Копировать"
             onClick={() => {
               setSheet(false);
-              void copyText(message.content);
+              void copyText(replaceStickerTokens(message.content));
             }}
           />
           {onQuote && message.content ? (
@@ -441,7 +442,7 @@ function UserBubble({
               label="Ответить"
               onClick={() => {
                 setSheet(false);
-                onQuote(message.content.replace(/\s+/g, " ").trim().slice(0, 240));
+                onQuote(replaceStickerTokens(message.content).replace(/\s+/g, " ").trim().slice(0, 240));
               }}
             />
           ) : null}
@@ -534,7 +535,7 @@ function AssistantBubble({
     onCommit() {
       resetSwipe();
       haptic("light");
-      if (message.content) onQuote?.(message.content.replace(/\s+/g, " ").trim().slice(0, 240));
+      if (message.content) onQuote?.(replaceStickerTokens(message.content).replace(/\s+/g, " ").trim().slice(0, 240));
     },
     onCancel: resetSwipe,
   });
@@ -640,7 +641,7 @@ function AssistantBubble({
                 label="Копировать"
                 onClick={() => {
                   setMore(false);
-                  void copyText(message.content);
+                  void copyText(replaceStickerTokens(message.content));
                 }}
               />
             ) : null}
@@ -649,7 +650,7 @@ function AssistantBubble({
                 label="Ответить"
                 onClick={() => {
                   setMore(false);
-                  onQuote(message.content.replace(/\s+/g, " ").trim().slice(0, 240));
+                  onQuote(replaceStickerTokens(message.content).replace(/\s+/g, " ").trim().slice(0, 240));
                 }}
               />
             ) : null}

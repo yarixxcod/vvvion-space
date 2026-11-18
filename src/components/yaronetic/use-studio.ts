@@ -18,6 +18,7 @@ import {
   blankProvider,
   builtinProvider,
   makeTitle,
+  showChatTitle,
 } from "@/lib/ai/defaults";
 import { deleteChat, loadChats, loadProviders, saveChat, saveProviders, clearChats, wipeDatabase } from "@/lib/ai/db";
 import { GUEST_OWNER, localChatAccess } from "@/lib/ai/chat-owner";
@@ -727,7 +728,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       const pending = opts?.reuseUser ? opts.reuseUser.files ?? [] : attachmentsRef.current;
       if (busyRef.current) {
         const other = chatsRef.current.find((item) => item.id === streamingIdRef.current);
-        const name = other?.title?.trim() || "другом";
+        const raw = other?.title?.trim();
+        const name = raw ? showChatTitle(raw) : "другом";
         toast(`Ответ ещё пишется в чате «${name}»`);
         return;
       }
@@ -1032,7 +1034,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         if (acc.length > 24) requestAnimationFrame(releaseStream);
         else releaseStream();
         if (isApp() && document.hidden && !stopped && !left) {
-          const chatTitle = chatsRef.current.find((item) => item.id === chatId)?.title?.trim();
+          const chatTitle = showChatTitle(chatsRef.current.find((item) => item.id === chatId)?.title?.trim() || "");
           const preview = messagePreviewOn() ? plainText(acc).slice(0, 1500) : "";
           appNotify({
             id: `ai:${chatId}:${asstId}`,
