@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, Flag } from "lucide-react";
 import { toast } from "sonner";
 import { claimArcade, getArcadePurse, type MergePurse } from "@/lib/social/merge";
-import { blankField, layMines, mineWon, revealMine, toggleFlag, type MineCell } from "@/lib/games/mine";
+import {
+  blankField,
+  layMines,
+  mineWon,
+  revealMine,
+  toggleFlag,
+  type MineCell,
+} from "@/lib/games/mine";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/haptic";
 
@@ -31,8 +38,10 @@ export function MineGame({ onBack }: { onBack: () => void }) {
     hold.current = 0;
   }
 
+  useEffect(() => () => window.clearTimeout(hold.current), []);
+
   const won = armed && !boom && mineWon(cells);
-  const left = cells.filter((cell) => cell.mine && !cell.flag).length;
+  const left = Math.max(0, MINES - cells.filter((cell) => cell.flag).length);
 
   useEffect(() => {
     void getArcadePurse({ data: { game: "mine" } })
@@ -41,7 +50,7 @@ export function MineGame({ onBack }: { onBack: () => void }) {
   }, []);
 
   useEffect(() => {
-    if (!won) return;
+    if (!won || (purse && purse.today + 8 > purse.cap)) return;
     let dead = false;
     void claimArcade({ data: { game: "mine", amount: 8, ticket } })
       .then((next) => {
@@ -82,7 +91,12 @@ export function MineGame({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3">
-        <button type="button" className="press inline-flex size-10 items-center justify-center rounded-2xl text-muted" aria-label="К списку игр" onClick={onBack}>
+        <button
+          type="button"
+          className="press inline-flex size-10 items-center justify-center rounded-2xl text-muted"
+          aria-label="К списку игр"
+          onClick={onBack}
+        >
           <ChevronLeft className="size-4" />
         </button>
         <div className="min-w-0 flex-1">
@@ -93,7 +107,11 @@ export function MineGame({ onBack }: { onBack: () => void }) {
             {purse ? ` · на карте ${purse.balance}` : ""}
           </p>
         </div>
-        <button type="button" className="press h-10 rounded-xl border border-line px-3 text-sm" onClick={restart}>
+        <button
+          type="button"
+          className="press h-10 rounded-xl border border-line px-3 text-sm"
+          onClick={restart}
+        >
           Заново
         </button>
       </div>
@@ -105,7 +123,7 @@ export function MineGame({ onBack }: { onBack: () => void }) {
               type="button"
               aria-label={cell.flag ? "Флажок" : cell.open ? String(cell.n || "пусто") : "Клетка"}
               className={cn(
-                "press grid aspect-square place-items-center rounded-lg text-sm font-medium tabular-nums",
+                "mine-cell grid aspect-square place-items-center rounded-lg text-sm font-medium tabular-nums",
                 cell.open ? "bg-bg text-fg" : "bg-subtle",
                 cell.open && cell.mine && "bg-danger text-white",
                 cell.n === 1 && "text-accent",
@@ -155,16 +173,27 @@ export function MineGame({ onBack }: { onBack: () => void }) {
           <button
             type="button"
             aria-pressed={flagMode}
-            className={cn("press inline-flex h-11 items-center gap-1.5 rounded-2xl border px-3 text-sm", flagMode ? "border-accent bg-accent text-accent-fg" : "border-line")}
+            className={cn(
+              "press inline-flex h-11 items-center gap-1.5 rounded-2xl border px-3 text-sm",
+              flagMode ? "border-accent bg-accent text-accent-fg" : "border-line",
+            )}
             onClick={() => setFlagMode((value) => !value)}
           >
             <Flag className="size-4" />
             Флажок
           </button>
         </div>
-        {boom ? <p className="mt-3 text-center text-sm text-muted">Мина. Поле можно начать заново.</p> : null}
-        {won ? <p className="mt-3 text-center text-sm">Поле чистое. На карту — 8 вублей, если дневной предел ещё открыт.</p> : null}
-        <p className="mt-3 text-center text-xs text-faint">Первый ход безопасный. Удержание ставит флажок. За чистое поле — 8 вублей.</p>
+        {boom ? (
+          <p className="mt-3 text-center text-sm text-muted">Мина. Поле можно начать заново.</p>
+        ) : null}
+        {won ? (
+          <p className="mt-3 text-center text-sm">
+            Поле чистое. На карту — 8 вублей, если дневной предел ещё открыт.
+          </p>
+        ) : null}
+        <p className="mt-3 text-center text-xs text-faint">
+          Первый ход безопасный. Удержание ставит флажок. За чистое поле — 8 вублей.
+        </p>
       </div>
     </div>
   );

@@ -4,6 +4,8 @@ import { ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import { useCircleNest } from "@/lib/circle-history";
 import { claimMergePayout, getMergePurse, type MergePurse } from "@/lib/social/merge";
+import { TilesGame, MemoryGame, LightsGame } from "@/components/yaronetic/puzzle-games";
+import { GAME_RULES } from "@/lib/games/payout";
 import { MineGame } from "@/components/yaronetic/mine-game";
 import { SnakeGame } from "@/components/yaronetic/snake-game";
 
@@ -19,7 +21,10 @@ const MAX_E = 24;
 const REGEN = 3 * 60 * 1000;
 const MAX_LV = 5;
 
-const CHAINS: Record<Chain, { name: string; items: { name: string; code: string; emoji: string }[] }> = {
+const CHAINS: Record<
+  Chain,
+  { name: string; items: { name: string; code: string; emoji: string }[] }
+> = {
   bake: {
     name: "Пекарня",
     items: [
@@ -108,7 +113,13 @@ function fresh(): Save {
   starters.forEach((item, index) => {
     cells[index + 1] = item;
   });
-  return { cells, energy: MAX_E, energyAt: Date.now(), orders: [makeOrder(1), makeOrder(2), makeOrder(3)], next: 4 };
+  return {
+    cells,
+    energy: MAX_E,
+    energyAt: Date.now(),
+    orders: [makeOrder(1), makeOrder(2), makeOrder(3)],
+    next: 4,
+  };
 }
 
 function isItem(cell: Cell): cell is Item {
@@ -119,12 +130,44 @@ function revive(raw: unknown): Save {
   if (!raw || typeof raw !== "object") return fresh();
   const data = raw as Partial<Save>;
   if (!Array.isArray(data.cells) || data.cells.length !== SIZE) return fresh();
+  const cells = data.cells.map((cell): Cell => {
+    if (!cell || typeof cell !== "object") return null;
+    if ("gen" in cell) return null;
+    return ["bake", "garden", "craft"].includes(cell.k) &&
+      Number.isInteger(cell.lv) &&
+      cell.lv >= 1 &&
+      cell.lv <= MAX_LV
+      ? { k: cell.k, lv: cell.lv }
+      : null;
+  });
+  cells[0] = { gen: true };
+  const validOrders =
+    Array.isArray(data.orders) &&
+    data.orders.length === 3 &&
+    data.orders.every(
+      (order) =>
+        order &&
+        typeof order.id === "string" &&
+        typeof order.ticket === "string" &&
+        /^[a-z0-9]{8,16}$/.test(order.ticket) &&
+        ["bake", "garden", "craft"].includes(order.k) &&
+        PATTERNS.some((p) => p.lv === order.lv && p.n === order.n && p.pay === order.pay),
+    );
   return {
-    cells: data.cells,
-    energy: typeof data.energy === "number" ? data.energy : MAX_E,
-    energyAt: typeof data.energyAt === "number" ? data.energyAt : Date.now(),
-    orders: Array.isArray(data.orders) && data.orders.length === 3 ? data.orders : [makeOrder(1), makeOrder(2), makeOrder(3)],
-    next: typeof data.next === "number" ? data.next : 4,
+    cells,
+    energy:
+      typeof data.energy === "number" && Number.isFinite(data.energy)
+        ? Math.max(0, Math.min(MAX_E, Math.floor(data.energy)))
+        : MAX_E,
+    energyAt:
+      typeof data.energyAt === "number" && Number.isFinite(data.energyAt)
+        ? Math.min(Date.now(), Math.max(0, data.energyAt))
+        : Date.now(),
+    orders: validOrders ? data.orders! : [makeOrder(1), makeOrder(2), makeOrder(3)],
+    next:
+      typeof data.next === "number" && Number.isSafeInteger(data.next) && data.next >= 4
+        ? data.next
+        : 4,
   };
 }
 
@@ -174,7 +217,10 @@ function pickChain(orders: Order[]): Chain {
 }
 
 export function Games() {
-  const [open, setOpen] = useState<"stall" | "snake" | "mine" | null>(null);
+  const [open, setOpen] = useState<
+    "stall" | "snake" | "mine" | "tiles" | "memory" | "lights" | null
+  >(null);
+  const [filter, setFilter] = useState<"all" | "paid" | "puzzle">("all");
   useCircleNest(open !== null, () => setOpen(null));
   useEffect(() => {
     if (!open) return;
@@ -183,50 +229,143 @@ export function Games() {
       window.dispatchEvent(new CustomEvent("vv-circle-nested", { detail: false }));
     };
   }, [open]);
+  if (open === "tiles") return <TilesGame onBack={() => setOpen(null)} />;
+  if (open === "memory") return <MemoryGame onBack={() => setOpen(null)} />;
+  if (open === "lights") return <LightsGame onBack={() => setOpen(null)} />;
   if (open === "stall") return <Table onBack={() => setOpen(null)} />;
   if (open === "snake") return <SnakeGame onBack={() => setOpen(null)} />;
   if (open === "mine") return <MineGame onBack={() => setOpen(null)} />;
+  const games = [
+    {
+      id: "stall",
+      title: "Прилавок",
+      description: "Соединяйте предметы и собирайте заказы",
+      tag: "Слияние",
+      paid: true,
+      rule: GAME_RULES.stall,
+    },
+    {
+      id: "snake",
+      title: "Змейка",
+      description: "Собирайте яблоки, избегайте хвоста",
+      tag: "Аркада",
+      paid: true,
+      rule: GAME_RULES.snake,
+    },
+    {
+      id: "mine",
+      title: "Сапёр",
+      description: "Откройте поле без единой мины",
+      tag: "Логика",
+      paid: true,
+      rule: GAME_RULES.mine,
+    },
+    {
+      id: "tiles",
+      title: "2048 · Орбита",
+      description: "Соединяйте числа и покорите 2048",
+      tag: "Новое",
+      paid: false,
+    },
+    {
+      id: "memory",
+      title: "Созвездия",
+      description: "Находите пары и тренируйте память",
+      tag: "Новое",
+      paid: false,
+    },
+    {
+      id: "lights",
+      title: "Погаси звёзды",
+      description: "Одна клетка меняет всё вокруг",
+      tag: "Новое",
+      paid: false,
+    },
+  ] as const;
+  const visible = games.filter((g) => filter === "all" || (filter === "paid" ? g.paid : !g.paid));
   return (
-    <div className="h-full overflow-y-auto p-4">
-      <h2 className="font-serif text-3xl tracking-tight">Игры</h2>
-      <p className="mt-1 text-sm text-muted">Три короткие. У каждой свой дневной предел.</p>
-      <div className="mt-4 space-y-3">
-        <button type="button" className="press w-full overflow-hidden rounded-3xl border border-line bg-elev text-left" onClick={() => setOpen("stall")}>
-          <span className="flex h-28 items-center justify-center gap-3 bg-[color-mix(in_oklab,var(--accent)_16%,var(--bg))]">
-            {["1f35e", "1f490", "1f3fa", "1f3c6"].map((code) => (
-              <img key={code} src={google(code)} alt="" className="size-14" />
-            ))}
-          </span>
-          <span className="block px-4 py-3">
-            <span className="block font-serif text-2xl tracking-tight">Прилавок</span>
-            <span className="mt-1 block text-sm text-muted">Одинаковые вещи складываются в заказ. Не больше 60 в сутки.</span>
-          </span>
-        </button>
-        <button type="button" className="press w-full overflow-hidden rounded-3xl border border-line bg-elev text-left" onClick={() => setOpen("snake")}>
-          <span className="flex h-28 items-center justify-center gap-1 bg-subtle">
-            <span className="size-8 rounded-xl bg-accent/50" />
-            <span className="size-8 rounded-xl bg-accent/70" />
-            <span className="size-8 rounded-xl bg-accent" />
-            <span className="ml-3 size-6 rounded-full bg-danger" />
-          </span>
-          <span className="block px-4 py-3">
-            <span className="block font-serif text-2xl tracking-tight">Змейка</span>
-            <span className="mt-1 block text-sm text-muted">Три яблока — 2 вубля. Не больше 36 в сутки.</span>
-          </span>
-        </button>
-        <button type="button" className="press w-full overflow-hidden rounded-3xl border border-line bg-elev text-left" onClick={() => setOpen("mine")}>
-          <span className="grid h-28 grid-cols-4 gap-1 bg-subtle p-6">
-            {["", "1", "", "•", "2", "", "", "1", "", "", "2", "", "", "1", "", ""].map((mark, index) => (
-              <span key={index} className={mark === "•" ? "rounded-md bg-danger" : "grid place-items-center rounded-md bg-bg text-xs text-muted"}>
-                {mark === "•" ? "" : mark}
+    <div className="h-full overflow-y-auto px-4 py-4" data-games-catalog>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[.18em] text-muted">
+            VVVion Arcade
+          </p>
+          <h2 className="mt-1 font-serif text-3xl tracking-tight">Небольшой перерыв</h2>
+          <p className="mt-1 text-sm text-muted">Шесть игр. Без ставок и покупок ходов.</p>
+        </div>
+        <span className="mb-1 rounded-full border border-line px-2 py-1 text-xs text-muted">
+          6 игр
+        </span>
+      </div>
+      <div className="my-4 flex gap-2 overflow-x-auto pb-1" aria-label="Категории игр">
+        {(
+          [
+            ["all", "Все игры"],
+            ["paid", "С наградами"],
+            ["puzzle", "Головоломки"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={filter === id}
+            onClick={() => setFilter(id)}
+            className={
+              filter === id
+                ? "press min-h-11 shrink-0 rounded-full bg-accent px-3 text-xs font-medium text-accent-fg"
+                : "press min-h-11 shrink-0 rounded-full border border-line px-3 text-xs text-muted"
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3 min-[650px]:grid-cols-3">
+        {visible.map((game) => (
+          <button
+            key={game.id}
+            type="button"
+            data-game-id={game.id}
+            onClick={() => setOpen(game.id)}
+            className="game-tile press group flex min-w-0 flex-col overflow-hidden rounded-3xl border border-line bg-elev text-left"
+          >
+            <span className="relative block aspect-[5/4] w-full overflow-hidden bg-[#21172f]">
+              <img
+                src={`/games/${game.id}-v2.webp`}
+                alt=""
+                width="512"
+                height="512"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 motion-reduce:transform-none"
+              />
+              <span className="absolute top-2 left-2 rounded-full bg-[#171021d9] px-2 py-1 text-[9px] font-medium text-[#f1e8ff]">
+                {game.tag}
               </span>
-            ))}
-          </span>
-          <span className="block px-4 py-3">
-            <span className="block font-serif text-2xl tracking-tight">Сапёр</span>
-            <span className="mt-1 block text-sm text-muted">Чистое поле — 8 вублей. Не больше 40 в сутки.</span>
-          </span>
-        </button>
+            </span>
+            <span className="flex flex-1 flex-col px-3 py-3">
+              <span className="block text-sm font-semibold leading-snug">{game.title}</span>
+              <span className="mt-1 block min-h-8 text-[11px] leading-relaxed text-muted">
+                {game.description}
+              </span>
+              <span
+                className={
+                  game.paid
+                    ? "mt-3 block text-[10px] font-medium text-fg"
+                    : "mt-3 block text-[10px] font-medium text-muted"
+                }
+              >
+                {game.paid ? `До ${game.rule.cap} вуб. / 24 ч` : "Личный рекорд · без выплат"}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 rounded-2xl border border-line bg-subtle p-4">
+        <p className="text-xs font-medium">Как работают награды</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          Прилавок — до 60, змейка — до 36, сапёр — до 40 вублей за последние 24 часа. У каждой игры
+          свой предел. После его достижения можно играть дальше. Новые головоломки тренируют навыки
+          и не меняют баланс.
+        </p>
       </div>
     </div>
   );
@@ -254,7 +393,11 @@ function Table({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     if (!ready) return;
-    localStorage.setItem(KEY, JSON.stringify(save));
+    try {
+      localStorage.setItem(KEY, JSON.stringify(save));
+    } catch {
+      /* gameplay continues when storage is full */
+    }
   }, [ready, save]);
 
   useEffect(() => {
@@ -314,7 +457,8 @@ function Table({ onBack }: { onBack: () => void }) {
 
   function cellAt(x: number, y: number): number | null {
     const node = document.elementFromPoint(x, y);
-    const raw = node instanceof Element ? node.closest("[data-cell]")?.getAttribute("data-cell") : null;
+    const raw =
+      node instanceof Element ? node.closest("[data-cell]")?.getAttribute("data-cell") : null;
     if (raw == null) return null;
     const next = Number(raw);
     return Number.isInteger(next) ? next : null;
@@ -356,7 +500,10 @@ function Table({ onBack }: { onBack: () => void }) {
     if (busy) return;
     const hits = save.cells
       .map((cell, index) => ({ cell, index }))
-      .filter((row): row is { cell: Item; index: number } => isItem(row.cell) && row.cell.k === order.k && row.cell.lv === order.lv)
+      .filter(
+        (row): row is { cell: Item; index: number } =>
+          isItem(row.cell) && row.cell.k === order.k && row.cell.lv === order.lv,
+      )
       .slice(0, order.n);
     if (hits.length < order.n) return;
     const taken = hits.map((hit) => ({ index: hit.index, cell: hit.cell }));
@@ -366,33 +513,57 @@ function Table({ onBack }: { onBack: () => void }) {
     setPicked(null);
     setBusy(true);
     try {
+      if (purse && purse.today + order.pay > purse.cap) {
+        setSave((current) => ({
+          ...current,
+          orders: current.orders.map((item) =>
+            item.id === order.id ? makeOrder(current.next) : item,
+          ),
+          next: current.next + 1,
+        }));
+        toast("Заказ готов. Лимит наград исчерпан — играем без начисления.");
+        return;
+      }
       const next = await claimMergePayout({ data: { amount: order.pay, ticket: order.ticket } });
       setPurse(next);
-      if (!next.credited) {
+      if (!next.credited && next.receipt !== "duplicate") {
         restore(taken);
         toast("Этот заказ уже сдан");
         return;
       }
       setSave((current) => ({
         ...current,
-        orders: current.orders.map((item) => (item.id === order.id ? makeOrder(current.next) : item)),
+        orders: current.orders.map((item) =>
+          item.id === order.id ? makeOrder(current.next) : item,
+        ),
         next: current.next + 1,
       }));
-      toast(`+${order.pay} вублей`);
+      toast(next.receipt === "duplicate" ? "Заказ уже учтён" : `+${order.pay} вублей`);
     } catch (err) {
       restore(taken);
       toast.error(err instanceof Error ? err.message : "Выплата не прошла");
+      void getMergePurse()
+        .then(setPurse)
+        .catch(() => undefined);
     } finally {
       setBusy(false);
     }
   }
 
-  const waitMin = save.energy >= MAX_E ? 0 : Math.max(1, Math.ceil((REGEN - (Date.now() - save.energyAt)) / 60_000));
+  const waitMin =
+    save.energy >= MAX_E
+      ? 0
+      : Math.max(1, Math.ceil((REGEN - (Date.now() - save.energyAt)) / 60_000));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3">
-        <button type="button" className="press inline-flex size-10 items-center justify-center rounded-2xl text-muted" aria-label="К списку игр" onClick={onBack}>
+        <button
+          type="button"
+          className="press inline-flex size-10 items-center justify-center rounded-2xl text-muted"
+          aria-label="К списку игр"
+          onClick={onBack}
+        >
           <ChevronLeft className="size-4" />
         </button>
         <div className="min-w-0 flex-1">
@@ -404,7 +575,10 @@ function Table({ onBack }: { onBack: () => void }) {
             {purse ? ` · на карте ${purse.balance}` : ""}
           </p>
           <div className="mt-1 h-1 overflow-hidden rounded-full bg-subtle">
-            <div className="h-full bg-accent" style={{ width: `${(save.energy / MAX_E) * 100}%` }} />
+            <div
+              className="h-full bg-accent"
+              style={{ width: `${(save.energy / MAX_E) * 100}%` }}
+            />
           </div>
         </div>
       </div>
@@ -412,9 +586,12 @@ function Table({ onBack }: { onBack: () => void }) {
         {save.orders.map((order) => {
           const item = glyph({ k: order.k, lv: order.lv });
           const readyCount = have(save.cells, order);
-          const ok = readyCount >= order.n && !busy && (purse ? purse.today + order.pay <= purse.cap : true);
+          const ok = readyCount >= order.n && !busy;
           return (
-            <div key={order.id} className="w-48 shrink-0 rounded-2xl border border-line bg-elev p-2">
+            <div
+              key={order.id}
+              className="w-48 shrink-0 rounded-2xl border border-line bg-elev p-2"
+            >
               <div className="flex items-center gap-2">
                 <Piece src={stickerUrl(customer(order.id))} emoji="🙂" label="Покупатель" />
                 <Piece src={apple(item.code)} emoji={item.emoji} label={item.name} />
@@ -446,7 +623,13 @@ function Table({ onBack }: { onBack: () => void }) {
                 key={index}
                 type="button"
                 data-cell={index}
-                aria-label={cell && "gen" in cell ? "Мешок, взять вещь" : item ? `${item.name}, уровень ${isItem(cell) ? cell.lv : 1}` : "Пустая клетка"}
+                aria-label={
+                  cell && "gen" in cell
+                    ? "Мешок, взять вещь"
+                    : item
+                      ? `${item.name}, уровень ${isItem(cell) ? cell.lv : 1}`
+                      : "Пустая клетка"
+                }
                 className={`relative grid aspect-square place-items-center rounded-2xl border bg-bg ${over === index || picked === index ? "border-accent" : "border-line"} ${burst === index ? "merge-pop" : ""}`}
                 style={{ background: isItem(cell) ? WASH[cell.k] : undefined }}
                 onClick={() => {
@@ -465,7 +648,8 @@ function Table({ onBack }: { onBack: () => void }) {
                 onPointerMove={(event) => {
                   const start = point.current;
                   if (!start || drag.current == null) return;
-                  if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) start.moved = true;
+                  if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8)
+                    start.moved = true;
                   if (!start.moved) return;
                   setOver(cellAt(event.clientX, event.clientY));
                 }}
@@ -491,11 +675,15 @@ function Table({ onBack }: { onBack: () => void }) {
                   setOver(null);
                 }}
               >
-                {cell && "gen" in cell ? <Piece src={icon("1f392")} emoji="🎒" label="Мешок" /> : null}
+                {cell && "gen" in cell ? (
+                  <Piece src={icon("1f392")} emoji="🎒" label="Мешок" />
+                ) : null}
                 {item && isItem(cell) ? (
                   <>
                     <Piece src={apple(item.code)} emoji={item.emoji} label={item.name} />
-                    <span className="absolute right-1 bottom-0.5 text-xs tabular-nums text-faint">{cell.lv}</span>
+                    <span className="absolute right-1 bottom-0.5 text-xs tabular-nums text-faint">
+                      {cell.lv}
+                    </span>
                   </>
                 ) : null}
               </button>
@@ -503,13 +691,16 @@ function Table({ onBack }: { onBack: () => void }) {
           })}
         </div>
         <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-faint">
-          Нажмите мешок, чтобы достать вещь. Нажмите две одинаковые по очереди или перетащите одну на другую — получится следующая. Сдайте заказ покупателю. В сутки прилавок платит не больше 60 вублей.
+          Нажмите мешок, чтобы достать вещь. Нажмите две одинаковые по очереди или перетащите одну
+          на другую — получится следующая. Сдайте заказ покупателю. В сутки прилавок платит не
+          больше 60 вублей.
         </p>
         <button
           type="button"
           className="press mx-auto mt-3 block h-10 rounded-xl px-3 text-xs text-muted"
           onClick={() => {
-            if (!window.confirm("Собрать стол заново? Вубли, которые уже пришли, останутся.")) return;
+            if (!window.confirm("Собрать стол заново? Вубли, которые уже пришли, останутся."))
+              return;
             const next = fresh();
             setSave(next);
             localStorage.setItem(KEY, JSON.stringify(next));
@@ -531,5 +722,13 @@ function Piece({ src, emoji, label }: { src: string; emoji: string; label: strin
       </span>
     );
   }
-  return <img src={src} alt={label} className="size-9" draggable={false} onError={() => setFailed(true)} />;
+  return (
+    <img
+      src={src}
+      alt={label}
+      className="size-9"
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
 }

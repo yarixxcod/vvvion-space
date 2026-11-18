@@ -21,6 +21,19 @@ function code(): string {
 export function SnakeGame({ onBack }: { onBack: () => void }) {
   const [state, setState] = useState<SnakeState>(() => freshSnake());
   const [started, setStarted] = useState(false);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    const pause = () => setPaused(true);
+    const visibility = () => {
+      if (document.hidden) pause();
+    };
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("blur", pause);
+    return () => {
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("blur", pause);
+    };
+  }, []);
   const [purse, setPurse] = useState<MergePurse | null>(null);
   const queued = useRef<Dir | null>(null);
   const tickets = useRef<Record<number, string>>({});
@@ -34,6 +47,14 @@ export function SnakeGame({ onBack }: { onBack: () => void }) {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      if (
+        !started ||
+        paused ||
+        event.ctrlKey ||
+        event.metaKey ||
+        /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement)?.tagName)
+      )
+        return;
       const dir = KEYS[event.key];
       if (!dir) return;
       event.preventDefault();
@@ -41,10 +62,10 @@ export function SnakeGame({ onBack }: { onBack: () => void }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [started, paused]);
 
   useEffect(() => {
-    if (!started || state.dead) return;
+    if (!started || paused || state.dead) return;
     const timer = window.setInterval(() => {
       setState((current) => {
         if (current.dead) return current;
@@ -54,10 +75,10 @@ export function SnakeGame({ onBack }: { onBack: () => void }) {
       });
     }, 150);
     return () => window.clearInterval(timer);
-  }, [started, state.dead]);
+  }, [started, paused, state.dead]);
 
   useEffect(() => {
-    if (!state.apples || state.apples % 3 !== 0) return;
+    if (!state.apples || state.apples % 3 !== 0 || (purse && purse.today + 2 > purse.cap)) return;
     const mark = state.apples;
     const ticket = (tickets.current[mark] ??= code());
     let dead = false;
@@ -94,7 +115,12 @@ export function SnakeGame({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 px-3 pt-3">
-        <button type="button" className="press inline-flex size-10 items-center justify-center rounded-2xl text-muted" aria-label="К списку игр" onClick={onBack}>
+        <button
+          type="button"
+          className="press inline-flex size-10 items-center justify-center rounded-2xl text-muted"
+          aria-label="К списку игр"
+          onClick={onBack}
+        >
           <ChevronLeft className="size-4" />
         </button>
         <div className="min-w-0 flex-1">
@@ -112,6 +138,7 @@ export function SnakeGame({ onBack }: { onBack: () => void }) {
             tickets.current = {};
             queued.current = null;
             setStarted(false);
+            setPaused(false);
             setState(freshSnake());
           }}
         >
@@ -121,9 +148,10 @@ export function SnakeGame({ onBack }: { onBack: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <div
           className="mx-auto grid aspect-square w-full max-w-sm gap-px rounded-3xl bg-subtle p-2"
-          style={{ gridTemplateColumns: `repeat(${state.w}, minmax(0, 1fr))` }}
+          style={{ touchAction: "none", gridTemplateColumns: `repeat(${state.w}, minmax(0, 1fr))` }}
           onPointerDown={(event) => {
             point.current = { x: event.clientX, y: event.clientY };
+            event.currentTarget.setPointerCapture(event.pointerId);
           }}
           onPointerUp={(event) => swipe(event.clientX, event.clientY)}
           onPointerCancel={() => {
@@ -150,30 +178,75 @@ export function SnakeGame({ onBack }: { onBack: () => void }) {
           })}
         </div>
         {!started ? (
-          <button type="button" className="press mx-auto mt-3 block h-11 rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" onClick={() => { queued.current = null; setState(freshSnake()); setStarted(true); }}>
+          <button
+            type="button"
+            className="press mx-auto mt-3 block h-11 rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg"
+            onClick={() => {
+              queued.current = null;
+              setState(freshSnake());
+              setPaused(false);
+              setStarted(true);
+            }}
+          >
             Нажмите, чтобы начать
           </button>
         ) : null}
-        {started && state.dead ? <p className="mt-3 text-center text-sm text-muted">Стена или хвост. Можно начать заново.</p> : null}
-        <p className="mt-3 text-center text-xs text-faint">Каждые три яблока — 2 вубля. Стрелки, свайп или кнопки.</p>
+        {started && !state.dead ? (
+          <button
+            type="button"
+            className="press mx-auto mt-3 block min-h-11 rounded-2xl border border-line px-4 text-sm"
+            onClick={() => setPaused((p) => !p)}
+          >
+            {paused ? "Продолжить" : "Пауза"}
+          </button>
+        ) : null}
+        {started && state.dead ? (
+          <p className="mt-3 text-center text-sm text-muted">
+            Стена или хвост. Можно начать заново.
+          </p>
+        ) : null}
+        <p className="mt-3 text-center text-xs text-faint">
+          Каждые три яблока — 2 вубля. Стрелки, свайп или кнопки.
+        </p>
         <div className="mx-auto mt-3 grid w-44 grid-cols-3 gap-1">
           <span />
-          <Pad label="Вверх" onClick={() => aim("up")}>↑</Pad>
+          <Pad label="Вверх" onClick={() => aim("up")}>
+            ↑
+          </Pad>
           <span />
-          <Pad label="Влево" onClick={() => aim("left")}>←</Pad>
+          <Pad label="Влево" onClick={() => aim("left")}>
+            ←
+          </Pad>
           <span />
-          <Pad label="Вправо" onClick={() => aim("right")}>→</Pad>
+          <Pad label="Вправо" onClick={() => aim("right")}>
+            →
+          </Pad>
           <span />
-          <Pad label="Вниз" onClick={() => aim("down")}>↓</Pad>
+          <Pad label="Вниз" onClick={() => aim("down")}>
+            ↓
+          </Pad>
         </div>
       </div>
     </div>
   );
 }
 
-function Pad({ label, onClick, children }: { label: string; onClick: () => void; children: string }) {
+function Pad({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: string;
+}) {
   return (
-    <button type="button" aria-label={label} className="press grid h-12 place-items-center rounded-2xl border border-line bg-elev text-lg" onClick={onClick}>
+    <button
+      type="button"
+      aria-label={label}
+      className="press grid h-12 place-items-center rounded-2xl border border-line bg-elev text-lg"
+      onClick={onClick}
+    >
       {children}
     </button>
   );

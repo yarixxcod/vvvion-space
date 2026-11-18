@@ -382,3 +382,32 @@ html.vv-lowend .circle-nav { background:var(--elev); }
 @media(prefers-reduced-motion:reduce) { .service-tile-art,.circle-drop { transition:none; } }
 html.vv-reduce-motion .service-tile-art,html.vv-reduce-motion .circle-drop { transition:none; }
 @media(prefers-reduced-transparency:reduce) { .circle-nav { background:var(--elev); backdrop-filter:none; -webkit-backdrop-filter:none; } }
+
+/* Collectible artwork keeps its original lighting in both themes. */
+.catalog-art { isolation:isolate; box-shadow:inset 0 0 0 1px #ffffff12; }
+.catalog-art::after { content:""; position:absolute; inset:0; border:1px solid #ffffff18; border-radius:inherit; pointer-events:none; }
+html.light .catalog-card { background:linear-gradient(150deg,#fffdfb,#f0ebf6); border-color:#dbd2e4; }
+html.light .catalog-card:hover { border-color:#a18bb9; box-shadow:0 6px 20px #38224f12; }
+html.light .catalog-art { background:#21172f; box-shadow:0 3px 10px #30213d14; }
+html.light .catalog-art::after { border-color:#23162f20; }
+html.light .catalog-rarity { background:#fdfafff2; color:#4d3b65; border-color:#d6c9e5; backdrop-filter:none; }
+html.light .catalog-rarity[data-tier="rare"] { color:#18537c; border-color:#9bbad2; }
+html.light .catalog-rarity[data-tier="epic"] { color:#653485; border-color:#c6a4db; }
+html.light .catalog-rarity[data-tier="legendary"] { color:#775315; border-color:#c5a86a; box-shadow:0 2px 8px #99772f1c; }
+.game-tile { transition:border-color .2s,box-shadow .2s; }
+@media(hover:hover) and (pointer:fine) { .game-tile:hover { border-color:var(--line-strong); box-shadow:0 8px 24px #00000012; } }
+html.light .game-tile { background:#fffdfa; border-color:#ddd4e4; }
+.tile-number { background:var(--elev); color:var(--fg); }
+.tile-number[data-level="1"] { background:#eae3f5; color:#46385f; }
+.tile-number[data-level="2"] { background:#d9c9ed; color:#3c2c58; }
+.tile-number[data-level="3"] { background:#bda2dc; color:#2d1c43; }
+.tile-number[data-level="4"] { background:#9878bf; color:#fff; }
+.tile-number[data-level="5"] { background:#7955a4; color:#fff; }
+.tile-number[data-level="6"],.tile-number[data-level="7"] { background:#5d3c86; color:#fff; }
+.tile-number[data-level="8"],.tile-number[data-level="9"],.tile-number[data-level="10"],.tile-number[data-level="11"] { background:#edd098; color:#4d3312; box-shadow:inset 0 0 0 1px #fff7; }
+.memory-card { transition:background .2s,border-color .2s,transform .2s; }
+.memory-card:disabled { background:color-mix(in oklab,var(--ok) 12%,var(--elev)); color:var(--ok); border-color:color-mix(in oklab,var(--ok) 35%,var(--line)); }
+.light-cell.is-on { background:#f4dba5; color:#704e14; border-color:#caa464; box-shadow:0 0 14px #e2b96730,inset 0 1px 0 #fff9; }
+.mine-cell { min-width:0; min-height:0; touch-action:manipulation; -webkit-tap-highlight-color:transparent; border:1px solid var(--line); }
+@media(prefers-reduced-motion:reduce) { .memory-card,.game-tile { transition:none; } }
+.catalog-rarity { font-size:10px; }

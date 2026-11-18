@@ -220,7 +220,7 @@ export function Library() {
               <Gamepad2 className="size-4" aria-hidden="true" />
               Игры
             </span>
-            <span className={cn("text-xs leading-none", room === "play" ? "text-accent-fg/75" : "text-faint")}>Три игры</span>
+            <span className={cn("text-xs leading-none", room === "play" ? "text-accent-fg/75" : "text-faint")}>Шесть игр</span>
           </button>
         </div>
       </div>

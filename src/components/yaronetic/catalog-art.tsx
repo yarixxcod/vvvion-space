@@ -23,7 +23,8 @@ export function CatalogArt({
   const src = /^[a-z0-9-]+$/.test(id) ? `/${kind}/${id}-v2.webp` : "";
   const [failed, setFailed] = useState("");
   return (
-    <span className={`catalog-art relative block shrink-0 overflow-hidden bg-subtle ${className}`}>
+    <span data-art-kind={kind}
+      className={`catalog-art relative block shrink-0 overflow-hidden bg-subtle ${className}`}>
       {src && failed !== src ? (
         <img
           src={src}
