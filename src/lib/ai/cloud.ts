@@ -42,6 +42,7 @@ function asMessage(value: unknown): ChatMessage | null {
   if (typeof raw.providerName === "string") message.providerName = raw.providerName.slice(0, 48);
   if (typeof raw.error === "string") message.error = raw.error.slice(0, 500);
   if (raw.liked === true) message.liked = true;
+  if (raw.praised === true) message.praised = true;
   if (raw.stopped) message.stopped = true;
   if (raw.truncated) message.truncated = true;
   if (raw.live) message.live = true;

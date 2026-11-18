@@ -1,4 +1,5 @@
 import {stickerMeaning} from "@/lib/stickers";
+import { peelQuestionLike } from "@/lib/ai/question-like";
 import { readDraft, writeDraft } from "@/lib/ai/drafts";
 import { memoryForChat, moveNewChatMemory } from "@/lib/ai/memory";
 import { diskAccessEnabled } from "@/lib/ai/disk-access";
@@ -164,7 +165,8 @@ function wireTurns(items: ChatMessage[]): ChatTurn[] {
       if (file.kind === "file") return [`Приложен файл «${file.name}».`];
       return [];
     });
-    const text = [item.role === "user" ? stickerMeaning(item.content.trim()) : item.content.trim(), ...notes].filter(Boolean).join("\n\n").slice(0, 24_000);
+    const spoken = item.role === "user" ? stickerMeaning(item.content.trim()) : peelQuestionLike(item.content.trim()).text;
+    const text = [spoken, ...notes].filter(Boolean).join("\n\n").slice(0, 24_000);
     const images =
       item.id === lastUser ? (item.files ?? []).filter((file) => file.kind === "image" && file.dataUrl) : [];
     if (!text && images.length === 0) continue;
@@ -861,11 +863,12 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         const live = liveRef.current;
         if (!live || live.chatId !== chatId) return;
         if (!chatsRef.current.some((item) => item.id === chatId)) return;
-        const updated = live.messages.map((item) =>
-          item.id === asstId
-            ? {
+        const peeled = peelQuestionLike(acc);
+        const updated = live.messages.map((item) => {
+          if (item.id === asstId) {
+            return {
                 ...item,
-                content: acc,
+                content: peeled.text,
                 reasoning: reason || undefined,
                 usage,
                 error,
@@ -874,9 +877,11 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
                 imageUrl,
                 sources,
                 search,
-              }
-            : item,
-        );
+              };
+          }
+          if (item.id === userMsg.id) return { ...item, praised: peeled.like || undefined };
+          return item;
+        });
         live.messages = updated;
         const away = activeChatRef.current !== chatId || document.visibilityState === "hidden";
         const snapshot: Chat = { ...live.base, updatedAt: Date.now(), messages: updated, unread: away };
@@ -930,6 +935,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             toolNote: [
               pluginNote({ calc: false, clock: false, brief: false, translate: false, ask: wantAsk }, trimmed),
               shownName.toLowerCase() === DEFAULT_NAME ? "" : `Тебя зовут «${shownName}». Если спрашивают, как тебя зовут, отвечай этим именем.`,
+              wantImage ? "" : "Если вопрос пользователя по-настоящему хороший — конкретный, живой, с деталями — закончи ответ отдельной строкой [[like]]. Не ставь её на приветствия, короткие реплики, оскорбления и обычные вопросы. Не упоминай метку.",
             ].filter(Boolean).join("\n\n"),
             personaId: readLivePersona() || undefined,
             temperature: provider.temperature,
@@ -1485,6 +1491,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
 
   function likeMessage(messageId:string){
     if(busyRef.current)return;
+    const target = messagesRef.current.find((item) => item.id === messageId);
+    if (!target || target.role !== "assistant") return;
     const next=messagesRef.current.map(m=>m.id===messageId?{...m,liked:!m.liked}:m);
     setMsgs(next);
     const chat=chatsRef.current.find(c=>c.id===activeChatRef.current);

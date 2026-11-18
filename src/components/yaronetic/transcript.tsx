@@ -6,13 +6,14 @@ import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowDown, Check, ChevronDown, Copy, Download, Info, MoreHorizontal, RefreshCw, Square, Trash2, Volume2, X } from "lucide-react";
+import { ArrowDown, Check, ChevronDown, Copy, Download, Heart, Info, MoreHorizontal, RefreshCw, Square, Trash2, Volume2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { isDiskPath } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { copyText, Markdown } from "@/components/yaronetic/markdown";
 import { looksLikeAscii } from "@/lib/ascii";
 import { replaceStickerTokens } from "@/lib/stickers";
+import { peelQuestionLike } from "@/lib/ai/question-like";
 import { ModelFace, usePassingMood, type FaceVariant } from "@/components/yaronetic/model-face";
 import { LiveLine } from "@/components/yaronetic/live-status";
 import { formatTime } from "@/lib/format-time";
@@ -212,9 +213,12 @@ export function Transcript({
         <div ref={content} className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
           <AnimatePresence initial={false}>
             {messages.map((message, index) => {
-              const visual=splitStickerContent(message.content);
+              const body = peelQuestionLike(message.content);
+              const visual=splitStickerContent(body.text);
               const shown={...message,content:visual.text};
               const pending = streaming && index === messages.length - 1 && message.role === "assistant";
+              const next = messages[index + 1];
+              const praised = message.role === "user" && (message.praised || (next?.role === "assistant" && peelQuestionLike(next.content).like));
               return (
                 <motion.article
                   key={message.id}
@@ -224,7 +228,7 @@ export function Transcript({
                   className={message.role === "user" ? "msg-row flex justify-end" : pending ? "msg-row msg-live" : "msg-row"}
                 >
                   {message.role === "user" ? (visual.text || message.files?.length ? <UserBubble
-                      message={shown}
+                      message={{ ...shown, praised }}
                       editing={editing === message.id}
                       editText={editText}
                       disabled={streaming}
@@ -266,7 +270,11 @@ export function Transcript({
                   )}
                                   {visual.stickers.length?<div className={message.role==="user"?"flex gap-2":"mt-2 flex gap-2"}>{visual.stickers.map((code,i)=><StickerImage key={`${code}-${i}`} code={code} className="size-36 max-w-full"/>)}</div>:null}
                   {message.role==="user"&&!visual.text&&visual.stickers.length&&!readonly&&onDelete?<button type="button" aria-label="Удалить стикер" className="press ml-1 self-end rounded-full p-2 text-muted" onClick={()=>onDelete(message.id)}><Trash2 className="size-4"/></button>:null}
-                  {!readonly&&onLike&&!pending?<div className={message.role==="user"?"ml-2 self-end":"mt-2"}><MessageLike liked={message.liked} count={message.liked?1:0} busy={streaming} onClick={()=>onLike(message.id)}/></div>:null}
+                  {!readonly && onLike && !pending && message.role === "assistant" ? (
+                    <div className="mt-1">
+                      <MessageLike bare liked={message.liked} busy={streaming} onClick={() => onLike(message.id)} />
+                    </div>
+                  ) : null}
 </motion.article>
               );
             })}
@@ -383,7 +391,7 @@ function UserBubble({
       ) : (
         <div
           ref={box}
-          className="rounded-3xl rounded-br-lg bg-subtle px-4 py-3 select-none [-webkit-touch-callout:none] md:select-text"
+          className="relative rounded-[1.35rem] rounded-br-md border-0 bg-fg/[0.06] px-4 py-3 shadow-none select-none [-webkit-touch-callout:none] md:select-text"
           onClick={() => {
             if (fine || window.getSelection()?.toString() || hold.fired.current) return;
           }}
@@ -418,6 +426,11 @@ function UserBubble({
             ) : (
               <p className="whitespace-pre-wrap text-pretty">{replaceStickerTokens(message.content)}</p>
             )
+          ) : null}
+          {message.praised ? (
+            <span className="absolute -right-1 -bottom-1 text-[#ff3b5c]" title="Модели понравился вопрос" aria-label="Модели понравился вопрос">
+              <Heart className="size-3" fill="currentColor" />
+            </span>
           ) : null}
         </div>
       )}

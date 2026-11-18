@@ -40,6 +40,7 @@ function asPublicMessage(value: unknown): ChatMessage | null {
   if (typeof raw.providerName === "string") message.providerName = raw.providerName.slice(0, 48);
   if (typeof raw.error === "string" && raw.error.trim()) message.error = raw.error.trim().slice(0, 300);
   if (raw.stopped) message.stopped = true;
+  if (raw.praised === true) message.praised = true;
   if (raw.truncated) message.truncated = true;
   if (raw.image) message.image = true;
   if (raw.web) message.web = true;
