@@ -4,6 +4,7 @@ export function commandOf(text: string): { name: string; arg: string } | null {
   return match ? { name: match[1].toLowerCase(), arg: (match[2] || "").trim() } : null;
 }
 export function splitTelegramText(text: string, limit = 3500): string[] {
+  // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted text.
   const clean = text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
   const parts: string[] = [];
   let rest = clean.slice(0, 28000);

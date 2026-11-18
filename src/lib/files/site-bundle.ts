@@ -38,6 +38,7 @@ export function sitePath(value: string, from = "index.html"): string | null {
     const url = new URL(value, new URL(from, ROOT));
     if (url.origin !== new URL(ROOT).origin) return null;
     const path = decodeURIComponent(url.pathname).slice(1);
+    // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted text.
     if (path.split("/").some((x) => x === ".." || /[\\\u0000-\u001f]/.test(x))) return null;
     return path;
   } catch {

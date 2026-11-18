@@ -73,7 +73,8 @@ export function validateFact(value: unknown, confirmSensitive = false): string {
   const text = value.trim();
   if (text.length < 3 || text.length > MAX_CONTENT)
     throw new MemoryInputError("Запись: от 3 до 500 символов");
-  if (/[\u0000-\u001f\u007f]/.test(text)) throw new MemoryInputError("Запишите факт одной строкой");
+  if (Array.from(text).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127))
+    throw new MemoryInputError("Запишите факт одной строкой");
   if (hasSecret(text)) throw new MemoryInputError("Секреты и платёжные реквизиты сохранять нельзя");
   if (
     /ignore.{0,20}(instruction|rule)|игнорируй.{0,30}(инструкц|правил)|system\s*prompt|системн.{0,20}(промпт|инструкц)|<\/?(?:system|script)|выдай.{0,20}(ключ|пароль)|override|jailbreak/i.test(

@@ -193,6 +193,7 @@ export const uploadDiskDocument = createServerFn({ method: "POST" })
       typeof row.name !== "string" ||
       !row.name.trim() ||
       row.name.length > 75 ||
+      // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted text.
       /[/\\\u0000-\u001f]/.test(row.name) ||
       !(documentKind(row.name) || isSiteAsset(row.name))
     )

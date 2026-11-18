@@ -7,7 +7,6 @@ import {
   normalizeFact,
   parseMemoryCommand,
   type Workspace,
-  type MemoryFact,
 } from "./policy";
 import * as store from "./store";
 export const OFF_WORKSPACE: Workspace = {
