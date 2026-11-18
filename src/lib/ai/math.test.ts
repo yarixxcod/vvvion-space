@@ -33,6 +33,13 @@ test("chat formulas are math, not an ascii drawing", () => {
   }
 });
 
+test("a bold list is markdown, not a clipped drawing", () => {
+  const text = ["*   **Цветение:** Озеро станет ярко-зелёным из-за ила", "*   **Заиливание:** Огромное количество отмерших водорослей"].join("\n");
+  const fenced = fenceAscii(text);
+  assert.equal(fenced.includes("```"), false);
+  assert.match(fenced, /\*\*Цветение:\*\*/);
+});
+
 test("prices stay text and a drawing stays a drawing", () => {
   const price = prepareMath("Билет стоит $18 и ещё $24.");
   assert.equal(price.slots.length, 0);

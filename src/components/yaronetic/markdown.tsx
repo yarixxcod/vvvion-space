@@ -12,7 +12,7 @@ import { evaluate, formatCalc } from "@/lib/ai/calc";
 import { prepareMath, type MathSlot } from "@/lib/ai/math";
 import { parseQuestionBlock, splitQuestionText } from "@/lib/ai/question";
 import { splitRich, type StepCard } from "@/lib/ai/steps";
-import { fenceAscii, isAsciiLang, looksLikeAscii } from "@/lib/ascii";
+import { fenceAscii, isAsciiLang, looksLikeAscii, looksLikeMarkdown } from "@/lib/ascii";
 import { pushBackLayer } from "@/lib/app-back";
 
 const EMPTY_SOURCES: Source[] = [];
@@ -190,6 +190,14 @@ function isHtmlBlock(lang: string | undefined, code: string) {
   return !key && /^\s*(<!doctype html|<html|<svg)/i.test(code);
 }
 
+function dedent(raw: string): string {
+  const lines = raw.replace(/\s+$/u, "").split("\n");
+  const widths = lines.filter((line) => line.trim()).map((line) => /^\t+$/.test(line) ? 0 : (line.match(/^[ ]*/)?.[0].length ?? 0));
+  const min = widths.length ? Math.min(...widths) : 0;
+  if (min < 1) return raw;
+  return lines.map((line) => line.slice(min)).join("\n");
+}
+
 function AsciiBlock({ code }: { code: string }) {
   return <pre className="ascii-art">{code.replace(/\n$/, "")}</pre>;
 }
@@ -335,8 +343,8 @@ function markdownComponents(live: boolean | undefined, slots: MathSlot[], source
       if (!(lang || raw.includes("\n"))) return <code>{raw}</code>;
       if (lang === "calc") return <CalcBlock code={raw} />;
       const plain = (lang || "").toLowerCase();
-      if (plain === "text" || plain === "txt" || plain === "plain" || plain === "plaintext" || plain === "md" || plain === "markdown") {
-        return <MarkdownBody text={raw} live={live} />;
+      if (plain === "text" || plain === "txt" || plain === "plain" || plain === "plaintext" || plain === "md" || plain === "markdown" || (!lang && looksLikeMarkdown(raw))) {
+        return <MarkdownBody text={dedent(raw)} live={live} />;
       }
       if (isHtmlBlock(lang, raw)) return <CodeBlock code={raw} lang={lang || "html"} live={live} />;
       if (isAsciiLang(lang) || (!lang && looksLikeAscii(raw))) return <AsciiBlock code={raw} />;
