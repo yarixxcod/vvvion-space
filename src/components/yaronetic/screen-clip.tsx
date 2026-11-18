@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Maximize2, Play, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { getScreen, type ScreenVideo } from "@/lib/screen/service";
+import { frameClass, stageClass, useClipFrame } from "@/components/yaronetic/screen-frame";
 
 const LABEL = { youtube: "YouTube", rutube: "Rutube", vk: "VK" } as const;
 
@@ -45,11 +46,14 @@ export function ScreenClip({ id }: { id: string }) {
     return <p className="mt-1.5 text-xs opacity-70">Ролик уже убрали</p>;
   }
 
+  const frame = useClipFrame(video.thumb, video.embedUrl, video.provider);
   return (
     <>
       <button type="button" className="relative mt-1.5 block w-full overflow-hidden rounded-2xl bg-black text-left" onClick={() => setOpen(true)}>
-        {video.thumb && !bad ? (
-          <img src={video.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} className="mx-auto max-h-[min(70dvh,640px)] w-auto max-w-full bg-black object-contain" />
+        {frame.src && !bad ? (
+          <span className={frameClass(frame.tall)}>
+            <img src={frame.src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBad(true)} onLoad={frame.onLoad} className="h-full w-full object-cover" />
+          </span>
         ) : (
           <span className="grid aspect-video w-full place-items-center bg-subtle font-serif text-3xl text-muted">{LABEL[video.provider]}</span>
         )}
@@ -68,7 +72,8 @@ export function ScreenClip({ id }: { id: string }) {
 }
 
 function ScreenPlayer({ video, onClose }: { video: ScreenVideo; onClose: () => void }) {
-  const frame = useRef<HTMLDivElement>(null);
+  const frameBox = useRef<HTMLDivElement>(null);
+  const poster = useClipFrame(video.thumb, video.embedUrl, video.provider);
   return (
     <div className="fixed inset-0 z-[90] flex flex-col bg-black/80 p-3" role="dialog" aria-modal="true" aria-label={video.title}>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -78,7 +83,7 @@ function ScreenPlayer({ video, onClose }: { video: ScreenVideo; onClose: () => v
           type="button"
           className="press inline-flex h-11 items-center gap-1.5 rounded-2xl bg-elev px-3 text-sm text-fg"
           onClick={() => {
-            const node = frame.current;
+            const node = frameBox.current;
             if (!node) return;
             if (document.fullscreenElement) void document.exitFullscreen();
             else void node.requestFullscreen().catch(() => undefined);
@@ -93,15 +98,17 @@ function ScreenPlayer({ video, onClose }: { video: ScreenVideo; onClose: () => v
         </button>
         </div>
       </div>
-      <div ref={frame} className="relative min-h-0 w-full flex-1 bg-black">
-        <iframe
-          title={video.title}
-          src={video.embedUrl}
-          className="absolute inset-0 h-full w-full"
-          allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-        />
+      <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div ref={frameBox} className={stageClass(poster.tall)}>
+          <iframe
+            title={video.title}
+            src={video.embedUrl}
+            className="absolute inset-0 h-full w-full"
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        </div>
       </div>
     </div>
   );

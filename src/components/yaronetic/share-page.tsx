@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { DocPreview } from "@/components/yaronetic/doc-preview";
 import { FileVideo } from "@/components/yaronetic/fit-video";
 import { Mark } from "@/components/yaronetic/mark";
 import { Wordmark } from "@/components/yaronetic/wordmark";
@@ -459,9 +460,7 @@ function Preview({
   onSave: () => void;
   onClose?: () => void;
 }) {
-  const [loading, setLoading] = useState(
-    entry.media === "pdf" || entry.media === "audio" || entry.media === "video",
-  );
+  const [loading, setLoading] = useState(entry.media === "audio" || entry.media === "video");
   const [failed, setFailed] = useState(false);
   return (
     <figure className="mt-5 overflow-hidden rounded-3xl border border-accent/20 bg-elev">
@@ -504,12 +503,7 @@ function Preview({
           </div>
         ) : null}
         {entry.media === "pdf" ? (
-          <iframe
-            title={entry.name}
-            src={entry.view}
-            onLoad={() => setLoading(false)}
-            className="h-[60dvh] w-full bg-white"
-          />
+          <DocPreview name={entry.name} src={entry.view} className="h-[60dvh]" />
         ) : null}
       </div>
       {entry.media === "file" ? (

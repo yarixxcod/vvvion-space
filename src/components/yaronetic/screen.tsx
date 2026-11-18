@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { getAccess } from "@/lib/social/admin";
 import { useCircleNest } from "@/lib/circle-history";
+import { frameClass, stageClass, useClipFrame } from "@/components/yaronetic/screen-frame";
 import { addScreenVideo, listScreen, removeScreenVideo, type ScreenVideo } from "@/lib/screen/service";
 
 const LABEL = { youtube: "YouTube", rutube: "Rutube", vk: "VK" } as const;
@@ -93,13 +94,7 @@ export function Screen() {
           </form>
         ) : null}
       </div>
-      <div
-        className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-10"
-        style={{
-          maskImage: "linear-gradient(to bottom, transparent 0, #000 0.7rem, #000 calc(100% - 2.4rem), transparent 100%)",
-          WebkitMaskImage: "linear-gradient(to bottom, transparent 0, #000 0.7rem, #000 calc(100% - 2.4rem), transparent 100%)",
-        }}
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-10">
         {rows === null ? <PageLoader compact /> : null}
         {rows && rows.length === 0 ? <p className="text-sm text-faint">Пока нет роликов.</p> : null}
         <ul className="grid gap-3 sm:grid-cols-2">
@@ -127,24 +122,24 @@ function Thumb({
   onRemove: () => void;
 }) {
   const [bad, setBad] = useState(false);
+  const frame = useClipFrame(video.thumb, video.embedUrl, video.provider);
   return (
     <li className="overflow-hidden rounded-[1.25rem] border border-line bg-elev">
       <button type="button" className="relative block w-full text-left" onClick={onOpen}>
-        {video.thumb && !bad ? (
-          <span className="relative block h-36 overflow-hidden bg-black/50 sm:h-40">
-            <img src={video.thumb} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-lg" />
+        {frame.src && !bad ? (
+          <span className={frameClass(frame.tall)}>
             <img
-              src={video.thumb}
+              src={frame.src}
               alt=""
               loading="lazy"
               referrerPolicy="no-referrer"
               onError={() => setBad(true)}
-              className="relative z-[1] h-full w-full object-contain"
+              onLoad={frame.onLoad}
+              className="h-full w-full object-cover"
             />
-            <span className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-10 bg-gradient-to-t from-elev to-transparent" />
           </span>
         ) : (
-          <span className="grid h-36 w-full place-items-center bg-subtle font-serif text-2xl text-muted sm:h-40">{LABEL[video.provider]}</span>
+          <span className="grid aspect-video w-full place-items-center bg-subtle font-serif text-2xl text-muted">{LABEL[video.provider]}</span>
         )}
         <span className="absolute bottom-2 left-2 z-[3] inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-xs text-white">
           <Play className="size-3" />
@@ -164,7 +159,8 @@ function Thumb({
 }
 
 function Player({ video, onClose }: { video: ScreenVideo; onClose: () => void }) {
-  const frame = useRef<HTMLDivElement>(null);
+  const frameBox = useRef<HTMLDivElement>(null);
+  const poster = useClipFrame(video.thumb, video.embedUrl, video.provider);
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-black/80 p-3" role="dialog" aria-modal="true" aria-label={video.title}>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -174,7 +170,7 @@ function Player({ video, onClose }: { video: ScreenVideo; onClose: () => void })
           type="button"
           className="press inline-flex h-11 items-center gap-1.5 rounded-2xl bg-elev px-3 text-sm"
           onClick={() => {
-            const node = frame.current;
+            const node = frameBox.current;
             if (!node) return;
             if (document.fullscreenElement) void document.exitFullscreen();
             else void node.requestFullscreen().catch(() => undefined);
@@ -189,15 +185,17 @@ function Player({ video, onClose }: { video: ScreenVideo; onClose: () => void })
         </button>
         </div>
       </div>
-      <div ref={frame} className="relative min-h-0 w-full flex-1 bg-black">
-        <iframe
-          title={video.title}
-          src={video.embedUrl}
-          className="absolute inset-0 h-full w-full"
-          allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
-          allowFullScreen
-          referrerPolicy="strict-origin-when-cross-origin"
-        />
+      <div className="flex min-h-0 flex-1 items-center justify-center">
+        <div ref={frameBox} className={stageClass(poster.tall)}>
+          <iframe
+            title={video.title}
+            src={video.embedUrl}
+            className="absolute inset-0 h-full w-full"
+            allow="autoplay; fullscreen; picture-in-picture; encrypted-media"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        </div>
       </div>
     </div>
   );

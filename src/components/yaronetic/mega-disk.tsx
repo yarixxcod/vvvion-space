@@ -1,9 +1,10 @@
 import { readSiteAsset } from "@/lib/files/documents.fn";
-import { isSiteAsset } from "@/lib/files/document-kind";
+import { isSiteAsset, documentKind } from "@/lib/files/document-kind";
 import { Monitor } from "lucide-react";
 import { DocumentEditor } from "./document-editor";
 import { SitePreview, type SiteSource } from "./site-preview";
-import { documentKind } from "@/lib/files/document-kind";
+import { DocPreview } from "@/components/yaronetic/doc-preview";
+import { officeKind } from "@/lib/files/office-preview";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Download, FileText, Folder, FolderPlus, Music2, Pencil, Share2, Trash2, X } from "lucide-react";
@@ -133,7 +134,9 @@ function MegaPreview({
             Слушать
           </button>
         ) : null}
-        {kind === "pdf" ? <iframe title={entry.name} src={src} className="h-full min-h-[70dvh] w-full rounded-2xl bg-white" /> : null}
+        {kind === "pdf" || (kind === "file" && officeKind(entry.name)) ? (
+          <DocPreview name={entry.name} src={src} headers={megaAuthHeaders()} className="min-h-0 flex-1" />
+        ) : null}
         {kind === "text" ? (
           entry.bytes > 200_000 ? (
             <p className="text-sm text-white">Слишком большой для превью. Его можно скачать.</p>
@@ -145,7 +148,7 @@ function MegaPreview({
             <pre className="max-h-full w-full overflow-auto rounded-2xl bg-elev p-4 text-left text-xs whitespace-pre-wrap">{text}</pre>
           )
         ) : null}
-        {kind === "file" ? <p className="px-6 text-center text-sm text-white">Превью для этого файла нет. Его можно скачать.</p> : null}
+        {kind === "file" && !officeKind(entry.name) ? <p className="px-6 text-center text-sm text-white">Превью для этого файла нет. Его можно скачать.</p> : null}
       </div>
     </div>
   );

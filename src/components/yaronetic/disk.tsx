@@ -1,9 +1,10 @@
 import { DiskImports } from "./disk-imports";
 import { readSiteAsset } from "@/lib/files/documents.fn";
-import { isSiteAsset } from "@/lib/files/document-kind";
+import { isSiteAsset, documentKind } from "@/lib/files/document-kind";
 import { DocumentEditor } from "./document-editor";
 import { SitePreview, type SiteSource } from "./site-preview";
-import { documentKind } from "@/lib/files/document-kind";
+import { DocPreview } from "@/components/yaronetic/doc-preview";
+import { officeKind } from "@/lib/files/office-preview";
 import { useEffect, useState, type ReactNode } from "react";
 import { Monitor, Download, Folder, FolderPlus, Link2, Pencil, Trash2 } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
@@ -148,6 +149,7 @@ function OwnDisk() {
   const [open, setOpen] = useState<DiskFile | null>(null);
   const [edit, setEdit] = useState<DiskFile | null>(null);
   const [document, setDocument] = useState<DiskFile | null>(null);
+  const [sheet, setSheet] = useState<DiskFile | null>(null);
   const [site, setSite] = useState<{folder:string|null;entry?:string;name:string}|null>(null);
   const [sort, setSort] = useState<SortKey>("date");
   const [dir, setDir] = useState<SortDir>("desc");
@@ -500,7 +502,7 @@ function OwnDisk() {
         </section>
       ) : null}
 
-      {documents.length > 0 ? <section className="mt-4"><h3 className="px-1 text-sm font-medium">Файлы</h3><ul className="mt-2 space-y-2">{documents.map((file) => <li key={file.id} className={cn("flex items-center gap-3 rounded-2xl border bg-bg p-3", picked.includes(file.id) ? "border-accent" : "border-line")}><button type="button" onClick={() => toggle(file.id)} aria-pressed={picked.includes(file.id)} className="press grid size-11 shrink-0 place-items-center rounded-xl bg-subtle text-accent">{picked.includes(file.id) ? "✓" : "TXT"}</button><div className="min-w-0 flex-1"><button type="button" className="press block min-h-11 w-full truncate text-left text-sm" onClick={()=> /\.html?$/i.test(file.name) ? setSite({folder:file.folderId,entry:file.name,name:file.name}) : documentKind(file.name) ? setDocument(file) : void downloadUrl(srcOf(file),file.name).catch(()=>toast.error("Не удалось открыть"))}>{file.name}</button><p className="text-xs text-faint">{sizeLabel(file.bytes)}</p></div><button type="button" aria-label={`Скачать ${file.name}`} className="press min-h-11 rounded-xl border border-line px-3 text-xs" onClick={() => void downloadUrl(srcOf(file), file.name).catch(() => toast.error("Не удалось скачать файл"))}>Скачать</button>{diskMenu(file)}</li>)}</ul></section> : null}
+      {documents.length > 0 ? <section className="mt-4"><h3 className="px-1 text-sm font-medium">Файлы</h3><ul className="mt-2 space-y-2">{documents.map((file) => <li key={file.id} className={cn("flex items-center gap-3 rounded-2xl border bg-bg p-3", picked.includes(file.id) ? "border-accent" : "border-line")}><button type="button" onClick={() => toggle(file.id)} aria-pressed={picked.includes(file.id)} className="press grid size-11 shrink-0 place-items-center rounded-xl bg-subtle text-accent">{picked.includes(file.id) ? "✓" : "TXT"}</button><div className="min-w-0 flex-1"><button type="button" className="press block min-h-11 w-full truncate text-left text-sm" onClick={() => /\.html?$/i.test(file.name) ? setSite({ folder: file.folderId, entry: file.name, name: file.name }) : documentKind(file.name) ? setDocument(file) : officeKind(file.name) ? setSheet(file) : void downloadUrl(srcOf(file), file.name).catch(() => toast.error("Не удалось открыть"))}>{file.name}</button><p className="text-xs text-faint">{sizeLabel(file.bytes)}</p></div><button type="button" aria-label={`Скачать ${file.name}`} className="press min-h-11 rounded-xl border border-line px-3 text-xs" onClick={() => void downloadUrl(srcOf(file), file.name).catch(() => toast.error("Не удалось скачать файл"))}>Скачать</button>{diskMenu(file)}</li>)}</ul></section> : null}
 
       {voices.length > 0 ? (
         <section className="mt-4">
@@ -574,6 +576,21 @@ function OwnDisk() {
         </div>
       ) : null}
       {document ? <DocumentEditor storage="disk" file={document} onClose={()=>setDocument(null)} onSaved={async()=>{setRev(value=>value+1);setDisk(await getDisk());}}/> : null}
+      {sheet ? (
+        <div className="fixed inset-0 z-[80] flex flex-col bg-black/80 p-3" role="dialog" aria-modal="true" aria-label={sheet.name}>
+          <div className="flex items-center gap-2">
+            <BackButton onClick={() => setSheet(null)} label="Назад" className="text-white" />
+            <p className="min-w-0 flex-1 truncate text-sm text-white">{sheet.name}</p>
+            <button type="button" className="press inline-flex h-11 items-center gap-1.5 rounded-2xl bg-elev px-3 text-sm" onClick={() => void downloadUrl(srcOf(sheet), sheet.name).catch(() => toast.error("Не удалось скачать"))}>
+              <Download className="size-4" />
+              Скачать
+            </button>
+          </div>
+          <div className="mt-3 min-h-0 flex-1 overflow-auto">
+            <DocPreview name={sheet.name} src={srcOf(sheet)} className="h-full" />
+          </div>
+        </div>
+      ) : null}
       {site ? <SitePreview name={site.name} entry={site.entry} onClose={()=>setSite(null)} load={async()=>disk.files.filter(file=>file.folderId===site.folder && isSiteAsset(file.name)).map(file=>({path:file.name,url:srcOf(file),mime:file.mime,bytes:file.bytes,read:async()=>{const asset=await readSiteAsset({data:{storage:"disk",id:file.id}});return Uint8Array.from(atob(asset.data),c=>c.charCodeAt(0));}}))}/> : null}
       {edit ? (
         <FileEditor
