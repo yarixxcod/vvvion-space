@@ -272,7 +272,7 @@ export function Transcript({
                   {message.role==="user"&&!visual.text&&visual.stickers.length&&!readonly&&onDelete?<button type="button" aria-label="Удалить стикер" className="press ml-1 self-end rounded-full p-2 text-muted" onClick={()=>onDelete(message.id)}><Trash2 className="size-4"/></button>:null}
                   {!readonly && onLike && !pending && message.role === "assistant" ? (
                     <div className="mt-1">
-                      <MessageLike bare liked={message.liked} busy={streaming} onClick={() => onLike(message.id)} />
+                      <MessageLike bare liked={message.liked} onClick={() => onLike(message.id)} />
                     </div>
                   ) : null}
 </motion.article>

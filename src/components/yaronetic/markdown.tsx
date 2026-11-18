@@ -334,6 +334,10 @@ function markdownComponents(live: boolean | undefined, slots: MathSlot[], source
       const lang = /language-([\w#+.-]+)/.exec(className || "")?.[1];
       if (!(lang || raw.includes("\n"))) return <code>{raw}</code>;
       if (lang === "calc") return <CalcBlock code={raw} />;
+      const plain = (lang || "").toLowerCase();
+      if (plain === "text" || plain === "txt" || plain === "plain" || plain === "plaintext" || plain === "md" || plain === "markdown") {
+        return <MarkdownBody text={raw} live={live} />;
+      }
       if (isHtmlBlock(lang, raw)) return <CodeBlock code={raw} lang={lang || "html"} live={live} />;
       if (isAsciiLang(lang) || (!lang && looksLikeAscii(raw))) return <AsciiBlock code={raw} />;
       return <CodeBlock code={raw} lang={lang} live={live} />;

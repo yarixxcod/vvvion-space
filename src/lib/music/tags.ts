@@ -74,7 +74,7 @@ export function readTags(bytes: Uint8Array): MusicTags {
         : mp4 && (mp4.title || mp4.artist || mp4.cover)
           ? mp4
           : (id3 ?? flac ?? mp4 ?? { ...EMPTY });
-  return {
+  const tags: MusicTags = {
     title: picked.title,
     artist: picked.artist,
     album: picked.album,
@@ -85,6 +85,8 @@ export function readTags(bytes: Uint8Array): MusicTags {
     bits: picked.bits || flac?.bits || wav.bits || 0,
     duration: picked.duration || flac?.duration || 0,
   };
+  if (!tags.sampleRate || !tags.duration) applyMp4Clock(tags, bytes);
+  return tags;
 }
 
 export function musicBits(tags: { bitrate: number; sampleRate: number; bits: number; duration?: number } | null, size = 0): string {
@@ -147,6 +149,14 @@ function u32(bytes: Uint8Array, at: number): number {
 
 function syncsafe(bytes: Uint8Array, at: number): number {
   return ((bytes[at] ?? 0) & 0x7f) * 0x200000 + ((bytes[at + 1] ?? 0) & 0x7f) * 0x4000 + ((bytes[at + 2] ?? 0) & 0x7f) * 0x80 + ((bytes[at + 3] ?? 0) & 0x7f);
+}
+
+export function audioStart(bytes: Uint8Array): number {
+  if (bytes.length < 10 || bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return 0;
+  const size = syncsafe(bytes, 6);
+  const span = 10 + size;
+  if (span < 10 || span > 40_000_000) return 0;
+  return span;
 }
 
 function readId3(bytes: Uint8Array): MusicTags | null {
@@ -379,6 +389,27 @@ function flacPicture(block: Uint8Array): MusicTags["cover"] {
   at += 4;
   if (dataLen < 32 || at + dataLen > block.length || dataLen > 1_500_000) return null;
   return { mime: mime.startsWith("image/") ? mime : "image/jpeg", bytes: block.subarray(at, at + dataLen) };
+}
+
+const AUDIO_RATES = new Set([8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 88200, 96000, 176400, 192000]);
+
+function applyMp4Clock(tags: MusicTags, bytes: Uint8Array) {
+  const end = bytes.length - 28;
+  for (let i = 4; i <= end; i += 1) {
+    if (bytes[i] !== 0x6d || bytes[i + 1] !== 0x64 || bytes[i + 2] !== 0x68 || bytes[i + 3] !== 0x64) continue;
+    const size = u32(bytes, i - 4);
+    const version = bytes[i + 4] ?? 0xff;
+    if ((version === 0 && size !== 32) || (version === 1 && size !== 44) || version > 1) continue;
+    if ((bytes[i + 5] ?? 1) !== 0 || (bytes[i + 6] ?? 1) !== 0 || (bytes[i + 7] ?? 1) !== 0) continue;
+    const timescale = version === 0 ? u32(bytes, i + 16) : u32(bytes, i + 24);
+    if (!AUDIO_RATES.has(timescale)) continue;
+    const duration = version === 0 ? u32(bytes, i + 20) : u32(bytes, i + 28) * 0x100000000 + u32(bytes, i + 32);
+    const seconds = duration / timescale;
+    if (seconds < 0.4 || seconds > 60 * 60 * 6) continue;
+    if (!tags.sampleRate) tags.sampleRate = timescale;
+    if (!tags.duration) tags.duration = seconds;
+    return;
+  }
 }
 
 function readMp4(bytes: Uint8Array): MusicTags | null {

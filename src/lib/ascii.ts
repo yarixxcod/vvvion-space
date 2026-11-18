@@ -26,7 +26,7 @@ export function looksLikeAscii(text: string): boolean {
 
 export function isAsciiLang(lang?: string): boolean {
   const key = (lang || "").toLowerCase();
-  return key === "ascii" || key === "text" || key === "txt" || key === "plaintext" || key === "art";
+  return key === "ascii" || key === "art";
 }
 
 /** Wrap unprotected drawings in an ascii fence so Markdown keeps every space. */

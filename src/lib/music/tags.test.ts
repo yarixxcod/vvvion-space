@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isMusicFile, readTags } from "./tags.ts";
+import { audioStart, isMusicFile, musicBits, readTags } from "./tags.ts";
 import { parseLrc } from "./lrc.ts";
 
 function id3(title: string, artist: string, genre: string): Uint8Array {
@@ -70,6 +70,40 @@ test("mp3 frame bitrate", () => {
   const tags = readTags(new Uint8Array([0xff, 0xfb, 0xe0, 0x00, 0xff, 0xfb, 0xe0, 0x00]));
   assert.equal(tags.bitrate, 320);
   assert.equal(tags.sampleRate, 44100);
+});
+
+test("audio starts after a long id3 cover", () => {
+  const header = new Uint8Array(10);
+  header.set([0x49, 0x44, 0x33, 0x03, 0x00, 0x00]);
+  const size = 600_000;
+  header[6] = (size >> 21) & 0x7f;
+  header[7] = (size >> 14) & 0x7f;
+  header[8] = (size >> 7) & 0x7f;
+  header[9] = size & 0x7f;
+  assert.equal(audioStart(header), 10 + size);
+});
+
+test("m4a clock comes from mdhd", () => {
+  const box = new Uint8Array(32);
+  box[0] = 0;
+  box[1] = 0;
+  box[2] = 0;
+  box[3] = 32;
+  box.set([0x6d, 0x64, 0x68, 0x64], 4);
+  const rate = 44100;
+  const samples = rate * 180;
+  box[20] = (rate >>> 24) & 0xff;
+  box[21] = (rate >>> 16) & 0xff;
+  box[22] = (rate >>> 8) & 0xff;
+  box[23] = rate & 0xff;
+  box[24] = (samples >>> 24) & 0xff;
+  box[25] = (samples >>> 16) & 0xff;
+  box[26] = (samples >>> 8) & 0xff;
+  box[27] = samples & 0xff;
+  const tags = readTags(box);
+  assert.equal(tags.sampleRate, 44100);
+  assert.equal(tags.duration, 180);
+  assert.equal(musicBits(tags, 180 * 128_000 / 8), "128 кбит/с · 44.1 кГц");
 });
 
 test("lrc lines", () => {

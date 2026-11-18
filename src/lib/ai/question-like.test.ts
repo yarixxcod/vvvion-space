@@ -13,3 +13,9 @@ test("an ordinary answer is left untouched", () => {
   const text = "Просто ответ.";
   assert.deepEqual(peelQuestionLike(text), { text, like: false });
 });
+
+test("a half-written like mark stays out of the answer", () => {
+  const peeled = peelQuestionLike("Смотрю дальше\n[[lik");
+  assert.equal(peeled.like, false);
+  assert.equal(peeled.text, "Смотрю дальше");
+});

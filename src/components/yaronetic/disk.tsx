@@ -77,7 +77,7 @@ function DiskTrack({ file, src, picked, menu, onPlay, onPick }: { file: DiskFile
   if (!ready) return null;
 
   return (
-    <li className="flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2">
+    <li className="relative z-0 flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <span className="relative shrink-0">
           <button type="button" className="press block" onClick={onPlay}>
@@ -350,7 +350,7 @@ function OwnDisk() {
   }
 
   return (
-    <div className="absolute inset-0 overflow-y-auto overscroll-contain px-3 pt-4 pb-10">
+    <div className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-4 pb-10">
       <section className="rounded-[1.7rem] border border-line bg-elev px-4 py-4">
         <p className="text-xs tracking-[0.22em] text-faint uppercase">{tx({ ru: "Диск", en: "Disk", kk: "Диск" })}</p>
         <p className="mt-1 font-serif text-4xl leading-none">

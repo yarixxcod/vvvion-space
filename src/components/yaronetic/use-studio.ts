@@ -1490,10 +1490,12 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   }, [setMsgs, setTheme, setPaper, setFace, setSearchEngine, setReasoning]);
 
   function likeMessage(messageId:string){
-    if(busyRef.current)return;
     const target = messagesRef.current.find((item) => item.id === messageId);
     if (!target || target.role !== "assistant") return;
-    const next=messagesRef.current.map(m=>m.id===messageId?{...m,liked:!m.liked}:m);
+    const liked = !target.liked;
+    const next=messagesRef.current.map(m=>m.id===messageId?{...m,liked}:m);
+    const live = liveRef.current;
+    if (live) live.messages = live.messages.map((item) => (item.id === messageId ? { ...item, liked } : item));
     setMsgs(next);
     const chat=chatsRef.current.find(c=>c.id===activeChatRef.current);
     if(chat)void persistChat({...chat,messages:next,updatedAt:Date.now()},true);

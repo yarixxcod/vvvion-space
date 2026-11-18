@@ -31,7 +31,7 @@ export function FileBar({
   onDir: () => void;
 }) {
   return (
-    <div className="sticky top-4 z-[1] -mx-3 mt-3 bg-elev px-3 pb-1">
+    <div className="relative z-[2] mt-3">
       <input
         value={query}
         onChange={(event) => onQuery(event.target.value)}
@@ -45,13 +45,13 @@ export function FileBar({
             key={item.key}
             type="button"
             aria-pressed={sort === item.key}
-            className={cn("press h-8 rounded-full px-3 text-xs", sort === item.key ? "bg-accent text-accent-fg" : "border border-line text-muted")}
+            className={cn("press h-8 shrink-0 rounded-full px-3 text-xs whitespace-nowrap", sort === item.key ? "bg-accent text-accent-fg" : "border border-line text-muted")}
             onClick={() => onSort(item.key)}
           >
             {item.label}
           </button>
         ))}
-        <button type="button" className="press inline-flex h-8 items-center gap-1 rounded-full border border-line px-3 text-xs text-muted" onClick={onDir}>
+        <button type="button" className="press inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-line px-3 text-xs whitespace-nowrap text-muted" onClick={onDir}>
           {dir === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />}
           {dirLabel(sort, dir)}
         </button>

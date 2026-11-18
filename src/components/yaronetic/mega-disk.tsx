@@ -202,7 +202,7 @@ function TrackRow({
   const extra = bits || sizeLabel(bytes);
 
   return (
-    <li className="flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2">
+    <li className="relative z-0 flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2">
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <span className="relative shrink-0">
           <button type="button" className="press block" onClick={onPlay} disabled={disabled}>
@@ -607,7 +607,7 @@ export function MegaDisk() {
   const ratio = view.quota > 0 ? Math.min(1, view.used / view.quota) : 0;
 
   return (
-    <div className="absolute inset-0 overflow-y-auto overscroll-contain px-3 pt-4 pb-10">
+    <div className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-4 pb-10">
       <section className="rounded-[1.7rem] border border-line bg-elev px-4 py-4">
         <p className="text-xs tracking-[0.22em] text-faint uppercase">{tx({ ru: "Мегадиск", en: "Megadisk", kk: "Мегадиск" })}</p>
         <p className="mt-1 font-serif text-4xl leading-none">
@@ -789,7 +789,7 @@ export function MegaDisk() {
             );
           }
           return (
-            <li key={entry.id} className={`flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2`}>
+            <li key={entry.id} className="relative z-0 flex items-center gap-2 rounded-2xl border border-line bg-bg px-3 py-2">
               {entry.kind === "folder" ? (
                 <button type="button" className="press flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => void openFolder(entry.id)}>
                   <Folder className="size-4 shrink-0 text-muted" />

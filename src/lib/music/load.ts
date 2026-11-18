@@ -1,4 +1,4 @@
-import { readTags, readTailTags, type MusicTags } from "@/lib/music/tags";
+import { audioStart, readTags, readTailTags, type MusicTags } from "@/lib/music/tags";
 
 const cache = new Map<string, Promise<MusicTags>>();
 const STAMP_KEY = "vvvion.tag-rev";
@@ -66,13 +66,45 @@ export function loadTags(src: string, name: string): Promise<MusicTags> {
   return job;
 }
 
+function hasTech(tags: MusicTags): boolean {
+  return tags.bitrate > 0 || (tags.sampleRate >= 8000 && tags.duration > 1);
+}
+
+function mergeTech(base: MusicTags, extra: MusicTags): MusicTags {
+  return {
+    title: base.title || extra.title,
+    artist: base.artist || extra.artist,
+    album: base.album || extra.album,
+    genre: base.genre || extra.genre,
+    cover: base.cover ?? extra.cover,
+    bitrate: base.bitrate || extra.bitrate,
+    sampleRate: base.sampleRate || extra.sampleRate,
+    bits: base.bits || extra.bits,
+    duration: base.duration || extra.duration,
+  };
+}
+
 async function read(src: string, name: string): Promise<MusicTags> {
   const head = await pull(src, "bytes=0-524287");
-  const tags = readTags(head);
-  if (tags.title || tags.artist || tags.cover) return tags;
-  if (!/\.(m4a|mp4|aac)$/i.test(name)) return tags;
-  const tail = await pull(src, "bytes=-1048575");
-  return readTailTags(tail);
+  let tags = readTags(head);
+  const span = audioStart(head);
+  if (!hasTech(tags) && span > head.length - 16 && span < 40_000_000) {
+    try {
+      const frames = await pull(src, `bytes=${span}-${span + 131071}`);
+      tags = mergeTech(tags, readTags(frames));
+    } catch {
+      /* title and cover from the header still stand */
+    }
+  }
+  const needTail = !hasTech(tags) && (span > head.length || /\.(m4a|mp4|aac)$/i.test(name) || !(tags.title || tags.artist || tags.cover));
+  if (needTail) {
+    try {
+      tags = mergeTech(tags, readTailTags(await pull(src, "bytes=-1048575")));
+    } catch {
+      /* keep whatever the head already had */
+    }
+  }
+  return tags;
 }
 
 async function pull(src: string, range: string): Promise<Uint8Array> {
