@@ -32,6 +32,7 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
   const [node, setNode] = useState<HTMLElement | null>(null);
   const [person, setPerson] = useState<PublicPerson | null>(null);
   const [error, setError] = useState("");
+  const [report, setReport] = useState(false);
   useEffect(() => setNode(document.body), []);
   useEffect(() => pushBackLayer(onClose), [onClose]);
   useEffect(() => {
@@ -54,7 +55,6 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
   const place = [person?.city, person?.country].filter(Boolean).join(", ");
   const born = person?.birthDate ? formatBirth(person.birthDate) : "";
   const mine = Boolean(me?.id && me.id === userId);
-  const [report, setReport] = useState(false);
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/55 sm:items-center" role="presentation" onClick={onClose}>
       <div
