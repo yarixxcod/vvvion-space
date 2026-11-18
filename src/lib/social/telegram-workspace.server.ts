@@ -16,6 +16,14 @@ const AI: Key = [
   ],
   BACK,
 ];
+async function modelLabel(name: string) {
+  if (!name) return "";
+  const sql = await getSql();
+  const [row] = await sql<{
+    label: string;
+  }>`select coalesce(nullif(display_name, ''), name) as label from catalog_models where name = ${name}`;
+  return row?.label || name;
+}
 async function session(userId: string) {
   await ensureTelegramWorkspace();
   const sql = await getSql();
@@ -46,10 +54,11 @@ export async function workspaceAction(
     } else await sql`update telegram_sessions set ai_enabled=true where user_id=${userId}`;
     const s = await session(userId);
     if (!s?.model) return workspaceAction(token, chatId, userId, "models");
+    const label = await modelLabel(s.model);
     await say(
       token,
       chatId,
-      `ИИ-чат включён · ${s.model}\n\nОтправьте вопрос обычным сообщением. История появится и на сайте. Лимиты общие с сайтом. /stop возвращает обычный режим.`,
+      `ИИ-чат включён · ${label}\n\nОтправьте вопрос обычным сообщением. История появится и на сайте. Лимиты общие с сайтом. /stop возвращает обычный режим.`,
       AI,
     );
     return true;
@@ -94,17 +103,18 @@ export async function workspaceAction(
     if (!/^[a-f0-9]{32}$/.test(key)) return true;
     const [model] = await sql<{
       name: string;
-    }>`select name from catalog_models where md5(name)=${key}`;
+      label: string;
+    }>`select name, coalesce(nullif(display_name, ''), name) as label from catalog_models where md5(name) = ${key}`;
     if (!model) {
       await say(token, chatId, "Модель больше не найдена. Откройте /models.", AI);
       return true;
     }
     await session(userId);
-    await sql`update telegram_sessions set model=${model.name},ai_enabled=true where user_id=${userId}`;
+    await sql`update telegram_sessions set model = ${model.name}, ai_enabled = true where user_id = ${userId}`;
     await say(
       token,
       chatId,
-      `Выбрана ${model.name}. Можно писать вопрос. Контекст текущего диалога сохранён.`,
+      `Выбрана ${model.label}. Можно писать вопрос. Контекст текущего диалога сохранён.`,
       AI,
     );
     return true;
@@ -344,6 +354,7 @@ export async function aiMessage(
       role: "assistant",
       content: answer,
       model: s.model,
+      modelLabel: (await modelLabel(s.model)) || undefined,
       createdAt: Date.now(),
     };
     await withTransaction(async (tx) => {

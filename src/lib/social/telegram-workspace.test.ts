@@ -151,6 +151,10 @@ test("a repeated update does not duplicate an action", async () => {
 test("models and AI conversation use the same saved_chats owner", async () => {
   const [{ key }] = await sql.query("select md5(name) as key from catalog_models");
   await workspaceAction(token, "123", "alice", "model:" + key);
+  assert.match(sent.at(-1).body.text, /^Выбрана Model A\./);
+  assert.ok(!sent.at(-1).body.text.includes("model-a"));
+  const [picked] = await sql.query("select model from telegram_sessions where user_id='alice'");
+  assert.equal(picked.model, "model-a");
   await handleTelegram(request(message(4, "Привет")));
   assert.equal(state.__tgCalls, 1);
   const rows = await sql.query("select user_id,messages from saved_chats");
