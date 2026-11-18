@@ -311,16 +311,14 @@ function Shelf({
         void take([...event.dataTransfer.files]);
       }}
     >
-      <div className="flex items-start justify-between gap-3 px-4 pt-4">
-        <div>
-          <h3 className="font-serif text-2xl tracking-tight">Читальня</h3>
-          <p className="mt-1 max-w-md text-sm text-muted">
-            EPUB, FB2, TXT и PDF до 20 МБ. Книги с картинками тоже кладутся на полку. Загруженную книгу видят все, кто вошёл.
-          </p>
+      <div className="flex items-center justify-between gap-3 px-4 pt-3">
+        <div className="min-w-0">
+          <h3 className="font-serif text-lg leading-tight tracking-tight">Читальня</h3>
+          <p className="mt-0.5 truncate text-xs text-muted">EPUB, FB2, TXT и PDF · до 20 МБ</p>
         </div>
         <button
           type="button"
-          className="press inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-40"
+          className="press inline-flex h-9 shrink-0 items-center gap-1.5 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-40"
           disabled={busy}
           onClick={() => input.current?.click()}
         >
@@ -340,7 +338,7 @@ function Shelf({
           }}
         />
       </div>
-      <label className="relative mx-4 mt-3 block">
+      <label className="relative mx-4 mt-2 block">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-faint" />
         <input
           id="shelf-search"
@@ -351,7 +349,13 @@ function Shelf({
           maxLength={80}
         />
       </label>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-10"
+        style={{
+          maskImage: "linear-gradient(to bottom, transparent 0, #000 0.7rem, #000 calc(100% - 2.4rem), transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to bottom, transparent 0, #000 0.7rem, #000 calc(100% - 2.4rem), transparent 100%)",
+        }}
+      >
         {error ? (
           <div>
             <p className="text-sm text-danger">{error}</p>
@@ -370,7 +374,7 @@ function Shelf({
             </p>
           </div>
         ) : (
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(160px,220px))] justify-center gap-3">
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-[repeat(auto-fill,minmax(140px,180px))] sm:justify-center">
             {books.map((book) => (
               <li key={book.id} className="relative">
                 <button type="button" className="press group w-full text-left" onClick={() => onOpen(book)}>
@@ -530,9 +534,12 @@ function Cover({ book }: { book: ShelfBook }) {
   const pct = book.chapters > 0 ? Math.round(((book.chapter + book.ratio) / book.chapters) * 100) : 0;
   const minutes = book.words > 40 ? Math.max(1, Math.round(book.words / 180)) : 0;
   return (
-    <div className="relative aspect-[2/3] overflow-hidden rounded-2xl border border-line bg-subtle shadow-[var(--shadow)]">
+    <div className="relative aspect-[3/4] overflow-hidden rounded-2xl border border-line bg-subtle shadow-[var(--shadow)]">
       {book.cover ? (
-        <img src={book.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+        <>
+          <img src={book.cover} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-md" />
+          <img src={book.cover} alt="" loading="lazy" className="relative z-[1] h-full w-full object-contain" />
+        </>
       ) : (
         <div className="flex h-full flex-col justify-between p-3">
           <span className="text-xs tracking-widest text-faint uppercase">{book.format}</span>
@@ -540,13 +547,13 @@ function Cover({ book }: { book: ShelfBook }) {
           <span className="truncate text-xs text-muted">{book.author || "без автора"}</span>
         </div>
       )}
-      <span className="absolute top-2 left-2 rounded-full bg-bg/80 px-2 py-0.5 text-xs tracking-wide text-muted uppercase">
+      <span className="absolute top-2 left-2 z-[2] rounded-full bg-bg/80 px-2 py-0.5 text-xs tracking-wide text-muted uppercase">
         {book.format}
       </span>
       {minutes ? (
-        <span className="absolute right-2 bottom-3 rounded-full bg-bg/80 px-2 py-0.5 text-xs text-muted">~{minutes} мин</span>
+        <span className="absolute right-2 bottom-3 z-[2] rounded-full bg-bg/80 px-2 py-0.5 text-xs text-muted">~{minutes} мин</span>
       ) : null}
-      <span className="absolute inset-x-0 bottom-0 h-1 bg-fg/10">
+      <span className="absolute inset-x-0 bottom-0 z-[2] h-1 bg-fg/10">
         <span className="block h-full bg-accent" style={{ width: `${Math.min(100, pct)}%` }} />
       </span>
     </div>

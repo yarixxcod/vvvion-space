@@ -88,7 +88,8 @@ export function App({
   const builtinLocked = banned && studio.activeProvider.kind === "builtin";
   const activeChat = studio.chats.find((chat) => chat.id === studio.activeChatId);
   const streamingHere = studio.streaming && studio.streamingChatId === studio.activeChatId;
-  const thought = thinkKind(studio.activeProvider.model);
+  const modelId = studio.activeProvider.model;
+  const thought = thinkKind(modelId, studio.modelLabels[modelId] || "");
   const personal = Boolean(user && interests && interests.topics.length > 0);
   const suggestions = personal && interests ? personalSuggestions(interests.topics, interests.tone) : suggestionsFor(lang);
   const builtin = studio.providers.find((provider) => provider.kind === "builtin");
@@ -884,6 +885,32 @@ function AccountGate() {
   );
 }
 
+function visitSalt(): number {
+  try {
+    const key = "vvvion.suggest.salt";
+    const saved = sessionStorage.getItem(key);
+    if (saved && Number(saved)) return Number(saved);
+    const next = (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
+    sessionStorage.setItem(key, String(next || 1));
+    return next || 1;
+  } catch {
+    return Math.floor(Date.now() / 86_400_000) || 1;
+  }
+}
+
+function mixCards<T>(items: readonly T[], salt: number): T[] {
+  const list = items.slice();
+  let state = salt >>> 0 || 1;
+  for (let i = list.length - 1; i > 0; i -= 1) {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    const j = state % (i + 1);
+    const swap = list[i] as T;
+    list[i] = list[j] as T;
+    list[j] = swap;
+  }
+  return list;
+}
+
 function EmptyChat({
   onPick,
   disabled,
@@ -896,6 +923,8 @@ function EmptyChat({
   personal: boolean;
 }) {
   const lang = useLang();
+  const [salt] = useState(visitSalt);
+  const cards = useMemo(() => mixCards(suggestions, salt).slice(0, 4), [suggestions, salt]);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4">
       <div className="m-auto flex w-full max-w-2xl flex-col items-center py-8">
@@ -908,7 +937,7 @@ function EmptyChat({
           <p className="mt-8 text-sm text-faint">{ui(lang, "gathering")}</p>
         ) : (
           <div className="mt-8 grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
-            {suggestions.slice(0, 4).map((item, index) => (
+            {cards.map((item, index) => (
               <button
                 key={`${item.title}-${index}`}
                 type="button"

@@ -1002,7 +1002,7 @@ export async function handleChat(request: Request): Promise<Response> {
 		}), request);
 		try {
 		const signal = armRun(actorUser, track, request, 24e4);
-        const providerRouter = createProviderRouter(targets, (url, headers, body, signal, secret) => callChat(url, headers, applyChatReasoning(body, typeof body.model === "string" ? body.model : ""), signal, secret), signal);
+        const providerRouter = createProviderRouter(targets, (url, headers, body, signal, secret) => callChat(url, headers, applyChatReasoning(body, typeof body.model === "string" ? body.model : "", model), signal, secret), signal);
         if (body.webSearch === true) {
           const rawQuery = contentToText([...messages].reverse().find(item => item.role === "user")?.content);
           const engine = isSearchEngine(typeof body.searchEngine === "string" ? body.searchEngine : "") ? body.searchEngine : "duck";

@@ -34,10 +34,19 @@ test("grok cannot take none, and an easy question stays on the lowest effort", (
   assert.equal(reasoningFields("grok-4.5", true, "привет").reasoning_effort, "low");
   assert.equal(reasoningFields("grok-4.5", false, "Докажи теорему по шагам").reasoning_effort, "low");
   assert.equal(thinkKind("gpt-4.1"), "never");
+  assert.equal(thinkKind("grok-4.5"), "always");
+  assert.equal(thinkKind("DeepSeek-4.1-flash"), "switch");
+  assert.equal(thinkKind("deepseek-v4.1-flash:free"), "switch");
+  assert.equal(thinkKind("grok-4.5", "DeepSeek-4.1-flash"), "switch");
   assert.deepEqual(reasoningFields("gpt-4.1", true, "Докажи теорему по шагам"), {});
   assert.deepEqual(reasoningFields("deepseek-chat", false, "почему так").thinking, { type: "disabled" });
-  assert.deepEqual(reasoningFields("deepseek-chat", true, "привет").thinking, { type: "disabled" });
+  assert.equal(reasoningFields("deepseek-chat", false, "почему так").reasoning_effort, undefined);
+  assert.deepEqual(reasoningFields("deepseek-chat", true, "привет").thinking, { type: "enabled" });
+  assert.equal(reasoningFields("deepseek-chat", true, "привет").reasoning_effort, "low");
   assert.deepEqual(reasoningFields("deepseek-chat", true, "Сравни два алгоритма и объясни разницу").thinking, { type: "enabled" });
+  assert.equal(reasoningFields("deepseek-chat", true, "Сравни два алгоритма и объясни разницу").reasoning_effort, "high");
+  assert.equal(reasoningFields("qwen-plus", true, "привет").enable_thinking, true);
+  assert.equal(reasoningFields("qwen-plus", false, "почему так").enable_thinking, false);
   assert.equal(wantsThought("ок"), false);
   assert.equal(wantsThought("Напиши функцию groupBy и разбери крайние случаи"), true);
   assert.deepEqual(toolReasoningFields("ernie-5.5-flash"), {});
@@ -48,7 +57,19 @@ test("the catalog alias does not decide the provider switch", () => {
   const easy = applyChatReasoning({ model: "grok-4.3", vvReason: true, vvUser: "привет" }, "deepseek-chat");
   assert.equal("vvReason" in easy, false);
   assert.equal("vvUser" in easy, false);
-  assert.deepEqual(easy.thinking, { type: "disabled" });
+  assert.deepEqual(easy.thinking, { type: "enabled" });
+  assert.equal(easy.reasoning_effort, "low");
+  const off = applyChatReasoning(
+    { model: "DeepSeek-4.1-flash", vvReason: false, vvUser: "Почему этот алгоритм квадратичный? Объясни по шагам." },
+    "deepseek-v4.1-flash:free",
+  );
+  assert.deepEqual(off.thinking, { type: "disabled" });
+  assert.equal("reasoning_effort" in off, false);
+  const hinted = applyChatReasoning({ vvReason: false, vvUser: "почему небо голубое?" }, "vendor-id", "DeepSeek-4.1-flash");
+  assert.deepEqual(hinted.thinking, { type: "disabled" });
+  const grok = applyChatReasoning({ vvReason: false, vvUser: "почему небо голубое?" }, "grok-4.5", "DeepSeek-4.1-flash");
+  assert.equal(grok.reasoning_effort, "low");
+  assert.equal("thinking" in grok, false);
   const hard = applyChatReasoning(
     { model: "GPT-5.2", vvReason: true, vvUser: "Почему этот алгоритм квадратичный? Объясни по шагам.", tools: [{ type: "function" }] },
     "deepseek-chat",

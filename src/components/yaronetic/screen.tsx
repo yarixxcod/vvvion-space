@@ -76,9 +76,9 @@ export function Screen() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="px-4 pt-4">
-        <h3 className="font-serif text-2xl tracking-tight">Смотрельня</h3>
-        <p className="mt-1 max-w-md text-sm text-muted">Ролики YouTube, Rutube и VK. Смотреть можно здесь, на весь экран тоже.</p>
+      <div className="px-4 pt-3">
+        <h3 className="font-serif text-lg leading-tight tracking-tight">Смотрельня</h3>
+        <p className="mt-0.5 text-xs text-muted">YouTube, Rutube и VK · здесь или на весь экран</p>
         {admin ? (
           <form className="mt-3 flex gap-2" onSubmit={(event) => void add(event)}>
             <input
@@ -93,7 +93,13 @@ export function Screen() {
           </form>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-4 pt-3 pb-10"
+        style={{
+          maskImage: "linear-gradient(to bottom, transparent 0, #000 0.7rem, #000 calc(100% - 2.4rem), transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to bottom, transparent 0, #000 0.7rem, #000 calc(100% - 2.4rem), transparent 100%)",
+        }}
+      >
         {rows === null ? <PageLoader compact /> : null}
         {rows && rows.length === 0 ? <p className="text-sm text-faint">Пока нет роликов.</p> : null}
         <ul className="grid gap-3 sm:grid-cols-2">
@@ -122,21 +128,25 @@ function Thumb({
 }) {
   const [bad, setBad] = useState(false);
   return (
-    <li className="overflow-hidden rounded-[1.4rem] border border-line bg-elev">
+    <li className="overflow-hidden rounded-[1.25rem] border border-line bg-elev">
       <button type="button" className="relative block w-full text-left" onClick={onOpen}>
         {video.thumb && !bad ? (
-          <img
-            src={video.thumb}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setBad(true)}
-            className="aspect-video w-full bg-subtle object-cover"
-          />
+          <span className="relative block h-36 overflow-hidden bg-black/50 sm:h-40">
+            <img src={video.thumb} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-lg" />
+            <img
+              src={video.thumb}
+              alt=""
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onError={() => setBad(true)}
+              className="relative z-[1] h-full w-full object-contain"
+            />
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-10 bg-gradient-to-t from-elev to-transparent" />
+          </span>
         ) : (
-          <span className="grid aspect-video w-full place-items-center bg-subtle font-serif text-3xl text-muted">{LABEL[video.provider]}</span>
+          <span className="grid h-36 w-full place-items-center bg-subtle font-serif text-2xl text-muted sm:h-40">{LABEL[video.provider]}</span>
         )}
-        <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-xs text-white">
+        <span className="absolute bottom-2 left-2 z-[3] inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-xs text-white">
           <Play className="size-3" />
           {LABEL[video.provider]}
         </span>

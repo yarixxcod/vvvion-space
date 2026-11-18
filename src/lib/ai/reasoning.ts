@@ -178,18 +178,23 @@ export class ThinkGate {
  * `always` — Grok 4.x that accepts effort but rejects a full off switch.
  * `switch` — DeepSeek, Qwen, GPT-5 and the o-series: off really means off.
  * `never` — no reasoning fields; the control stays inactive.
+ * The visible catalog label counts too: a row named DeepSeek must switch even if the id looks like Grok.
  */
 export type ThinkKind = "switch" | "always" | "never";
 
-export function thinkKind(model: string): ThinkKind {
+const SWITCH_FAMILY = /deepseek|qwen|qwq|reasoner|\bo[134](?:[.-]|$)|gpt-5|claude|ernie|glm-|kimi|moonshot|hunyuan|step-/;
+
+export function thinkKind(model: string, label = ""): ThinkKind {
   const id = model.toLowerCase();
-  if (!id) return "never";
-  if (/grok/.test(id)) {
-    if (/4\.1|4\.20|fast|non-?reasoning/.test(id)) return "never";
+  const shown = label.toLowerCase();
+  const both = `${id} ${shown}`.trim();
+  if (!both) return "never";
+  if (SWITCH_FAMILY.test(both)) return "switch";
+  if (/grok/.test(id) || /grok/.test(shown)) {
+    if (/4\.1|4\.20|fast|non-?reasoning/.test(id || shown)) return "never";
     return "always";
   }
-  if (/deepseek|qwen|qwq|reasoner|\bo[134](?:[.-]|$)|gpt-5|claude|ernie|glm-|kimi|moonshot|hunyuan|step-/.test(id)) return "switch";
-  if (/think|reason/.test(id)) return "switch";
+  if (/think|reason/.test(both)) return "switch";
   return "never";
 }
 
@@ -210,28 +215,28 @@ export function wantsThought(text: string): boolean {
 
 /**
  * Fields that actually change how hard the model thinks.
- * Off never thinks, except Grok, which rejects `none` and can only go down to `low`.
- * On is not "always high": easy text stays quiet, harder text thinks.
+ * The switch is the source of truth: off sends a real disable, on keeps the trace available.
+ * Easy text only lowers the effort. Grok rejects `none` and can only go down to `low`.
  */
 export function reasoningFields(model: string, enabled: boolean, userText = ""): Record<string, unknown> {
   const kind = thinkKind(model);
   if (kind === "never") return {};
-  const on = enabled && (userText ? wantsThought(userText) : true);
+  const hard = !userText || wantsThought(userText);
   const id = model.toLowerCase();
   if (id.includes("deepseek")) {
-    return on
-      ? { reasoning_effort: "high", thinking: { type: "enabled" } }
+    return enabled
+      ? { reasoning_effort: hard ? "high" : "low", thinking: { type: "enabled" } }
       : { thinking: { type: "disabled" } };
   }
   if (/qwen|qwq/.test(id)) {
-    return { enable_thinking: on, chat_template_kwargs: { enable_thinking: on } };
+    return { enable_thinking: enabled, chat_template_kwargs: { enable_thinking: enabled } };
   }
-  if (kind === "always") return { reasoning_effort: on ? "high" : "low" };
-  return { reasoning_effort: on ? "medium" : "none" };
+  if (kind === "always") return { reasoning_effort: enabled && hard ? "high" : "low" };
+  return { reasoning_effort: enabled ? (hard ? "medium" : "low") : "none" };
 }
 
 /** Drop the private hint and apply the switch to the upstream model id, not the catalog alias. */
-export function applyChatReasoning(payload: Record<string, unknown>, model: string): Record<string, unknown> {
+export function applyChatReasoning(payload: Record<string, unknown>, model: string, catalog = ""): Record<string, unknown> {
   const enabled = payload.vvReason === true;
   const user = typeof payload.vvUser === "string" ? payload.vvUser : "";
   const marked = "vvReason" in payload || "vvUser" in payload;
@@ -239,7 +244,8 @@ export function applyChatReasoning(payload: Record<string, unknown>, model: stri
   delete rest.vvReason;
   delete rest.vvUser;
   if (!marked || rest.tools) return rest;
-  return { ...rest, ...reasoningFields(model, enabled, user) };
+  const picked = thinkKind(model) === "never" && catalog && thinkKind(catalog) !== "never" ? catalog : model;
+  return { ...rest, ...reasoningFields(picked, enabled, user) };
 }
 
 /** Tool turns must not send reasoning_effort=none: Ernie and other gateways then drop tool_calls and answer with text. */

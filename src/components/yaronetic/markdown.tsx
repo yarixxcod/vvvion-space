@@ -1,6 +1,6 @@
 import type { Source } from "@/lib/ai/types";
 import { httpUrl, sourceKey } from "@/lib/ai/search-rank";
-import { createContext, useContext, memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -455,6 +455,74 @@ function AskView({
   );
 }
 
+function quietMotion() {
+  if (typeof window === "undefined") return true;
+  return (
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    document.documentElement.classList.contains("vv-reduce-motion")
+  );
+}
+
+/** Reveal live text a few characters at a time. A finished message is always the full string. */
+function useLiveText(text: string, live: boolean) {
+  const quiet = quietMotion();
+  const [n, setN] = useState(() => {
+    if (!live || quietMotion()) return text.length;
+    return text.length > 160 ? text.length - 28 : 0;
+  });
+  const nRef = useRef(n);
+  const textRef = useRef(text);
+  const liveRef = useRef(live);
+  textRef.current = text;
+  liveRef.current = live;
+
+  useEffect(() => {
+    if (quiet) {
+      nRef.current = text.length;
+      setN(text.length);
+      return;
+    }
+    if (nRef.current > text.length) {
+      nRef.current = 0;
+      setN(0);
+    }
+    let raf = 0;
+    let frames = 0;
+    const tick = () => {
+      const target = textRef.current;
+      frames += 1;
+      if (nRef.current >= target.length || frames > 360) {
+        if (nRef.current < target.length) {
+          nRef.current = target.length;
+          setN(target.length);
+        }
+        return;
+      }
+      const behind = target.length - nRef.current;
+      const step = !liveRef.current ? Math.max(8, Math.ceil(behind / 8)) : behind > 420 ? 22 : behind > 120 ? 9 : 3;
+      let next = Math.min(target.length, nRef.current + step);
+      const code = target.charCodeAt(next - 1);
+      if (code >= 0xd800 && code <= 0xdbff && next < target.length) next += 1;
+      nRef.current = next;
+      setN(next);
+      if (next < target.length) raf = requestAnimationFrame(tick);
+    };
+    if (nRef.current < text.length) raf = requestAnimationFrame(tick);
+    const guard = window.setTimeout(() => {
+      const full = textRef.current.length;
+      nRef.current = full;
+      setN(full);
+    }, live ? 15000 : 1600);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(guard);
+    };
+  }, [text, live, quiet]);
+
+  if (!live && n >= text.length) return text;
+  return text.slice(0, Math.min(n, text.length));
+}
+
 export function Markdown({
   sources = EMPTY_SOURCES,
   text,
@@ -470,7 +538,8 @@ export function Markdown({
   askNote?: string;
   onAsk?: (text: string) => void;
 }) {
-  const parts = useMemo(() => splitQuestionText(text), [text]);
+  const visible = useLiveText(text, live);
+  const parts = useMemo(() => splitQuestionText(visible), [visible]);
   let askSeen = false;
   return (
     <CitationSources.Provider value={sources}><div className="prose-y">
