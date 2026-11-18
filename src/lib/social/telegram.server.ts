@@ -509,6 +509,7 @@ async function textFeed(): Promise<string> {
            (select count(*)::int from post_files f where f.post_id = p.id) as files
     from posts p
     left join "user" u on u.id = p.user_id
+    where p.parent_id is null and p.hidden_at is null
     order by p.created_at desc
     limit 3
   `;

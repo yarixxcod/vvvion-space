@@ -22,10 +22,10 @@ export function HoldSheet({ title, onClose, children }: { title: string; onClose
   );
 }
 
-export function Holdable({ text, className, children }: { text: string; className?: string; children: ReactNode }) {
+export function Holdable({ text, className, children, onReport }: { text: string; className?: string; children: ReactNode; onReport?: () => void }) {
   const [open, setOpen] = useState(false);
   const hold = useLongPress(() => {
-    if (text.trim()) setOpen(true);
+    if (text.trim() || onReport) setOpen(true);
   });
   return (
     <>
@@ -54,6 +54,18 @@ export function Holdable({ text, className, children }: { text: string; classNam
           >
             Копировать
           </button>
+          {onReport ? (
+            <button
+              type="button"
+              className="press flex min-h-12 w-full items-center rounded-2xl px-3 text-left text-base"
+              onClick={() => {
+                setOpen(false);
+                onReport();
+              }}
+            >
+              Пожаловаться
+            </button>
+          ) : null}
         </HoldSheet>
       ) : null}
     </>

@@ -17,6 +17,7 @@ import { loadError } from "@/lib/load-error";
 import { useCircleNest } from "@/lib/circle-history";
 import { useEdgeBack } from "@/lib/gestures/use-edge-back";
 import { Holdable } from "@/components/yaronetic/hold-sheet";
+import { ReportDialog } from "@/components/yaronetic/report-dialog";
 import { isKnownSticker, stickerBody, stickerCode, stickerUrl } from "@/lib/stickers";
 import {
   countUnread,
@@ -507,6 +508,7 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
   const [fromCircle, setFromCircle] = useState(false);
   const [stickers, setStickers] = useState(false);
   const [likeBusy,setLikeBusy]=useState<string[]>([]);
+  const [reportId, setReportId] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadAbort = useRef<AbortController | null>(null);
@@ -783,7 +785,7 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
               <article key={message.id} className={cn("flex items-end gap-2", message.mine ? "justify-end" : "justify-start")}>
                 {message.mine ? null : <PersonFace name={message.name} image={message.image} size={28} userId={message.userId} />}
                 {sticker ? (
-                  <div className="max-w-[9.5rem]">
+                  <Holdable text={sticker} onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined} className="max-w-[9.5rem]">
                     <StickerImage code={sticker} />
                     <p className={cn("mt-0.5 text-xs", message.mine ? "text-right text-faint" : "text-faint")}>
                       {!message.id.startsWith("local-")?<span className="mr-2 inline-flex align-middle"><MessageLike liked={message.liked} count={message.likes} busy={likeBusy.includes(message.id)} onClick={()=>void like(message)}/></span>:null}
@@ -792,10 +794,11 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
                         <span className="ml-1" aria-label={message.read ? "Прочитано" : "Отправлено"}>{message.read ? "✓✓" : "✓"}</span>
                       ) : null}
                     </p>
-                  </div>
+                  </Holdable>
                 ) : (
                   <Holdable
                     text={clip.text}
+                    onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined}
                     className={cn(
                       "max-w-[min(85%,32rem)] rounded-3xl px-3 py-2 text-base leading-6 shadow-sm",
                       wide && "max-w-[min(85%,32rem)]",
@@ -849,6 +852,7 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
         onMega={(file) => void place("mega", file.id)}
         onPost={(id) => void place("post", id)}
       />
+      {reportId ? <ReportDialog targetType="message" targetId={reportId} onClose={() => setReportId(null)} /> : null}
       <form className="border-t border-line bg-bg p-2" onSubmit={(event) => void submit(event)}>
         {progress ? (
           <div className="mb-2">

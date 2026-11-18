@@ -149,7 +149,7 @@ export async function handlePostPublish(request: Request): Promise<Response> {
 
   const sql = await getSql();
   if (parentRaw) {
-    const parent = await sql<{ id: string }>`select id from posts where id = ${parentRaw} and parent_id is null`;
+    const parent = await sql<{ id: string }>`select id from posts where id = ${parentRaw} and parent_id is null and hidden_at is null`;
     if (!parent.length) return json(400, { message: "Запись не найдена" });
   }
   const recent = await sql<{ n: number }>`
@@ -157,6 +157,15 @@ export async function handlePostPublish(request: Request): Promise<Response> {
     where user_id = ${userId} and created_at > now() - interval '10 minutes'
   `;
   if (Number(recent[0]?.n ?? 0) >= 12) return json(429, { message: "Слишком много записей подряд. Подождите немного." });
+  try {
+    const limited = await sql<{ user_id: string }>`
+      select user_id from account_limits where user_id = ${userId} and posts_until > now() limit 1
+    `;
+    if (limited[0]) return json(403, { message: "Публикации временно ограничены" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (!/account_limits|does not exist|relation/i.test(message)) throw err;
+  }
 
   const id = crypto.randomUUID();
   await sql`

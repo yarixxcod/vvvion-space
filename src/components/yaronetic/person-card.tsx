@@ -7,6 +7,7 @@ import { PersonFace } from "@/components/yaronetic/person-face";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { pushBackLayer } from "@/lib/app-back";
 import { readPublicPerson, type PublicPerson } from "@/lib/social/person-card";
+import { ReportDialog } from "@/components/yaronetic/report-dialog";
 
 let opener: ((id: string) => void) | null = null;
 
@@ -53,6 +54,7 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
   const place = [person?.city, person?.country].filter(Boolean).join(", ");
   const born = person?.birthDate ? formatBirth(person.birthDate) : "";
   const mine = Boolean(me?.id && me.id === userId);
+  const [report, setReport] = useState(false);
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/55 sm:items-center" role="presentation" onClick={onClose}>
       <div
@@ -92,7 +94,7 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
               )}
               <p className="mt-1 text-xs text-faint">В VVVion с {formatBirth(person.joinedAt.slice(0, 10))}</p>
             </div>
-            {mine ? <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" className="press min-h-11 rounded-xl bg-accent px-3 text-sm font-medium text-accent-fg" onClick={() => { onClose(); openAccountPanel("profile"); }}>Редактировать</button><button type="button" className="press min-h-11 rounded-xl border border-line px-3 text-sm" onClick={() => { onClose(); openAccountPanel("settings"); }}>Настройки</button></div> : null}
+            {mine ? <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" className="press min-h-11 rounded-xl bg-accent px-3 text-sm font-medium text-accent-fg" onClick={() => { onClose(); openAccountPanel("profile"); }}>Редактировать</button><button type="button" className="press min-h-11 rounded-xl border border-line px-3 text-sm" onClick={() => { onClose(); openAccountPanel("settings"); }}>Настройки</button></div> : <button type="button" className="press mt-5 min-h-11 w-full rounded-xl border border-line px-3 text-sm" onClick={() => setReport(true)}>Пожаловаться</button>}
             <section className="mt-5">
               <div className="flex items-baseline justify-between gap-3">
                 <h3 className="font-serif text-xl">Подарки</h3>
@@ -115,6 +117,7 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
             </section>
           </div>
         ) : null}
+        {report ? <ReportDialog targetType="user" targetId={userId} onClose={() => setReport(false)} /> : null}
       </div>
     </div>,
     node,

@@ -1017,7 +1017,7 @@ async function shareMeta(viewerId: string, id: string): Promise<{ name: string; 
       union all
       select 1
       from posts p
-      where p.user_id = ${row.user_id} and strpos(p.body, ${mark}) > 0
+      where p.user_id = ${row.user_id} and strpos(p.body, ${mark}) > 0 and p.hidden_at is null
       limit 1
     `;
     if (!allowed[0]) throw new Error("Файл не найден");

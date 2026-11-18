@@ -9,6 +9,7 @@ import { WhisperCard } from "@/components/yaronetic/whisper-card";
 import { AppReleaseCard } from "@/components/yaronetic/app-release-admin";
 import { TelegramAdmin } from "@/components/yaronetic/telegram-admin";
 import { PriceAdmin } from "@/components/yaronetic/price-admin";
+import { ModerationDesk } from "@/components/yaronetic/moderation-desk";
 import { getUsagePolicy, saveUsagePolicy, type UsagePolicy } from "@/lib/social/limits";
 import {
   clearAttempts,
@@ -44,7 +45,7 @@ const TABS = [
   ["models", "Модели"],
   ["images", "Картинки"],
   ["voice", "Голос"],
-  ["journal", "Журнал"],
+  ["desk", "Поддержка"],
   ["stats", "Статистика"],
   ["servers", "Серверы"],
   ["release", "Обновление"],
@@ -247,7 +248,7 @@ export function AdminPanel() {
       {tab === "models" ? <Models models={models} policy={policy} onModels={setModels} onPolicy={setPolicy} /> : null}
       {tab === "images" ? <Images models={images} onChange={setImages} /> : null}
       {tab === "voice" ? <Voices models={voices} onChange={setVoices} /> : null}
-      {tab === "journal" ? <Journal /> : null}
+      {tab === "desk" ? <ModerationDesk journal={<Journal />} /> : null}
       {tab === "stats" ? <Stats /> : null}
       {tab === "release" ? <AppReleaseCard /> : null}
       {tab === "prices" ? <PriceAdmin /> : null}
