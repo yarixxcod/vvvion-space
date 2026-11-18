@@ -216,7 +216,15 @@ type TgFile = {
   file_name?: string;
   mime_type?: string;
 };
+function isDirectMemoryMessage(message: TgMessage) {
+  return !message.forward_origin && !message.forward_date && !message.quote &&
+    !message.entities?.some(e => ["blockquote", "expandable_blockquote", "pre", "code"].includes(e.type || ""));
+}
 type TgMessage = {
+  forward_origin?: unknown;
+  forward_date?: unknown;
+  quote?: unknown;
+  entities?: { type?: string }[];
   text?: string;
   caption?: string;
   chat?: TgChat;
@@ -1040,7 +1048,7 @@ async function processTelegramUpdate(
     }
     if (!command) {
       const { aiMessage } = await import("@/lib/social/telegram-workspace.server");
-      if (!(await aiMessage(bot.token, chatId, userId, text)))
+      if (!(await aiMessage(bot.token, chatId, userId, text, false, isDirectMemoryMessage(message))))
         await say(
           bot.token,
           chatId,
@@ -1051,7 +1059,7 @@ async function processTelegramUpdate(
     }
     if (command.name === "ask" && command.arg) {
       const { aiMessage } = await import("@/lib/social/telegram-workspace.server");
-      await aiMessage(bot.token, chatId, userId, command.arg, true);
+      await aiMessage(bot.token, chatId, userId, command.arg, true, isDirectMemoryMessage(message));
       return new Response("ok");
     }
     if (command.name === "say") {

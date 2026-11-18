@@ -293,6 +293,7 @@ export async function aiMessage(
   userId: string,
   text: string,
   force = false,
+  memoryDirect = true,
 ) {
   const sql = await getSql();
   const s = await session(userId);
@@ -345,7 +346,7 @@ export async function aiMessage(
     let answer: string;
     try {
       const { completeTelegramChat } = await import("@/lib/ai/proxy.server");
-      answer = await completeTelegramChat(userId, s.model, [...messages, user]);
+      answer = await completeTelegramChat(userId, s.model, [...messages, user], {text,chatKey:id,attachments:!memoryDirect});
     } finally {
       clearInterval(typing);
     }
