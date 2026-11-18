@@ -411,3 +411,9 @@ html.light .game-tile { background:#fffdfa; border-color:#ddd4e4; }
 .mine-cell { min-width:0; min-height:0; touch-action:manipulation; -webkit-tap-highlight-color:transparent; border:1px solid var(--line); }
 @media(prefers-reduced-motion:reduce) { .memory-card,.game-tile { transition:none; } }
 .catalog-rarity { font-size:10px; }
+
+/* Stickers keep their own colors and alpha in both themes. */
+.sticker-picker img { transition:transform .15s ease; }
+.sticker-picker button:hover img { transform:translateY(-2px); }
+.like-chip { font-variant-numeric:tabular-nums; }
+@media(prefers-reduced-motion:reduce){.sticker-picker img{transition:none}.sticker-picker button:hover img{transform:none}}

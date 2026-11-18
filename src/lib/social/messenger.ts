@@ -4,6 +4,7 @@ import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { grantAchievement } from "@/lib/social/achievements";
 import { assertActive } from "@/lib/social/access";
+import { withTransaction } from "@/lib/db";
 import { stickerCode } from "@/lib/stickers";
 import { bookMark, megaMark, postMark, screenMark, splitChat } from "@/lib/screen/mark";
 
@@ -35,6 +36,8 @@ export type RoomMessage = {
   mine: boolean;
   createdAt: string;
   read?: boolean;
+  likes?: number;
+  liked?: boolean;
   files: FileMeta[];
 };
 
@@ -590,7 +593,13 @@ export const listRoomMessages = createServerFn({ method: "POST" })
         });
         byMessage.set(file.message_id, list);
       }
+      const {ensureMessageLikes}=await import("@/lib/social/message-likes.server");
+      await ensureMessageLikes();
+      const likes=await sql<{message_id:string;n:number;mine:boolean}>`select l.message_id,count(*)::int as n,bool_or(l.user_id=${context.userId}) as mine from room_message_likes l join room_messages m on m.id=l.message_id where m.room_id=${data} group by l.message_id`;
+      const reactions=new Map(likes.map(r=>[r.message_id,r]));
       return rows.map((row) => ({
+        likes: reactions.get(row.id)?.n||0,
+        liked: reactions.get(row.id)?.mine||false,
         id: row.id,
         userId: row.user_id,
         name: row.name,
@@ -807,3 +816,14 @@ export const readRoomFile = createServerFn({ method: "POST" })
       fail(err);
     }
   });
+
+export const setRoomMessageLike=createServerFn({method:"POST"}).middleware([authMiddleware]).validator((input:unknown)=>{
+ const r=input as {roomId?:unknown;messageId?:unknown;liked?:unknown}|null;
+ if(!r||typeof r.liked!=="boolean")throw new Error("Реакция не найдена");
+ return {roomId:asId(r.roomId),messageId:asId(r.messageId),liked:r.liked};
+}).handler(async({context,data})=>{
+ await assertActive(context.userId);
+ const {ensureMessageLikes}=await import("@/lib/social/message-likes.server");await ensureMessageLikes();
+ const {setMessageLike}=await import("@/lib/social/message-likes-core");
+ return withTransaction(sql=>setMessageLike(sql,context.userId,data));
+});

@@ -1,0 +1,6 @@
+OpenMoji 15.0.0 — https://openmoji.org/
+By HfG Schwäbisch Gmünd and OpenMoji contributors.
+Source: https://github.com/hfg-gmuend/openmoji/tree/15.0.0/color/svg
+License: Creative Commons Attribution-ShareAlike 4.0 International
+https://creativecommons.org/licenses/by-sa/4.0/
+These SVG illustrations are distributed unmodified. Original VVVion Cosmic Cat assets in ../ are separate works.

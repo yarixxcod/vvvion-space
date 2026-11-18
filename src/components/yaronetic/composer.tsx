@@ -1,6 +1,8 @@
+import {StickerPicker} from "@/components/yaronetic/sticker-picker";
+import {stickerBody} from "@/lib/stickers";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUp, Brain, Globe, ImageIcon, MessageCircleQuestion, Paperclip, Plus, Square, X } from "lucide-react";
+import { Smile, ArrowUp, Brain, Globe, ImageIcon, MessageCircleQuestion, Paperclip, Plus, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { MicButton } from "@/components/yaronetic/mic-button";
 import { HoldHint } from "@/components/yaronetic/hold-hint";
@@ -22,6 +24,7 @@ export function Composer({
   value,
   onChange,
   onSend,
+  onSticker,
   onStop,
   streaming,
   disabled,
@@ -46,6 +49,7 @@ export function Composer({
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  onSticker?: (body:string)=>void;
   onStop: () => void;
   streaming: boolean;
   disabled?: boolean;
@@ -73,6 +77,7 @@ export function Composer({
   const sentAt = useRef(0);
   const [upload, setUpload] = useState<UploadView | null>(null);
   const [more, setMore] = useState(false);
+  const [stickers,setStickers]=useState(false);
   const lang = useLang();
 
   useEffect(() => {
@@ -113,6 +118,7 @@ export function Composer({
         fire();
       }}
     >
+      {stickers && onSticker ? <div className="mb-2"><StickerPicker ai disabled={Boolean(disabled||streaming||upload)} onClose={()=>setStickers(false)} onPick={code=>{setStickers(false);onSticker(stickerBody(code));}}/></div>:null}
       {files.length > 0 ? (
         <div className="flex flex-wrap gap-1 px-1 pb-1">
           {files.map((file) => (
@@ -187,6 +193,7 @@ export function Composer({
             }
           }}
         />
+        {onSticker && !imageMode?<button type="button" className="press mb-0.5 grid size-11 shrink-0 place-items-center rounded-full text-muted" aria-label="Стикеры" aria-pressed={stickers} disabled={disabled||streaming} onClick={()=>setStickers(v=>!v)}><Smile className="size-5"/></button>:null}
         <div className="mb-0.5 shrink-0">
           {streaming ? (
             <button type="button" className="press inline-flex size-11 items-center justify-center rounded-full bg-fg text-bg lg:hidden" onClick={onStop} aria-label={ui(lang, "stop")} title="Стоп · Esc">

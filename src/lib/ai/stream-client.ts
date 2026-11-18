@@ -21,6 +21,7 @@ export type StreamPayload = {
   track?: { chatId: string; messageId: string };
   personaId?: string;
   toolNote?: string;
+  stickerReplies?: boolean;
   mcp?: string[];
   diskAccess?: boolean;
   memory?: string[];

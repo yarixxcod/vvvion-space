@@ -57,6 +57,7 @@ export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  liked?: boolean;
   createdAt: number;
   model?: string;
   modelLabel?: string;

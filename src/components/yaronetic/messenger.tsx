@@ -1,3 +1,6 @@
+import {StickerPicker, StickerImage} from "@/components/yaronetic/sticker-picker";
+import {MessageLike} from "@/components/yaronetic/message-like";
+import {setRoomMessageLike} from "@/lib/social/messenger";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { SourcePicker } from "@/components/yaronetic/source-picker";
 import { sizeLabel, UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
@@ -14,7 +17,7 @@ import { loadError } from "@/lib/load-error";
 import { useCircleNest } from "@/lib/circle-history";
 import { useEdgeBack } from "@/lib/gestures/use-edge-back";
 import { Holdable } from "@/components/yaronetic/hold-sheet";
-import { STICKER_PACKS, isKnownSticker, stickerBody, stickerCode, stickerUrl } from "@/lib/stickers";
+import { isKnownSticker, stickerBody, stickerCode, stickerUrl } from "@/lib/stickers";
 import {
   countUnread,
   createGroup,
@@ -495,7 +498,7 @@ function Avatar({ name, image, userId, size = 36 }: { name: string; image?: stri
   return <PersonFace name={name} image={image} size={size} userId={userId} />;
 }
 
-function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void }) {
+export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void }) {
   const [messages, setMessages] = useState<RoomMessage[] | null>(null);
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -503,7 +506,7 @@ function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void }) {
   const [progress, setProgress] = useState<UploadView | null>(null);
   const [fromCircle, setFromCircle] = useState(false);
   const [stickers, setStickers] = useState(false);
-  const [pack, setPack] = useState<(typeof STICKER_PACKS)[number]["id"]>("faces");
+  const [likeBusy,setLikeBusy]=useState<string[]>([]);
   const scroller = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadAbort = useRef<AbortController | null>(null);
@@ -513,6 +516,13 @@ function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void }) {
   const primed = useRef(false);
   const edge = useEdgeBack(true, onBack);
 
+  async function like(message:RoomMessage){
+    if(likeBusy.includes(message.id)||message.id.startsWith("local-"))return;
+    setLikeBusy(v=>[...v,message.id]);
+    try{const next=await setRoomMessageLike({data:{roomId:room.id,messageId:message.id,liked:!message.liked}});setMessages(v=>v?.map(m=>m.id===message.id?{...m,...next}:m)||null);}
+    catch(e){toast.error(e instanceof Error?e.message:"Лайк не сохранился");}
+    finally{setLikeBusy(v=>v.filter(id=>id!==message.id));}
+  }
   const pull = useCallback(async () => {
     const rows = await listRoomMessages({ data: room.id });
     setMessages((current) => {
@@ -774,8 +784,9 @@ function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void }) {
                 {message.mine ? null : <PersonFace name={message.name} image={message.image} size={28} userId={message.userId} />}
                 {sticker ? (
                   <div className="max-w-[9.5rem]">
-                    <img src={stickerUrl(sticker)} alt="" className="size-32 object-contain" />
+                    <StickerImage code={sticker} />
                     <p className={cn("mt-0.5 text-xs", message.mine ? "text-right text-faint" : "text-faint")}>
+                      {!message.id.startsWith("local-")?<span className="mr-2 inline-flex align-middle"><MessageLike liked={message.liked} count={message.likes} busy={likeBusy.includes(message.id)} onClick={()=>void like(message)}/></span>:null}
                       {when(message.createdAt)}
                       {message.mine && !message.id.startsWith("local-") ? (
                         <span className="ml-1" aria-label={message.read ? "Прочитано" : "Отправлено"}>{message.read ? "✓✓" : "✓"}</span>
@@ -813,6 +824,7 @@ function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void }) {
                       <Attachment key={file.id} file={file} mine={message.mine} />
                     ))}
                     <p className={cn("mt-0.5 text-right text-xs tabular-nums", message.mine ? "text-accent-fg/70" : "text-faint")}>
+                      {!message.id.startsWith("local-")?<span className="mr-2 inline-flex align-middle"><MessageLike liked={message.liked} count={message.likes} busy={likeBusy.includes(message.id)} onClick={()=>void like(message)}/></span>:null}
                       {when(message.createdAt)}
                       {message.mine && !message.id.startsWith("local-") ? (
                         <span className="ml-1" aria-label={message.read ? "Прочитано" : "Отправлено"}>{message.read ? "✓✓" : "✓"}</span>
@@ -826,11 +838,7 @@ function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void }) {
         )}
       </div>
       {stickers ? (
-        <StickerDeck
-          pack={pack}
-          onPack={setPack}
-          onPick={(code) => void deliver(stickerBody(code), [], false)}
-        />
+        <StickerPicker disabled={busy} onClose={()=>setStickers(false)} onPick={(code) => {setStickers(false);void deliver(stickerBody(code), [], false);}}/>
       ) : null}
       <SourcePicker
         open={fromCircle}
@@ -1250,42 +1258,6 @@ function VoiceNote({ file, mine }: { file: FileMeta; mine: boolean }) {
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-function StickerDeck({
-  pack,
-  onPack,
-  onPick,
-}: {
-  pack: (typeof STICKER_PACKS)[number]["id"];
-  onPack: (id: (typeof STICKER_PACKS)[number]["id"]) => void;
-  onPick: (code: string) => void;
-}) {
-  const current = STICKER_PACKS.find((item) => item.id === pack) ?? STICKER_PACKS[0];
-  return (
-    <div className="border-t border-line bg-elev">
-      <div className="flex gap-1 overflow-x-auto px-2 pt-2">
-        {STICKER_PACKS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={cn("press h-8 shrink-0 rounded-full px-3 text-xs", item.id === current.id ? "bg-subtle text-fg" : "text-muted")}
-            onClick={() => onPack(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <div className="grid max-h-52 grid-cols-5 gap-1 overflow-y-auto px-2 py-2 sm:grid-cols-6">
-        {current.codes.map((code) => (
-          <button key={code} type="button" className="press grid aspect-square place-items-center rounded-2xl hover:bg-subtle" onClick={() => onPick(code)}>
-            <img src={stickerUrl(code)} alt="" className="size-12 object-contain" />
-          </button>
-        ))}
-      </div>
-      <p className="px-3 pb-2 text-xs text-faint">Набор OpenMoji, открытая лицензия CC BY-SA.</p>
     </div>
   );
 }

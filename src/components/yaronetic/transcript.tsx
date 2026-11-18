@@ -1,3 +1,6 @@
+import {StickerImage} from "@/components/yaronetic/sticker-picker";
+import {MessageLike} from "@/components/yaronetic/message-like";
+import {splitStickerContent} from "@/lib/stickers";
 import { SearchEvidence } from "./search-evidence";
 import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -85,7 +88,9 @@ export function Transcript({
   reasoningOn = true,
   assistantName = "",
   onQuote,
+  onLike,
 }: {
+  onLike?: (id:string)=>void;
   messages: ChatMessage[];
   streaming: boolean;
   onRegenerate: (messageId?: string) => void;
@@ -206,6 +211,8 @@ export function Transcript({
         <div ref={content} className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
           <AnimatePresence initial={false}>
             {messages.map((message, index) => {
+              const visual=splitStickerContent(message.content);
+              const shown={...message,content:visual.text};
               const pending = streaming && index === messages.length - 1 && message.role === "assistant";
               return (
                 <motion.article
@@ -215,9 +222,8 @@ export function Transcript({
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                   className={message.role === "user" ? "msg-row flex justify-end" : pending ? "msg-row msg-live" : "msg-row"}
                 >
-                  {message.role === "user" ? (
-                    <UserBubble
-                      message={message}
+                  {message.role === "user" ? (visual.text || message.files?.length ? <UserBubble
+                      message={shown}
                       editing={editing === message.id}
                       editText={editText}
                       disabled={streaming}
@@ -236,10 +242,10 @@ export function Transcript({
                       }}
                       onDelete={readonly || !onDelete ? undefined : () => onDelete(message.id)}
                       onQuote={onQuote}
-                    />
+                    /> : null
                   ) : (
                     <AssistantBubble
-                      message={message}
+                      message={shown}
                       pending={pending}
                       continuing={continuing && pending}
                       canRegenerate={!readonly && !streaming && !pending}
@@ -257,7 +263,10 @@ export function Transcript({
                       onQuote={onQuote}
                     />
                   )}
-                </motion.article>
+                                  {visual.stickers.length?<div className={message.role==="user"?"flex gap-2":"mt-2 flex gap-2"}>{visual.stickers.map((code,i)=><StickerImage key={`${code}-${i}`} code={code} className="size-36 max-w-full"/>)}</div>:null}
+                  {message.role==="user"&&!visual.text&&visual.stickers.length&&!readonly&&onDelete?<button type="button" aria-label="Удалить стикер" className="press ml-1 self-end rounded-full p-2 text-muted" onClick={()=>onDelete(message.id)}><Trash2 className="size-4"/></button>:null}
+                  {!readonly&&onLike&&!pending?<div className={message.role==="user"?"ml-2 self-end":"mt-2"}><MessageLike liked={message.liked} count={message.liked?1:0} busy={streaming} onClick={()=>onLike(message.id)}/></div>:null}
+</motion.article>
               );
             })}
           </AnimatePresence>

@@ -1,3 +1,4 @@
+import {stickerMeaning} from "@/lib/stickers";
 import { readDraft, writeDraft } from "@/lib/ai/drafts";
 import { memoryForChat, moveNewChatMemory } from "@/lib/ai/memory";
 import { diskAccessEnabled } from "@/lib/ai/disk-access";
@@ -162,7 +163,7 @@ function wireTurns(items: ChatMessage[]): ChatTurn[] {
       if (file.kind === "file") return [`Приложен файл «${file.name}».`];
       return [];
     });
-    const text = [item.content.trim(), ...notes].filter(Boolean).join("\n\n").slice(0, 24_000);
+    const text = [item.role === "user" ? stickerMeaning(item.content.trim()) : item.content.trim(), ...notes].filter(Boolean).join("\n\n").slice(0, 24_000);
     const images =
       item.id === lastUser ? (item.files ?? []).filter((file) => file.kind === "image" && file.dataUrl) : [];
     if (!text && images.length === 0) continue;
@@ -939,6 +940,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             mcp: wantImage ? undefined : enabledMcpUrls(),
             diskAccess: !wantImage && diskAccessEnabled(),
             memory: wantImage ? undefined : memory,
+            stickerReplies: (()=>{try{return localStorage.getItem("vvvion.stickers.replies")!=="0";}catch{return true;}})(),
             messages: wireTurns(nextMessages.filter((item) => item.id !== asstId).slice(-32)),
           },
           {
@@ -1479,6 +1481,13 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     toast("Локальные данные очищены");
   }, [setMsgs, setTheme, setPaper, setFace, setSearchEngine, setReasoning]);
 
+  function likeMessage(messageId:string){
+    if(busyRef.current)return;
+    const next=messagesRef.current.map(m=>m.id===messageId?{...m,liked:!m.liked}:m);
+    setMsgs(next);
+    const chat=chatsRef.current.find(c=>c.id===activeChatRef.current);
+    if(chat)void persistChat({...chat,messages:next,updatedAt:Date.now()},true);
+  }
   return {
     ready,
     theme,
@@ -1538,6 +1547,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     stop,
     regenerate,
     dropMessage,
+    likeMessage,
     resendFrom,
     selectChat,
     newChat,

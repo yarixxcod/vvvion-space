@@ -1,3 +1,4 @@
+import {STICKER_REPLY_GUIDE, stickersAllowed} from "@/lib/stickers";
 import { createProviderRouter, recoverChatStream } from "@/lib/ai/provider-router";
 import { AGENT_GUIDE, runAgentLoop, toolCallsFromMessage } from "@/lib/ai/agent-loop";
 import type { SearchSummary } from "@/lib/ai/search-types";
@@ -43,6 +44,7 @@ type ChatBody = {
   track?: unknown;
   personaId?: unknown;
   toolNote?: unknown;
+  stickerReplies?: unknown;
   mcp?: unknown;
   diskAccess?: unknown;
   memory?: unknown;
@@ -905,6 +907,7 @@ export async function handleChat(request: Request): Promise<Response> {
 		if (personaText) system = kind === "builtin" && catalogPrompt ? `${catalogPrompt}\n\n${personaText}` : personaText;
 		const toolNote = typeof body.toolNote === "string" ? body.toolNote.trim().slice(0, 4000) : "";
 		if (toolNote) system = system ? `${system}\n\n${toolNote}` : toolNote;
+        if(body.stickerReplies === true && stickersAllowed(messagesIn)) system = `${system}\n\n${STICKER_REPLY_GUIDE}`;
 		if (system) messages.unshift({
 			role: "system",
 			content: system.slice(0, 16e3)

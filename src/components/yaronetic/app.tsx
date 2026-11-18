@@ -578,6 +578,7 @@ export function App({
                 onRegenerate={studio.regenerate}
                 onResend={studio.resendFrom}
                 onDelete={studio.dropMessage}
+                onLike={studio.likeMessage}
                 onAsk={(text) =>
                   void studio.send(text, {
                     web: studio.webMode,
@@ -610,6 +611,7 @@ export function App({
                 </p>
               ) : null}
               <Composer
+                onSticker={body=>void studio.send(body)}
                 value={studio.draft}
                 onChange={studio.setDraft}
                 streaming={streamingHere}
