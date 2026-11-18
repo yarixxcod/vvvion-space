@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { listShelf } from "@/lib/books/shelf";
-import { loadTags } from "@/lib/music/load";
+import { loadTags, withStamp } from "@/lib/music/load";
 import { isMusicFile, musicBits } from "@/lib/music/tags";
 import { listScreen } from "@/lib/screen/service";
 import { getDisk } from "@/lib/social/disk.fn";
@@ -171,7 +171,7 @@ function MegaLabel({ row }: { row: MegaPick }) {
   useEffect(() => {
     if (!isMusicFile(row.name, row.mime)) return;
     let dead = false;
-    void loadTags(megaFileUrl(row.id, "view"), row.name)
+    void loadTags(withStamp(megaFileUrl(row.id, "view"), row.id), row.name)
       .then((tags) => {
         if (dead) return;
         if (tags.title) setTitle(tags.title);

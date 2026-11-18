@@ -1,4 +1,5 @@
 import { getBearerToken } from "@/lib/auth/client";
+import { withStamp } from "@/lib/music/load";
 import { MEGA_CHUNK } from "@/lib/social/mega-plan";
 
 type Reply = { id?: string; received?: number; message?: string };
@@ -184,6 +185,36 @@ export async function stampMegaFile(id: string, header: Uint8Array): Promise<voi
   throw new Error(last);
 }
 
+/** Read the start back. A cached copy of the old file must not count as saved. */
+export async function confirmMegaStamp(id: string, header: Uint8Array): Promise<boolean> {
+  if (header.length < 10) return false;
+  const url = new URL(megaFileUrl(id, "view"), "http://vvvion.local");
+  url.searchParams.set("r", String(Date.now()));
+  const res = await fetch(`${url.pathname}${url.search}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { ...headers(), "cache-control": "no-cache", Range: `bytes=0-${header.length - 1}` },
+  });
+  if ((!res.ok && res.status !== 206) || !res.body) return false;
+  const reader = res.body.getReader();
+  const got = new Uint8Array(header.length);
+  let at = 0;
+  try {
+    while (at < header.length) {
+      const step = await reader.read();
+      if (step.done) break;
+      const n = Math.min(step.value.length, header.length - at);
+      got.set(step.value.subarray(0, n), at);
+      at += n;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  if (at < header.length) return false;
+  for (let i = 0; i < header.length; i += 1) if (got[i] !== header[i]) return false;
+  return true;
+}
+
 export class MegaFinishError extends Error {
   id: string;
   constructor(id: string) {
@@ -266,7 +297,7 @@ export function megaFileUrl(id: string, mode: "view" | "file", room = false): st
   if (room) query.set("room", "1");
   const token = getBearerToken();
   if (token) query.set("t", token);
-  return `/api/mega/${id}?${query}`;
+  return withStamp(`/api/mega/${id}?${query}`, id);
 }
 
 export function megaAuthHeaders(): HeadersInit {

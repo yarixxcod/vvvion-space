@@ -21,11 +21,11 @@ import { VerifyMailButton } from "@/components/yaronetic/verify-mail";
 import { UploadMeter, sizeLabel, type UploadView } from "@/components/yaronetic/upload-meter";
 import { compareFiles, matchQuery, type SortDir, type SortKey } from "@/lib/files/order";
 import { useTx } from "@/lib/lang";
-import { dropTags, loadTags } from "@/lib/music/load";
+import { bumpFileStamp, dropTags, loadTags, withStamp } from "@/lib/music/load";
 import { coverUrl, isMusicFile, musicBits, type MusicTags } from "@/lib/music/tags";
 import { entryName, siblingName } from "@/lib/social/mega-plan";
 import { buyMega, dropMegaShare, getMega, listMegaFolders, makeMegaFolder, moveMega, peekMegaLink, removeMega, renameMega, shareMega, type MegaEntry, type MegaView } from "@/lib/social/mega";
-import { downloadMegaFile, finishMegaClient, MegaFinishError, megaAuthHeaders, megaFileUrl, stampMegaFile, uploadMegaFile } from "@/lib/social/mega-upload";
+import { downloadMegaFile, finishMegaClient, MegaFinishError, megaAuthHeaders, megaFileUrl, confirmMegaStamp, stampMegaFile, uploadMegaFile } from "@/lib/social/mega-upload";
 import { shareOut } from "@/lib/app-bridge";
 import { previewPathPrefix } from "@/lib/preview-path-prefix";
 
@@ -262,8 +262,8 @@ export function MegaDisk() {
   const abortRef = useRef<AbortController | null>(null);
 
   function href(id: string) {
-    const url = megaFileUrl(id, "view");
-    return rev ? `${url}&r=${rev}` : url;
+    void rev;
+    return withStamp(megaFileUrl(id, "view"), id);
   }
 
   function load(next = folder) {
@@ -512,17 +512,27 @@ export function MegaDisk() {
   }
 
   async function saveEdit(entry: MegaEntry, nextName: string, audio: AudioPatch | null) {
-    const fresh = () => {
-      dropTags(megaFileUrl(entry.id, "view"));
-      void caches.open("vvvion-mega").then((cache) => cache.delete(new Request(`${location.origin}/__vvvion_mega/${entry.id}`))).catch(() => undefined);
+    const fresh = (id: string) => {
+      bumpFileStamp(id);
+      dropTags(megaFileUrl(id, "view"));
+      void caches.open("vvvion-mega").then((cache) => cache.delete(new Request(`${location.origin}/__vvvion_mega/${id}`))).catch(() => undefined);
       setRev((value) => value + 1);
     };
+    let headerStuck = false;
     if (audio?.header) {
       if (nextName !== entry.name) setView(await renameMega({ data: { id: entry.id, folder, name: nextName } }));
-      await stampMegaFile(entry.id, audio.header);
-      fresh();
-      await load();
-      return;
+      try {
+        await stampMegaFile(entry.id, audio.header);
+        headerStuck = await confirmMegaStamp(entry.id, audio.header);
+      } catch (error) {
+        if (!audio.full) throw error;
+      }
+      if (headerStuck) {
+        fresh(entry.id);
+        await load();
+        return;
+      }
+      if (!audio.full) throw new Error("Теги не записались");
     }
     if (audio?.full) {
       const draft = draftName(entry.name);
@@ -534,7 +544,8 @@ export function MegaDisk() {
         await renameMega({ data: { id: entry.id, folder, name: entry.name } }).catch(() => undefined);
         throw error;
       }
-      fresh();
+      fresh(entry.id);
+      await load();
       return;
     }
     if (nextName !== entry.name) setView(await renameMega({ data: { id: entry.id, folder, name: nextName } }));
@@ -596,7 +607,7 @@ export function MegaDisk() {
   const ratio = view.quota > 0 ? Math.min(1, view.used / view.quota) : 0;
 
   return (
-    <div className="h-full overflow-y-auto px-3 pt-3 pb-6">
+    <div className="absolute inset-0 overflow-y-auto overscroll-contain px-3 pt-4 pb-10">
       <section className="rounded-[1.7rem] border border-line bg-elev px-4 py-4">
         <p className="text-xs tracking-[0.22em] text-faint uppercase">{tx({ ru: "Мегадиск", en: "Megadisk", kk: "Мегадиск" })}</p>
         <p className="mt-1 font-serif text-4xl leading-none">

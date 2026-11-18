@@ -169,11 +169,21 @@ const requireUser = createServerOnlyFn(async (request: Request): Promise<string 
   return id;
 });
 
+function contentTag(bytes: Uint8Array): string {
+  let hash = 2166136261;
+  const n = Math.min(bytes.length, 8192);
+  for (let i = 0; i < n; i += 1) hash = Math.imul(hash ^ (bytes[i] ?? 0), 16777619);
+  hash = Math.imul(hash ^ bytes.length, 16777619);
+  return `W/"${(hash >>> 0).toString(16)}"`;
+}
+
 function fileResponse(request: Request, row: { data: string; mime: string; name: string }, download: boolean): Response {
   const bytes = Buffer.from(row.data, "base64");
+  const etag = contentTag(bytes);
   const headers = new Headers({
     "content-type": playbackType(row.name, row.mime || ""),
-    "cache-control": "private, max-age=86400",
+    "cache-control": "private, no-cache",
+    etag,
     "x-content-type-options": "nosniff",
   });
   const filename = cleanName(row.name, "file");
@@ -181,6 +191,9 @@ function fileResponse(request: Request, row: { data: string; mime: string; name:
     "content-disposition",
     `${download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(filename)}`,
   );
+  if (!request.headers.get("range") && request.headers.get("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers });
+  }
   return bytesResponse(request, bytes, headers);
 }
 

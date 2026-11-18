@@ -19,7 +19,7 @@ import { PageLoader } from "@/components/yaronetic/page-loader";
 import { compareFiles, matchQuery, type SortDir, type SortKey } from "@/lib/files/order";
 import { useCircleNest } from "@/lib/circle-history";
 import { useTx } from "@/lib/lang";
-import { dropTags, loadTags } from "@/lib/music/load";
+import { bumpFileStamp, dropTags, loadTags, withStamp } from "@/lib/music/load";
 import { coverUrl, isMusicFile, musicBits } from "@/lib/music/tags";
 import { deleteDiskFile, getDisk, makeDiskFolder, moveDiskFiles, removeDiskFolder, renameDiskFile, shareDisk } from "@/lib/social/disk.fn";
 import type { DiskFile, DiskSnapshot } from "@/lib/social/disk";
@@ -288,11 +288,13 @@ function OwnDisk() {
   const ratio = disk.quota > 0 ? Math.min(1, disk.used / disk.quota) : 0;
 
   function srcOf(file: DiskFile) {
-    return rev ? `${file.url}?r=${rev}` : file.url;
+    void rev;
+    return withStamp(file.url, file.id);
   }
 
   async function saveEdit(file: DiskFile, name: string, audio: AudioPatch | null) {
     if (name !== file.name) setDisk(await renameDiskFile({ data: { id: file.id, name } }));
+    if (audio?.header && !audio.full) throw new Error("Теги не записались");
     if (!audio?.full) return;
     const copy = new ArrayBuffer(audio.full.byteLength);
     new Uint8Array(copy).set(audio.full);
@@ -303,6 +305,7 @@ function OwnDisk() {
     const res = await fetch("/api/disk", { method: "POST", credentials: "same-origin", body });
     const parsed = (await res.json().catch(() => ({}))) as { message?: string };
     if (!res.ok) throw new Error(parsed.message || "Теги не записались");
+    bumpFileStamp(file.id);
     dropTags(file.url);
     setRev((value) => value + 1);
     setDisk(await getDisk());
@@ -320,7 +323,7 @@ function OwnDisk() {
       {
         label: "Скачать",
         icon: <Download className="size-4" />,
-        onClick: () => void downloadUrl(`${file.url}?dl=1`, file.name).catch(() => toast.error("Не удалось скачать")),
+        onClick: () => void downloadUrl(withStamp(`${file.url}?dl=1`, file.id), file.name).catch(() => toast.error("Не удалось скачать")),
       },
       {
         label: picked.includes(file.id) ? "Снять выбор" : "Выбрать",
@@ -347,7 +350,7 @@ function OwnDisk() {
   }
 
   return (
-    <div className="h-full overflow-y-auto px-3 pt-3 pb-6">
+    <div className="absolute inset-0 overflow-y-auto overscroll-contain px-3 pt-4 pb-10">
       <section className="rounded-[1.7rem] border border-line bg-elev px-4 py-4">
         <p className="text-xs tracking-[0.22em] text-faint uppercase">{tx({ ru: "Диск", en: "Disk", kk: "Диск" })}</p>
         <p className="mt-1 font-serif text-4xl leading-none">
@@ -625,7 +628,7 @@ export function Disk() {
   }
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex gap-1 px-3 pt-3">
+      <div className="z-20 flex shrink-0 gap-1 bg-elev px-3 pt-3 pb-2">
         <button
           type="button"
           aria-pressed={lane === "own"}
@@ -643,7 +646,11 @@ export function Disk() {
           {tx({ ru: "Мегадиск", en: "Megadisk", kk: "Мегадиск" })}
         </button>
       </div>
-      <div className="min-h-0 flex-1">{lane === "mega" ? <MegaDisk /> : <OwnDisk />}</div>
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {lane === "mega" ? <MegaDisk /> : <OwnDisk />}
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-4 bg-gradient-to-b from-elev to-transparent" />
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-elev to-transparent" />
+      </div>
     </div>
   );
 }

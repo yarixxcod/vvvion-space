@@ -31,7 +31,7 @@ export function FileBar({
   onDir: () => void;
 }) {
   return (
-    <div className="mt-3">
+    <div className="sticky top-4 z-[1] -mx-3 mt-3 bg-elev px-3 pb-1">
       <input
         value={query}
         onChange={(event) => onQuery(event.target.value)}

@@ -102,8 +102,9 @@ export function FileEditor({
         const huge = file.bytes > REWRITE_MAX;
         const res = await fetch(file.src, {
           credentials: "same-origin",
+          cache: "no-store",
           signal: ctrl.signal,
-          headers: huge ? { Range: "bytes=0-524287" } : undefined,
+          headers: huge ? { Range: "bytes=0-524287", "cache-control": "no-cache" } : { "cache-control": "no-cache" },
         });
         if (!res.ok && res.status !== 206) throw new Error("Файл не прочитался");
         const raw = huge ? await take(res, 524_288) : new Uint8Array(await res.arrayBuffer());
@@ -168,11 +169,8 @@ export function FileEditor({
       }
       const plan = planTagWrite(bytes, { title, artist, album, genre, cover }, { partial });
       if (plan.mode === "no") {
-        if (nextName === file.name) {
-          toast(plan.reason);
-          return;
-        }
         toast(plan.reason);
+        return;
       } else if (plan.mode === "keep") {
         audio = { header: plan.header, full: partial ? null : overlay(bytes, plan.header) };
       } else if (plan.mode === "rewrite") {
