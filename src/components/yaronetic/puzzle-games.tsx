@@ -86,14 +86,14 @@ function Record({ name, score, lower = false }: { name: string; score: number; l
     try {
       const n = Number(localStorage.getItem(`vvvion.game.${name}.best`));
       if (Number.isFinite(n) && n >= 0) setBest(n);
-    } catch {}
+    } catch { /* Storage may be disabled; the current game still works. */ }
   }, [name]);
   useEffect(() => {
     if (score > 0 && (!best || (lower ? score < best : score > best))) {
       setBest(score);
       try {
         localStorage.setItem(`vvvion.game.${name}.best`, String(score));
-      } catch {}
+      } catch { /* Storage may be disabled; the current game still works. */ }
     }
   }, [score, best, lower, name]);
   return (

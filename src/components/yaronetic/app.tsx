@@ -923,7 +923,9 @@ function EmptyChat({
   personal: boolean;
 }) {
   const lang = useLang();
-  const [salt] = useState(visitSalt);
+  // The server and first client render must select the same cards for hydration.
+  const [salt, setSalt] = useState(1);
+  useEffect(() => setSalt(visitSalt()), []);
   const cards = useMemo(() => mixCards(suggestions, salt).slice(0, 4), [suggestions, salt]);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4">
