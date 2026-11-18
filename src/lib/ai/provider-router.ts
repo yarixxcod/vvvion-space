@@ -103,15 +103,19 @@ export async function probeChatResponse(
         if (parsed.error || parsed.type === "error") throw new Error("provider_stream_error");
         for (const choice of parsed.choices ?? []) {
           const delta = choice.delta ?? choice.message ?? {};
+          const detail = delta.reasoning_details ?? delta.reasoning;
+          const detailText = typeof detail === "string" ? detail : Array.isArray(detail) ? detail : "";
           if (
             delta.content?.length ||
             delta.reasoning_content?.length ||
-            delta.reasoning?.length ||
+            delta.thinking?.length ||
+            (typeof detailText === "string" ? detailText.length : detailText.length) ||
             delta.tool_calls?.length ||
             choice.text?.length
           )
             usable = true;
         }
+        if (!usable && typeof parsed.delta === "string" && parsed.delta.length) usable = true;
       }
       if (usable) break;
     }

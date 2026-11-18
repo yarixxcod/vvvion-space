@@ -1023,8 +1023,12 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         abortRef.current = null;
         busyRef.current = false;
         stopRef.current = false;
-        setStreaming(false);
-        setStreamId(null);
+        const releaseStream = () => {
+          setStreaming(false);
+          setStreamId(null);
+        };
+        if (acc.length > 24) requestAnimationFrame(releaseStream);
+        else releaseStream();
         if (isApp() && document.hidden && !stopped && !left) {
           const chatTitle = chatsRef.current.find((item) => item.id === chatId)?.title?.trim();
           const preview = messagePreviewOn() ? plainText(acc).slice(0, 1500) : "";

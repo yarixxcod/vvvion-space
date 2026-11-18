@@ -140,9 +140,14 @@ export function Transcript({
       }, 700);
     };
     const onScroll = () => {
-      if (!userActive.current) return;
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-      const near = dist < 24;
+      const overflow = el.scrollHeight - el.clientHeight;
+      const dist = overflow - el.scrollTop;
+      const slack = Math.min(320, Math.max(180, Math.round(el.clientHeight * 0.38)));
+      const near = overflow < 120 || dist < slack;
+      if (!userActive.current) {
+        if (stick.current && near) setAway(false);
+        return;
+      }
       stick.current = near;
       setAway(!near);
     };
@@ -166,7 +171,6 @@ export function Transcript({
       el.removeEventListener("touchstart", down);
       el.removeEventListener("pointerdown", down);
       el.removeEventListener("wheel", down);
-      el.removeEventListener("wheel", up);
       el.removeEventListener("keydown", down);
       el.removeEventListener("touchend", up);
       el.removeEventListener("touchcancel", up);

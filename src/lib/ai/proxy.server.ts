@@ -16,7 +16,7 @@ import { assertBuiltinChat, loadAccess } from "@/lib/social/access";
 import { explainApiError, readApiFailure } from "@/lib/ai/api-error";
 import { ACCOUNT_REQUIRED_MESSAGE } from "@/lib/ai/guest-limit";
 import { peekGuest, takeGuestQuestion, withGuestCookie } from "@/lib/ai/guest.server";
-import { extractPieces, reasoningFields, softenReasoning, ThinkGate, toolReasoningFields } from "@/lib/ai/reasoning";
+import { applyChatReasoning, extractPieces, softenReasoning, ThinkGate, toolReasoningFields } from "@/lib/ai/reasoning";
 import { formatSearch, searchWeb } from "@/lib/ai/search.server";
 import { isSearchEngine } from "@/lib/ai/search-engine";
 import type { ChatPart, Source, Usage } from "@/lib/ai/types";
@@ -989,8 +989,9 @@ export async function handleChat(request: Request): Promise<Response> {
 			stream_options: { include_usage: true }
 		};
 		if (temperature != null) payload.temperature = temperature;
-		const canSteer = kind === "builtin" || !reasoningOn || /grok|deepseek|qwen|qwq|\bo[134]\b|gpt-5|reasoner/i.test(model);
-		if (canSteer) Object.assign(payload, reasoningFields(model, reasoningOn));
+		const lastUser = [...messages].reverse().find((item) => item.role === "user");
+		payload.vvReason = reasoningOn;
+		payload.vvUser = contentToText(lastUser?.content).slice(0, 4_000);
 		track = actorUser ? readTrack(body) : null;
 		let releaseWork = () => {};
 		keep(new Promise<void>((resolve) => {
@@ -998,7 +999,7 @@ export async function handleChat(request: Request): Promise<Response> {
 		}), request);
 		try {
 		const signal = armRun(actorUser, track, request, 24e4);
-        const providerRouter = createProviderRouter(targets, callChat, signal);
+        const providerRouter = createProviderRouter(targets, (url, headers, body, signal, secret) => callChat(url, headers, applyChatReasoning(body, typeof body.model === "string" ? body.model : ""), signal, secret), signal);
         if (body.webSearch === true) {
           const rawQuery = contentToText([...messages].reverse().find(item => item.role === "user")?.content);
           const engine = isSearchEngine(typeof body.searchEngine === "string" ? body.searchEngine : "") ? body.searchEngine : "duck";

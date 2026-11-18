@@ -223,8 +223,11 @@ const UI = {
   stopShort: { ru: "Стоп", en: "Stop", kk: "Тоқта" },
   send: { ru: "Отправить", en: "Send", kk: "Жіберу" },
   aiPick: { ru: "ИИ", en: "AI", kk: "ЖИ" },
-  reasonOn: { ru: "Ход мысли включён", en: "Reasoning is on", kk: "Ой өрбітуі қосулы" },
+  reasonOn: { ru: "Сама решает, когда думать", en: "Decides when to think", kk: "Қашан ойлануды өзі шешеді" },
   reasonOff: { ru: "Ход мысли выключен", en: "Reasoning is off", kk: "Ой өрбітуі өшірулі" },
+  reasonDeep: { ru: "На сложном думает глубже, на простом коротко", en: "Deeper on hard questions, brief on easy ones", kk: "Қиында тереңірек, оңайда қысқа" },
+  reasonMin: { ru: "Мысли на минимуме: эта модель не выключает их совсем", en: "Minimum thoughts: this model cannot turn them fully off", kk: "Ой минимумда: бұл модель оны толық өшірмейді" },
+  reasonNever: { ru: "Эта модель не думает отдельно", en: "This model does not think separately", kk: "Бұл модель бөлек ойланбайды" },
   askOn: { ru: "Уточняющие вопросы включены", en: "Follow-up questions are on", kk: "Нақтылау сұрақтары қосулы" },
   askOff: { ru: "Уточняющие вопросы", en: "Follow-up questions", kk: "Нақтылау сұрақтары" },
   guestLeft: {

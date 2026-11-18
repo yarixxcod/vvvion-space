@@ -9,8 +9,14 @@ import { uploadChatFile } from "@/lib/social/circle-upload";
 import { UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
 import type { ChatFile } from "@/lib/ai/types";
 import { cn } from "@/lib/utils";
-import { ui } from "@/lib/i18n";
+import { ui, type Lang } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
+
+function reasonLabel(lang: Lang, mode: "auto" | "always" | "never", on: boolean) {
+  if (mode === "never") return ui(lang, "reasonNever");
+  if (mode === "always") return ui(lang, on ? "reasonDeep" : "reasonMin");
+  return ui(lang, on ? "reasonOn" : "reasonOff");
+}
 
 export function Composer({
   value,
@@ -28,6 +34,7 @@ export function Composer({
   onFiles,
   reasoning,
   onReasoning,
+  reasoningMode = "auto",
   ask,
   onAsk,
   modelSlot,
@@ -51,6 +58,7 @@ export function Composer({
   onFiles: (files: ChatFile[]) => void;
   reasoning?: boolean;
   onReasoning?: (value: boolean) => void;
+  reasoningMode?: "auto" | "always" | "never";
   ask?: boolean;
   onAsk?: (value: boolean) => void;
   modelSlot?: ReactNode;
@@ -260,11 +268,23 @@ export function Composer({
           {onReasoning ? (
             <button
               type="button"
-              aria-pressed={Boolean(reasoning)}
-              aria-label={reasoning ? ui(lang, "reasonOn") : ui(lang, "reasonOff")}
-              title={reasoning ? ui(lang, "reasonOn") : ui(lang, "reasonOff")}
-              className={cn("press inline-flex size-10 items-center justify-center rounded-2xl border", reasoning ? "border-accent bg-subtle text-fg" : "border-line text-faint")}
-              onClick={() => onReasoning(!reasoning)}
+              aria-pressed={reasoningMode !== "never" && Boolean(reasoning)}
+              aria-disabled={reasoningMode === "never"}
+              disabled={reasoningMode === "never"}
+              aria-label={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
+              title={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
+              className={cn(
+                "press inline-flex size-10 items-center justify-center rounded-2xl border",
+                reasoningMode === "never"
+                  ? "cursor-not-allowed border-line text-faint opacity-40"
+                  : reasoning
+                    ? "border-accent bg-subtle text-fg"
+                    : "border-line text-faint",
+              )}
+              onClick={() => {
+                if (reasoningMode === "never") return;
+                onReasoning(!reasoning);
+              }}
             >
               <Brain className="size-4" />
             </button>
@@ -385,9 +405,12 @@ export function Composer({
             <ToolRow
               icon={<Brain className="size-4" />}
               title="Ход мысли"
-              hint={reasoning ? "Включён" : "Выключен"}
-              pressed={Boolean(reasoning)}
-              onClick={() => onReasoning(!reasoning)}
+              hint={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
+              pressed={reasoningMode !== "never" && Boolean(reasoning)}
+              onClick={() => {
+                if (reasoningMode === "never") return;
+                onReasoning(!reasoning);
+              }}
             />
           ) : null}
           {onAsk ? (

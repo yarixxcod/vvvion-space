@@ -21,6 +21,7 @@ import { useCircleUnread } from "@/components/yaronetic/messenger";
 import { GUEST_QUESTION_LIMIT } from "@/lib/ai/guest-limit";
 import { personalSuggestions, topicLabel } from "@/lib/ai/interest-topics";
 import { suggestionsFor } from "@/lib/ai/defaults";
+import { thinkKind } from "@/lib/ai/reasoning";
 import { getInterests, type InterestProfile } from "@/lib/ai/interests";
 import { getMailStatus } from "@/lib/mail/codes";
 import { publishChat } from "@/lib/ai/share";
@@ -87,6 +88,7 @@ export function App({
   const builtinLocked = banned && studio.activeProvider.kind === "builtin";
   const activeChat = studio.chats.find((chat) => chat.id === studio.activeChatId);
   const streamingHere = studio.streaming && studio.streamingChatId === studio.activeChatId;
+  const thought = thinkKind(studio.activeProvider.model);
   const personal = Boolean(user && interests && interests.topics.length > 0);
   const suggestions = personal && interests ? personalSuggestions(interests.topics, interests.tone) : suggestionsFor(lang);
   const builtin = studio.providers.find((provider) => provider.kind === "builtin");
@@ -623,6 +625,7 @@ export function App({
                 }
                 onStop={studio.stop}
                 reasoning={studio.reasoning}
+                reasoningMode={thought === "never" ? "never" : thought === "always" ? "always" : "auto"}
                 onReasoning={studio.setReasoning}
                 ask={studio.askMode}
                 onAsk={studio.setAskMode}

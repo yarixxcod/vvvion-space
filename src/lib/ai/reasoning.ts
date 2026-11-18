@@ -37,6 +37,14 @@ function visibleContent(value: unknown): string {
     .join("");
 }
 
+function detailsText(value: unknown): string {
+  if (typeof value === "string") return clip(value);
+  if (!value || typeof value !== "object") return "";
+  if (Array.isArray(value)) return value.map((part) => detailsText(part)).join("");
+  const record = value as Record<string, unknown>;
+  return firstText(record.text, record.content, record.summary, record.reasoning);
+}
+
 function reasonParts(value: unknown): string {
   if (!Array.isArray(value)) return "";
   return value
@@ -78,7 +86,7 @@ export function extractPieces(payload: Record<string, unknown>): { text: string;
     if (box) {
       return {
         text: visibleContent(box.content),
-        reason: firstText(box.reasoning_content, box.reasoning, box.thinking) || reasonParts(box.content),
+        reason: firstText(box.reasoning_content, box.reasoning, box.thinking, detailsText(box.reasoning_details)) || reasonParts(box.content),
       };
     }
     if (typeof choice.text === "string") return { text: choice.text, reason: "" };
@@ -166,22 +174,72 @@ export class ThinkGate {
 }
 
 /**
- * Fields that actually change how hard the model thinks.
- * Grok 4 rejects `none` (the request fails); the lowest accepted effort is `low`.
- * Other families get a real off switch: `none` or `thinking: disabled`.
+ * Whether this upstream model can think, and whether the switch can turn it off.
+ * `always` — Grok 4.x that accepts effort but rejects a full off switch.
+ * `switch` — DeepSeek, Qwen, GPT-5 and the o-series: off really means off.
+ * `never` — no reasoning fields; the control stays inactive.
  */
-export function reasoningFields(model: string, enabled: boolean): Record<string, unknown> {
+export type ThinkKind = "switch" | "always" | "never";
+
+export function thinkKind(model: string): ThinkKind {
+  const id = model.toLowerCase();
+  if (!id) return "never";
+  if (/grok/.test(id)) {
+    if (/4\.1|4\.20|fast|non-?reasoning/.test(id)) return "never";
+    return "always";
+  }
+  if (/deepseek|qwen|qwq|reasoner|\bo[134](?:[.-]|$)|gpt-5|claude|ernie|glm-|kimi|moonshot|hunyuan|step-/.test(id)) return "switch";
+  if (/think|reason/.test(id)) return "switch";
+  return "never";
+}
+
+const SMALLTALK =
+  /^(?:привет|приветствую|здравствуй(?:те)?|добрый\s+(?:день|вечер|утро)|хай|hello|hi|hey|yo|ок|окей|okay|ok|спасибо|благодарю|thanks|thank you|пока|bye|да|нет|yes|no|ага|угу|понял|понятно|ясно|класс|круто|лол|ха+|👍|👋|🙏)[.!?\s…]*$/iu;
+
+/** Easy turns stay quiet. A real question, code, math or a long prompt is worth a trace. */
+export function wantsThought(text: string): boolean {
+  const raw = text.replace(/\s+/g, " ").trim();
+  if (!raw || SMALLTALK.test(raw)) return false;
+  if (/(```|\bкод\b|\bcode\b|функц|алгоритм|сравни|почему|зачем|докажи|посчитай|вычисли|объясни|расскажи|разниц|\bexplain\b|\bwhy\b|\bhow\b|debug|ошибк|\bsql\b|regex|архитект|пошаг|\bплан\b|таблиц|формул|уравнен|разбер|проанализ|напиши|реализ|\bimplement\b)/i.test(raw)) return true;
+  if (raw.length <= 28 && !/[?？]/.test(raw) && !/\d/.test(raw)) return false;
+  if (raw.length > 160) return true;
+  if (/[?？]/.test(raw) && raw.length > 36) return true;
+  if (/\d+\s*[-+*/x×÷=]\s*\d+/.test(raw)) return true;
+  return raw.length > 72;
+}
+
+/**
+ * Fields that actually change how hard the model thinks.
+ * Off never thinks, except Grok, which rejects `none` and can only go down to `low`.
+ * On is not "always high": easy text stays quiet, harder text thinks.
+ */
+export function reasoningFields(model: string, enabled: boolean, userText = ""): Record<string, unknown> {
+  const kind = thinkKind(model);
+  if (kind === "never") return {};
+  const on = enabled && (userText ? wantsThought(userText) : true);
   const id = model.toLowerCase();
   if (id.includes("deepseek")) {
-    return enabled
+    return on
       ? { reasoning_effort: "high", thinking: { type: "enabled" } }
       : { thinking: { type: "disabled" } };
   }
   if (/qwen|qwq/.test(id)) {
-    return { enable_thinking: enabled, chat_template_kwargs: { enable_thinking: enabled } };
+    return { enable_thinking: on, chat_template_kwargs: { enable_thinking: on } };
   }
-  if (id.includes("grok")) return { reasoning_effort: enabled ? "high" : "low" };
-  return { reasoning_effort: enabled ? "high" : "none" };
+  if (kind === "always") return { reasoning_effort: on ? "high" : "low" };
+  return { reasoning_effort: on ? "medium" : "none" };
+}
+
+/** Drop the private hint and apply the switch to the upstream model id, not the catalog alias. */
+export function applyChatReasoning(payload: Record<string, unknown>, model: string): Record<string, unknown> {
+  const enabled = payload.vvReason === true;
+  const user = typeof payload.vvUser === "string" ? payload.vvUser : "";
+  const marked = "vvReason" in payload || "vvUser" in payload;
+  const rest = { ...payload };
+  delete rest.vvReason;
+  delete rest.vvUser;
+  if (!marked || rest.tools) return rest;
+  return { ...rest, ...reasoningFields(model, enabled, user) };
 }
 
 /** Tool turns must not send reasoning_effort=none: Ernie and other gateways then drop tool_calls and answer with text. */

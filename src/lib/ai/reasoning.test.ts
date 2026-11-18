@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ThinkGate, extractPieces, reasoningFields, softenReasoning, toolReasoningFields } from "./reasoning.ts";
+import { ThinkGate, applyChatReasoning, extractPieces, reasoningFields, softenReasoning, thinkKind, toolReasoningFields, wantsThought } from "./reasoning.ts";
 
 test("reasoning_content stays out of the answer", () => {
   const pieces = extractPieces({
@@ -29,13 +29,32 @@ test("think tags split across chunks", () => {
   assert.equal(a.reason + b.reason + c.reason + end.reason, "тихо");
 });
 
-test("grok cannot take none, so off is the lowest accepted effort", () => {
-  assert.equal(reasoningFields("grok-4.7", true).reasoning_effort, "high");
-  assert.equal(reasoningFields("grok-4.5", false).reasoning_effort, "low");
-  assert.equal(reasoningFields("gpt-4.1", false).reasoning_effort, "none");
-  assert.deepEqual(reasoningFields("deepseek-chat", false).thinking, { type: "disabled" });
+test("grok cannot take none, and an easy question stays on the lowest effort", () => {
+  assert.equal(reasoningFields("grok-4.7", true, "Докажи теорему по шагам").reasoning_effort, "high");
+  assert.equal(reasoningFields("grok-4.5", true, "привет").reasoning_effort, "low");
+  assert.equal(reasoningFields("grok-4.5", false, "Докажи теорему по шагам").reasoning_effort, "low");
+  assert.equal(thinkKind("gpt-4.1"), "never");
+  assert.deepEqual(reasoningFields("gpt-4.1", true, "Докажи теорему по шагам"), {});
+  assert.deepEqual(reasoningFields("deepseek-chat", false, "почему так").thinking, { type: "disabled" });
+  assert.deepEqual(reasoningFields("deepseek-chat", true, "привет").thinking, { type: "disabled" });
+  assert.deepEqual(reasoningFields("deepseek-chat", true, "Сравни два алгоритма и объясни разницу").thinking, { type: "enabled" });
+  assert.equal(wantsThought("ок"), false);
+  assert.equal(wantsThought("Напиши функцию groupBy и разбери крайние случаи"), true);
   assert.deepEqual(toolReasoningFields("ernie-5.5-flash"), {});
   assert.equal(toolReasoningFields("grok-4").reasoning_effort, "low");
+});
+
+test("the catalog alias does not decide the provider switch", () => {
+  const easy = applyChatReasoning({ model: "grok-4.3", vvReason: true, vvUser: "привет" }, "deepseek-chat");
+  assert.equal("vvReason" in easy, false);
+  assert.equal("vvUser" in easy, false);
+  assert.deepEqual(easy.thinking, { type: "disabled" });
+  const hard = applyChatReasoning(
+    { model: "GPT-5.2", vvReason: true, vvUser: "Почему этот алгоритм квадратичный? Объясни по шагам.", tools: [{ type: "function" }] },
+    "deepseek-chat",
+  );
+  assert.equal("thinking" in hard, false);
+  assert.equal(Array.isArray(hard.tools), true);
 });
 
 test("a rejected none is retried as low, an unknown field is dropped", () => {

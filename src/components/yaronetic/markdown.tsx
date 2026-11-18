@@ -415,18 +415,49 @@ function MathView({ tex, display, raw }: { tex: string; display: boolean; raw: s
 }
 
 function useStreamText(text: string, live?: boolean) {
-  const latest = useRef(text);
-  latest.current = text;
-  const [shown, setShown] = useState(text);
+  const target = useRef(text);
+  const liveRef = useRef(Boolean(live));
+  const started = useRef(false);
+  target.current = text;
+  liveRef.current = Boolean(live);
+  if (live) started.current = true;
+  const [shown, setShown] = useState(() => (live ? "" : text));
   useEffect(() => {
-    if (!live) return;
-    setShown(latest.current);
-    const id = window.setInterval(() => {
-      setShown((current) => (current === latest.current ? current : latest.current));
-    }, 80);
-    return () => window.clearInterval(id);
+    if (!started.current) {
+      setShown(target.current);
+      return;
+    }
+    let raf = 0;
+    let stop = false;
+    const tick = () => {
+      if (stop) return;
+      let more = false;
+      setShown((current) => {
+        const goal = target.current;
+        if (!goal.startsWith(current)) {
+          more = liveRef.current;
+          return goal;
+        }
+        const behind = goal.length - current.length;
+        if (!behind) {
+          more = liveRef.current;
+          return current;
+        }
+        const step = Math.min(behind, behind > 2000 ? 36 : behind > 800 ? 18 : 8);
+        const next = goal.slice(0, current.length + step);
+        more = liveRef.current || next.length < goal.length;
+        return next;
+      });
+      if (more) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      stop = true;
+      cancelAnimationFrame(raf);
+    };
   }, [live]);
-  return live ? shown : text;
+  if (!started.current) return text;
+  return shown;
 }
 
 function AskView({
