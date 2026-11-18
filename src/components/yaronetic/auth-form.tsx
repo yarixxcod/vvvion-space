@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth/client";
+import { safeAppPath } from "@/lib/auth/safe-path";
 import { ui } from "@/lib/i18n";
 import { txNow, useLang } from "@/lib/lang";
 import { SecretInput } from "@/components/yaronetic/secret-input";
@@ -9,13 +11,13 @@ import { confirmMailCode, confirmPasswordCode, requestPasswordCode, sendConfirmC
 
 const BEARER_KEY = "grok-auth.bearer-token";
 
-function explain(error: { message?: string; code?: string } | null | undefined) {
+function explain(error: { message?: string; code?: string; status?: number } | null | undefined) {
   const code = error?.code ?? "";
   const message = error?.message ?? "";
   if (code === "USER_ALREADY_EXISTS" || /already exists/i.test(message)) {
     return txNow({ ru: "Такой логин уже есть. Войдите.", en: "That login already exists. Sign in.", kk: "Мұндай логин бар. Кіріңіз." });
   }
-  if (code === "INVALID_EMAIL_OR_PASSWORD" || /invalid email or password/i.test(message)) {
+  if (code === "INVALID_EMAIL_OR_PASSWORD" || error?.status === 401 || /invalid email or password/i.test(message)) {
     return txNow({ ru: "Неверный логин или пароль.", en: "Wrong login or password.", kk: "Логин немесе құпия сөз қате." });
   }
   if (/password/i.test(message) && /(short|least|8)/i.test(message)) {
@@ -23,13 +25,16 @@ function explain(error: { message?: string; code?: string } | null | undefined) 
   }
   if (/invalid email/i.test(message)) return txNow({ ru: "Логин — это адрес почты.", en: "The login is an email address.", kk: "Логин — пошта мекенжайы." });
   if (/invalid origin/i.test(message)) return txNow({ ru: "Не удалось войти с этой страницы.", en: "Could not sign in from this page.", kk: "Бұл беттен кіру болмады." });
+  if (/email.*verif|не подтверж/i.test(`${code} ${message}`)) {
+    return txNow({ ru: "Сначала подтвердите почту.", en: "Verify your email first.", kk: "Алдымен поштаны растаңыз." });
+  }
   if (/too many|слишком много попыток|временно закрыт/i.test(message)) {
     return message.includes("Слишком") || message.includes("закрыт")
       ? message
       : txNow({ ru: "Слишком много попыток. Подождите и попробуйте снова.", en: "Too many attempts. Wait and try again.", kk: "Тым көп әрекет. Күтіп, қайта көріңіз." });
   }
-  if (/робот|not a robot|captcha/i.test(message)) {
-    return txNow({ ru: "Подтвердите, что вы не робот.", en: "Confirm that you are not a robot.", kk: "Робот емес екеніңізді растаңыз." });
+  if (/робот|not a robot|captcha/i.test(message) || (error?.status === 400 && !message)) {
+    return txNow({ ru: "Подтвердите, что вы не робот. Если галочка уже стояла, поставьте её ещё раз.", en: "Confirm that you are not a robot. If the box was already checked, check it again.", kk: "Робот емес екеніңізді растаңыз. Белгі тұрса, қайта қойыңыз." });
   }
   return message || txNow({ ru: "Не удалось войти", en: "Could not sign in", kk: "Кіру болмады" });
 }
@@ -46,7 +51,15 @@ async function keepSession(response: Response) {
   await authClient.getSession();
 }
 
-export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onComplete?: () => void }) {
+export function AuthForm({
+  locked = false,
+  onComplete,
+  redirectTo,
+}: {
+  locked?: boolean;
+  onComplete?: () => void;
+  redirectTo?: string;
+}) {
   const [mode, setMode] = useState<"up" | "in" | "reset">("up");
   const [step, setStep] = useState<"ask" | "code">("ask");
   const [verifyEmail, setVerifyEmail] = useState(false);
@@ -58,6 +71,18 @@ export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onC
   const [resetKey, setResetKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const lang = useLang();
+  const navigate = useNavigate();
+
+  async function enter() {
+    const session = await authClient.getSession();
+    if (!session.data?.user) {
+      throw new Error(txNow({ ru: "Не удалось войти", en: "Could not sign in", kk: "Кіру болмады" }));
+    }
+    const { appWidgetSessionChanged } = await import("@/lib/app-bridge");
+    appWidgetSessionChanged();
+    onComplete?.();
+    if (redirectTo !== undefined) await navigate({ href: safeAppPath(redirectTo), replace: true });
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -109,20 +134,21 @@ export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onC
         }
         return;
       } else {
+        let kept: Promise<void> = Promise.resolve();
         const { error } = await authClient.signIn.email({
           email: login,
           password,
           fetchOptions: {
             headers: { "x-captcha": proof },
-            onSuccess: (ctx) => void keepSession(ctx.response),
+            onSuccess: (ctx) => {
+              kept = keepSession(ctx.response);
+            },
           },
         });
         if (error) throw new Error(explain(error));
-        await authClient.getSession();
-        const { appWidgetSessionChanged } = await import("@/lib/app-bridge");
-        appWidgetSessionChanged();
+        await kept;
         toast.success(txNow({ ru: "Вы вошли в аккаунт.", en: "Signed in successfully.", kk: "Аккаунтқа кірдіңіз." }));
-        onComplete?.();
+        await enter();
       }
     } catch (err) {
       setProof("");
@@ -139,11 +165,9 @@ export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onC
     setBusy(true);
     try {
       await confirmMailCode({ data: { code: code.trim() } });
-      await authClient.getSession();
       toast.success(txNow({ ru: "Почта подтверждена. Добро пожаловать!", en: "Email verified. Welcome!", kk: "Пошта расталды. Қош келдіңіз!" }));
-      setVerifyEmail(false);
-      onComplete?.();
       window.dispatchEvent(new Event("vvvion:email-verified"));
+      await enter();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Неверный или просроченный код");
     } finally {
@@ -343,7 +367,7 @@ export function AuthForm({ locked = false, onComplete }: { locked?: boolean; onC
         <HumanCheck resetKey={resetKey} onPayload={setProof} />
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || (mode === "in" && !proof)}
           className="press mt-1 h-11 rounded-2xl bg-accent text-sm font-medium text-accent-fg disabled:opacity-40"
         >
           {busy ? ui(lang, "wait") : mode === "up" ? ui(lang, "createAccount") : ui(lang, "enter")}
