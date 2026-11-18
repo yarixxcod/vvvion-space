@@ -7,6 +7,7 @@ import { PersonFace, refreshFaceMarks } from "@/components/yaronetic/person-face
 import { VpnDeskCard } from "@/components/yaronetic/vpn-admin";
 import { WhisperCard } from "@/components/yaronetic/whisper-card";
 import { AppReleaseCard } from "@/components/yaronetic/app-release-admin";
+import { TelegramAdmin } from "@/components/yaronetic/telegram-admin";
 import { PriceAdmin } from "@/components/yaronetic/price-admin";
 import { getUsagePolicy, saveUsagePolicy, type UsagePolicy } from "@/lib/social/limits";
 import {
@@ -39,6 +40,7 @@ import {
 const MODEL_RE = /^[A-Za-z0-9._:/-]+$/;
 const TABS = [
   ["people", "Участники"],
+  ["telegram", "Telegram"],
   ["models", "Модели"],
   ["images", "Картинки"],
   ["voice", "Голос"],
@@ -240,6 +242,7 @@ export function AdminPanel() {
           </button>
         ))}
       </div>
+      {tab === "telegram" ? <TelegramAdmin /> : null}
       {tab === "people" ? <People members={members} onChange={setMembers} /> : null}
       {tab === "models" ? <Models models={models} policy={policy} onModels={setModels} onPolicy={setPolicy} /> : null}
       {tab === "images" ? <Images models={images} onChange={setImages} /> : null}

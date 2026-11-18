@@ -68,3 +68,29 @@ export const stopTelegramLink = createServerFn({ method: "POST" })
     await forgetLink(context.userId);
     return { ok: true as const };
   });
+
+export type TelegramDiagnostics = TelegramBotState & {
+  reachable: boolean;
+  webhookReady: boolean;
+  pending: number;
+  links: number;
+  failed: number;
+  lastUpdate: string | null;
+  webhookError: string;
+  checkedAt: string;
+};
+export const getTelegramDiagnostics = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<TelegramDiagnostics> => {
+    await assertAdmin(context.userId);
+    const { diagnoseBot } = await import("@/lib/social/telegram.server");
+    return diagnoseBot();
+  });
+export const repairTelegramBot = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<TelegramDiagnostics> => {
+    await assertAdmin(context.userId);
+    const { repairBot, diagnoseBot } = await import("@/lib/social/telegram.server");
+    await repairBot();
+    return diagnoseBot();
+  });

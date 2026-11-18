@@ -593,7 +593,7 @@ export function Disk() {
   const [lane, setLane] = useState<"own" | "mega">("own");
   useEffect(() => {
     try {
-      if (sessionStorage.getItem("vvvion.disk-lane") === "mega") setLane("mega");
+      if (new URLSearchParams(window.location.search).get("view") === "mega" || sessionStorage.getItem("vvvion.disk-lane") === "mega") setLane("mega");
     } catch {
       /* private mode */
     }

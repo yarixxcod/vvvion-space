@@ -39,6 +39,9 @@ export function Library() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [admin, setAdmin] = useState(false);
   const [room, setRoom] = useState<"read" | "watch" | "play">("read");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("view") === "watch") setRoom("watch");
+  }, []);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("vv-circle-nested", { detail: Boolean(open) }));
@@ -134,7 +137,10 @@ export function Library() {
         })
         .catch(() => undefined);
     }
-    take();
+    const bookId = new URLSearchParams(window.location.search).get("book");
+    if (bookId && /^[A-Za-z0-9_-]{8,80}$/.test(bookId)) {
+      void listShelf({ data: { q: "" } }).then(rows => { if (!dead) { const book = rows.find(row => row.id === bookId); if (book) { setRoom("read"); setOpen(book); } } }).catch(() => undefined);
+    } else take();
     window.addEventListener("vvvion-jump", take);
     return () => {
       dead = true;

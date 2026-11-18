@@ -1557,3 +1557,38 @@ export async function handleModels(request: Request): Promise<Response> {
 		});
 	}
 }
+
+/** Trusted server entry point for a verified, linked Telegram account. Never exposed as HTTP. */
+export async function completeTelegramChat(userId: string, model: string, history: {role: string; content: string}[]) {
+  const access = await loadAccess(userId);
+  if (access.banned) throw new Error("Аккаунт заблокирован");
+  const sql = await getSql();
+  const exists = await sql`select name from catalog_models where name = ${model}`;
+  if (!exists.length) throw new Error("Модель удалена. Выберите другую через /models");
+  const limit = await enforceDailyLimit(userId);
+  if (limit.blocked) throw new Error(limit.message);
+  const catalog = await loadCatalog(model);
+  const targets = builtinTargets(catalog);
+  if (targets instanceof Response) throw new Error("У модели пока нет доступного ключа");
+  const attempt = await recordAttempt({userId,guestId:null,model,kind:"builtin",mode:"telegram",ok:false,note:history.at(-1)?.content || ""});
+  if (!attempt) throw new Error("Не удалось учесть запрос. Попробуйте позже");
+  const signal = AbortSignal.timeout(65_000);
+  const router = createProviderRouter(targets, callChat, signal, 18_000);
+  let answer = "";
+  let body: any;
+  for (let next=0;next<targets.length;next++) {
+    const response = await router.send({model,stream:false,max_tokens:3072,messages:[
+      {role:"system",content:[catalog.prompt,"Вы отвечаете в Telegram. Сохраняйте контекст диалога. Пишите понятно и соразмерно вопросу. Не утверждайте, что выполнили операции с деньгами или файлами: в этом чате доступны только текстовые ответы. Не используйте HTML-разметку."].filter(Boolean).join("\n\n")},
+      ...history.filter(m=>(m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim()).slice(-20).map(m=>({role:m.role,content:m.content.slice(0,12000)}))
+    ]});
+    if (response.failed) break;
+    body = await response.response.json();
+    const content = body?.choices?.[0]?.message?.content;
+    answer = typeof content === "string" ? content.trim() : "";
+    if(answer)break;
+    router.failCurrent();
+  }
+  if (!answer) throw new Error("Провайдеры модели не вернули ответ. Попробуйте позже или выберите другую модель");
+  await sql`update chat_attempts set ok = true, total_tokens = ${Math.max(0, Math.min(10_000_000, Number(body.usage?.total_tokens) || 0))} where id = ${attempt}`;
+  return answer.slice(0,28000);
+}

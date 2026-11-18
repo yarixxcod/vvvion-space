@@ -22,7 +22,7 @@ function topupId(value: unknown) {
 }
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): { place?: CircleTab; lang?: Lang; chat?: string; room?: string; new?: boolean; topup?: string; s?: string } => {
+  validateSearch: (search: Record<string, unknown>): { place?: CircleTab; lang?: Lang; chat?: string; room?: string; new?: boolean; topup?: string; s?: string; book?: string; view?: "read" | "watch" | "mega" } => {
     const lang = normalizeLang(search.lang);
     const chat = cleanId(search.chat);
     const room = cleanId(search.room);
@@ -37,6 +37,8 @@ export const Route = createFileRoute("/")({
       ...(fresh ? { new: true } : {}),
       ...(topup ? { topup } : {}),
       ...(section ? { s: section } : {}),
+      ...(cleanId(search.book) ? { book: cleanId(search.book) } : {}),
+      ...(search.view === "read" || search.view === "watch" || search.view === "mega" ? { view: search.view } : {}),
     };
   },
   loaderDeps: () => ({}),

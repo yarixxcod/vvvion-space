@@ -820,7 +820,7 @@ function TelegramCard() {
     <section className="mt-4 rounded-3xl border border-line bg-elev p-4">
       <p className="flex items-center gap-2 text-sm font-medium">
         <Send className="size-4 text-muted" />
-        Уведомления в Telegram
+        VVVion в Telegram
       </p>
       <p className="mt-1 text-xs text-faint">Тот же аккаунт, что и здесь. Пароль в бота писать не нужно: ссылка выдаётся, пока вы уже вошли.</p>
       {state === null ? (
@@ -830,8 +830,9 @@ function TelegramCard() {
       ) : state.linked ? (
         <div className="mt-3">
           <p className="text-sm">
-            Привязан{state.handle ? ` как @${state.handle}` : ""}. Сюда приходят сообщения, заявки и ответы в ленте. Файл или фото боту, до 20 МБ, сохраняются на мегадиск.
+            Привязан{state.handle ? ` как @${state.handle}` : ""}. ИИ-чат с моделями сайта, общая история, банк, книги и ролики. Файлы до 20 МБ сохраняются на Мегадиск.
           </p>
+          <a href={`https://t.me/${state.username}`} target="_blank" rel="noreferrer" className="press mt-3 mr-2 inline-flex h-10 items-center rounded-xl bg-accent px-3 text-sm text-accent-fg">Открыть бота</a>
           <button type="button" disabled={busy} className="press mt-3 h-10 rounded-xl border border-line px-3 text-sm disabled:opacity-40" onClick={() => void unlink()}>
             Отвязать
           </button>
