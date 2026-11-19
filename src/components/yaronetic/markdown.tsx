@@ -467,70 +467,74 @@ function AskView({
   );
 }
 
-function quietMotion() {
-  if (typeof window === "undefined") return true;
-  return (
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-    document.documentElement.classList.contains("vv-reduce-motion")
-  );
-}
-
-/** Reveal live text a few characters at a time. A finished message is always the full string. */
+/** Reveal live text a few characters at a time, on every screen. A message that was never live stays whole. */
 function useLiveText(text: string, live: boolean) {
-  const quiet = quietMotion();
-  const [n, setN] = useState(() => {
-    if (!live || quietMotion()) return text.length;
-    return text.length > 160 ? text.length - 28 : 0;
-  });
+  const [n, setN] = useState(() => (live ? 0 : text.length));
   const nRef = useRef(n);
   const textRef = useRef(text);
   const liveRef = useRef(live);
+  const wasLive = useRef(live);
   textRef.current = text;
   liveRef.current = live;
+  if (live) wasLive.current = true;
 
   useEffect(() => {
-    if (quiet) {
-      nRef.current = text.length;
-      setN(text.length);
-      return;
-    }
-    if (nRef.current > text.length) {
-      nRef.current = 0;
-      setN(0);
-    }
+    if (wasLive.current) return;
+    nRef.current = text.length;
+    setN(text.length);
+  }, [text]);
+
+  useEffect(() => {
+    if (!wasLive.current) return;
     let raf = 0;
-    let frames = 0;
+    let timer = 0;
+    let dead = false;
+    let gen = 0;
     const tick = () => {
+      if (dead) return;
       const target = textRef.current;
-      frames += 1;
-      if (nRef.current >= target.length || frames > 360) {
-        if (nRef.current < target.length) {
-          nRef.current = target.length;
-          setN(target.length);
-        }
+      if (nRef.current > target.length) nRef.current = 0;
+      const behind = target.length - nRef.current;
+      if (behind <= 0) {
+        if (!liveRef.current) return;
+        timer = window.setTimeout(kick, 48);
         return;
       }
-      const behind = target.length - nRef.current;
-      const step = !liveRef.current ? Math.max(8, Math.ceil(behind / 8)) : behind > 420 ? 22 : behind > 120 ? 9 : 3;
+      const step = behind > 600 ? 18 : behind > 240 ? 8 : behind > 48 ? 3 : 1;
       let next = Math.min(target.length, nRef.current + step);
-      const code = target.charCodeAt(next - 1);
+      const code = target.charCodeAt(Math.max(0, next - 1));
       if (code >= 0xd800 && code <= 0xdbff && next < target.length) next += 1;
       nRef.current = next;
       setN(next);
-      if (next < target.length) raf = requestAnimationFrame(tick);
+      kick();
     };
-    if (nRef.current < text.length) raf = requestAnimationFrame(tick);
-    const guard = window.setTimeout(() => {
-      const full = textRef.current.length;
-      nRef.current = full;
-      setN(full);
-    }, live ? 15000 : 1600);
+    function kick() {
+      if (dead) return;
+      const mine = ++gen;
+      window.clearTimeout(timer);
+      window.cancelAnimationFrame(raf);
+      timer = window.setTimeout(() => {
+        if (dead || mine !== gen) return;
+        gen += 1;
+        tick();
+      }, 48);
+      raf = window.requestAnimationFrame(() => {
+        if (dead || mine !== gen) return;
+        window.clearTimeout(timer);
+        gen += 1;
+        tick();
+      });
+    }
+    kick();
     return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(guard);
+      dead = true;
+      gen += 1;
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
     };
-  }, [text, live, quiet]);
+  }, [live]);
 
+  if (!wasLive.current) return text;
   if (!live && n >= text.length) return text;
   return text.slice(0, Math.min(n, text.length));
 }
@@ -551,10 +555,11 @@ export function Markdown({
   onAsk?: (text: string) => void;
 }) {
   const visible = useLiveText(text, live);
+  const drafting = visible.length < text.length;
   const parts = useMemo(() => splitQuestionText(visible), [visible]);
   let askSeen = false;
   return (
-    <CitationSources.Provider value={sources}><div className="prose-y">
+    <CitationSources.Provider value={sources}><div className={drafting && !live ? "prose-y caret" : "prose-y"}>
       {parts.map((part, index) => {
         if (part.kind === "ask") {
           const first = !askSeen;
@@ -573,9 +578,9 @@ export function Markdown({
         }
         return splitRich(part.text).map((piece, inner) =>
           piece.kind === "steps" ? (
-            <StepList key={`${index}-s-${inner}`} steps={piece.steps} live={live} />
+            <StepList key={`${index}-s-${inner}`} steps={piece.steps} live={live || drafting} />
           ) : (
-            <SettledMarkdown key={`${index}-m-${inner}`} text={piece.text} live={live} />
+            <SettledMarkdown key={`${index}-m-${inner}`} text={piece.text} live={live || drafting} />
           ),
         );
       })}

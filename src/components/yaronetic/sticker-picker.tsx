@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import {
   STICKER_PACKS,
@@ -7,6 +7,7 @@ import {
   stickerUrl,
   type StickerPackId,
 } from "@/lib/stickers";
+
 export function StickerImage({
   code,
   className = "size-32",
@@ -14,24 +15,65 @@ export function StickerImage({
   code: string;
   className?: string;
 }) {
+  const src = stickerUrl(code);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
-  return failed ? (
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !src) return;
+    let dead = false;
+    const img = new Image();
+    const paint = () => {
+      if (dead || !img.complete || img.naturalWidth < 1) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (w < 2 || h < 2) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const bw = Math.round(w * dpr);
+      const bh = Math.round(h * dpr);
+      if (canvas.width !== bw || canvas.height !== bh) {
+        canvas.width = bw;
+        canvas.height = bh;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, bw, bh);
+      ctx.drawImage(img, 0, 0, bw, bh);
+    };
+    img.onload = () => {
+      if (!dead) paint();
+    };
+    img.onerror = () => {
+      if (!dead) setFailed(true);
+    };
+    img.src = src;
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => paint());
+    ro?.observe(canvas);
+    return () => {
+      dead = true;
+      ro?.disconnect();
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [src]);
+  if (!src || failed) {
+    return (
+      <span className={`${className} inline-grid place-items-center rounded-2xl border border-line bg-subtle p-2 text-center text-xs text-fg`}>
+        {stickerLabel(code)}
+      </span>
+    );
+  }
+  return (
     <span
       role="img"
       aria-label={stickerLabel(code)}
-      className={`${className} inline-grid place-items-center rounded-2xl border border-line bg-subtle p-2 text-center text-xs text-fg`}
+      className={`sticker-art relative inline-block shrink-0 ${className}`}
+      onContextMenu={(event) => event.preventDefault()}
+      onDragStart={(event) => event.preventDefault()}
     >
-      {stickerLabel(code)}
+      <canvas ref={canvasRef} aria-hidden draggable={false} className="pointer-events-none absolute inset-0 size-full" />
+      <span aria-hidden className="absolute inset-0" />
     </span>
-  ) : (
-    <img
-      src={stickerUrl(code)}
-      alt={stickerLabel(code)}
-      loading="lazy"
-      decoding="async"
-      className={`${className} object-contain`}
-      onError={() => setFailed(true)}
-    />
   );
 }
 export function StickerPicker({

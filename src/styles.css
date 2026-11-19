@@ -176,7 +176,13 @@ html.vv-reduce-motion .mic-live { animation: none !important; }
 html.vv-lowend, html.vv-lowend *, html.vv-lowend *::before, html.vv-lowend *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 
 .msg-row:nth-last-child(-n+3),
-.msg-row.msg-live { content-visibility: visible; }
+.msg-row.msg-live { content-visibility: visible; contain: none; }
+.msg-row.msg-live * { content-visibility: visible; }
+.msg-live .prose-y,
+.msg-live .prose-y h1,
+.msg-live .prose-y h2,
+.msg-live .prose-y h3,
+.msg-live .prose-y h4 { text-wrap: wrap; }
 .msg-actions { opacity: 0; }
 @media (hover: hover) and (pointer: fine) {
   .group\/msg:hover .msg-actions,
@@ -413,7 +419,8 @@ html.light .game-tile { background:#fffdfa; border-color:#ddd4e4; }
 .catalog-rarity { font-size:10px; }
 
 /* Stickers keep their own colors and alpha in both themes. */
-.sticker-picker img { transition:transform .15s ease; }
-.sticker-picker button:hover img { transform:translateY(-2px); }
+.sticker-art,.sticker-art *{-webkit-touch-callout:none;user-select:none;-webkit-user-drag:none}
+.sticker-picker .sticker-art { transition:transform .15s ease; }
+.sticker-picker button:hover .sticker-art { transform:translateY(-2px); }
 .like-chip { font-variant-numeric:tabular-nums; }
-@media(prefers-reduced-motion:reduce){.sticker-picker img{transition:none}.sticker-picker button:hover img{transform:none}}
+@media(prefers-reduced-motion:reduce){.sticker-picker .sticker-art{transition:none}.sticker-picker button:hover .sticker-art{transform:none}}

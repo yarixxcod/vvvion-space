@@ -3,6 +3,12 @@ import type { ChatFile } from "@/lib/ai/types";
 const TEXT_EXT = /\.(txt|md|markdown|json|csv|ts|tsx|js|jsx|py|css|html|xml|yml|yaml|sql|log|sh|go|rs|java|c|cpp|h|php|toml)$/i;
 export const CHAT_FILE_MAX = 200 * 1024 * 1024;
 export const CHAT_FILE_COUNT = 8;
+/** A paste this long is attached as a text file, the way a long Grok paste is. */
+export const PASTE_FILE_AT = 5000;
+
+export function pasteAsFile(text: string): boolean {
+  return text.length >= PASTE_FILE_AT;
+}
 
 function safeName(name: string) {
   return name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "").trim().slice(0, 80) || "файл";
