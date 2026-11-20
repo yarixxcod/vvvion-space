@@ -666,7 +666,10 @@ function configuredImageRequest(model: string, prompt: string, config: Record<st
     }
   }
   // Providers requiring explicit dimensions should not receive an incompatible OpenAI size field.
-  if (payload.width !== undefined && payload.height !== undefined && config.size === undefined) delete payload.size;
+  if (payload.width !== undefined && payload.height !== undefined) {
+    if (config.size === undefined) delete payload.size;
+    if (config.response_format === undefined) delete payload.response_format;
+  }
   return payload;
 }
 function imageModelName(value: unknown) {
