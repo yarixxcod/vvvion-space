@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
@@ -77,6 +78,10 @@ function ytdlpPlugin(): Plugin {
   return {
     name: "app-builder:ytdlp",
     apply: "build",
+    buildStart() {
+      if (process.platform !== "linux" || process.arch !== "x64") return;
+      execFileSync(process.execPath, [join(process.cwd(), "scripts/prepare-ytdlp.mjs")], { stdio: "inherit" });
+    },
     closeBundle() {
       const from = join(process.cwd(), ".bin", "yt-dlp");
       if (!existsSync(from)) return;

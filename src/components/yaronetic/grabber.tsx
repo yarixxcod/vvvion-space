@@ -45,7 +45,41 @@ export function Grabber({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState("");
   const [stage, setStage] = useState<Tick["phase"]>("open");
   const isYoutube = /(?:youtube\.com|youtu\.be|youtube-nocookie\.com)/i.test(url);
+  const host = (() => {
+    try {
+      return clipHost(normalizeGrabUrl(url));
+    } catch {
+      return null;
+    }
+  })();
+  const hostName =
+    host === "youtube"
+      ? "YouTube"
+      : host === "instagram"
+        ? "Instagram"
+        : host === "tiktok"
+          ? "TikTok"
+          : host === "pinterest"
+            ? "Pinterest"
+            : host === "vk"
+              ? "VK"
+              : "";
   useEffect(() => () => abort.current?.abort(), []);
+
+  function applyPaste(text: string) {
+    try {
+      setUrl(normalizeGrabUrl(text));
+      setError("");
+    } catch (err) {
+      const clean = text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").trim().slice(0, 4000);
+      setUrl(clean);
+      setError(
+        err instanceof Error
+          ? err.message
+          : tx({ ru: "Нужна ссылка", en: "A link is required", kk: "Сілтеме керек" }),
+      );
+    }
+  }
 
   function labelOf(tick: Tick): Pull {
     if (tick.phase === "open")
@@ -161,18 +195,19 @@ export function Grabber({ onBack }: { onBack: () => void }) {
       <div className="flex items-center gap-2 px-3 pt-3">
         <button
           type="button"
-          className="press inline-flex h-10 items-center gap-1 rounded-xl px-2 text-sm text-muted"
+          className="press inline-flex h-11 items-center gap-1 rounded-xl px-2 text-sm text-muted"
           onClick={onBack}
         >
           <ChevronLeft className="size-4" />
           {tx({ ru: "Сервисы", en: "Services", kk: "Сервистер" })}
         </button>
-        <h3 className="font-serif text-xl tracking-tight">
+        <h3 className="font-serif text-xl">
           {tx({ ru: "Загрузчик", en: "Downloader", kk: "Жүктеуіш" })}
         </h3>
       </div>
-      <form className="space-y-3 px-4 pt-3" onSubmit={(event) => void run(event)}>
-        <div className="flex items-center gap-2 rounded-2xl border border-line bg-subtle px-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <form className="space-y-3 rounded-3xl border border-line bg-elev p-3" onSubmit={(event) => void run(event)}>
+        <div className="flex items-center gap-2 rounded-2xl border border-line bg-bg px-3">
           <Link className="size-4 shrink-0 text-faint" aria-hidden="true" />
           <input
             disabled={busy}
@@ -181,7 +216,10 @@ export function Grabber({ onBack }: { onBack: () => void }) {
             spellCheck={false}
             maxLength={4000}
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => {
+              setUrl(event.target.value);
+              if (error) setError("");
+            }}
             placeholder={tx({
               ru: "Ссылка на пост, сторис или ролик",
               en: "Link to a post, story or clip",
@@ -190,6 +228,12 @@ export function Grabber({ onBack }: { onBack: () => void }) {
             className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none"
             inputMode="url"
             aria-label={tx({ ru: "Ссылка", en: "Link", kk: "Сілтеме" })}
+            onPaste={(event) => {
+              const text = event.clipboardData.getData("text/plain");
+              if (!text.trim()) return;
+              event.preventDefault();
+              applyPaste(text);
+            }}
           />
           <button
             type="button"
@@ -197,32 +241,38 @@ export function Grabber({ onBack }: { onBack: () => void }) {
             className="press grid size-11 shrink-0 place-items-center rounded-xl text-muted"
             aria-label={tx({ ru: "Вставить ссылку", en: "Paste link", kk: "Сілтемені қою" })}
             onClick={() =>
-              void navigator.clipboard
-                .readText()
-                .then(setUrl)
-                .catch(() =>
-                  setError(
-                    tx({
-                      ru: "Вставьте ссылку в поле вручную",
-                      en: "Paste the link into the field",
-                      kk: "Сілтемені өріске қойыңыз",
-                    }),
-                  ),
-                )
+              void navigator.clipboard.readText().then(applyPaste).catch(() =>
+                setError(
+                  tx({
+                    ru: "Вставьте ссылку в поле вручную",
+                    en: "Paste the link into the field",
+                    kk: "Сілтемені өріске қойыңыз",
+                  }),
+                ),
+              )
             }
           >
             <ClipboardPaste className="size-4" />
           </button>
         </div>
+        {hostName ? (
+          <p className="px-1 text-xs text-muted">
+            {hostName}
+            {isYoutube
+              ? tx({ ru: " · можно выбрать формат", en: " · pick a format", kk: " · форматты таңдаңыз" })
+              : ""}
+          </p>
+        ) : null}
         {isYoutube ? (
           <div
-            className="grid grid-cols-3 gap-2"
+            className="grid grid-cols-3 gap-1 rounded-2xl bg-subtle p-1"
+            role="group"
             aria-label={tx({ ru: "Формат YouTube", en: "YouTube format", kk: "YouTube форматы" })}
           >
             {(
               [
-                ["video", tx({ ru: "Видео", en: "Video", kk: "Видео" }), "≤ 720p"],
-                ["small", tx({ ru: "Компактное", en: "Smaller", kk: "Ықшам" }), "≤ 360p"],
+                ["video", tx({ ru: "Видео", en: "Video", kk: "Видео" }), "720p"],
+                ["small", tx({ ru: "Меньше", en: "Smaller", kk: "Ықшам" }), "360p"],
                 ["audio", tx({ ru: "Аудио", en: "Audio", kk: "Аудио" }), "M4A"],
               ] as const
             ).map(([id, title, hint]) => (
@@ -234,12 +284,12 @@ export function Grabber({ onBack }: { onBack: () => void }) {
                 onClick={() => setMode(id)}
                 className={
                   mode === id
-                    ? "press rounded-2xl border border-accent bg-accent/10 px-2 py-2 text-left"
-                    : "press rounded-2xl border border-line px-2 py-2 text-left"
+                    ? "press rounded-xl bg-elev px-2 py-2 text-center shadow-sm"
+                    : "press rounded-xl px-2 py-2 text-center text-muted"
                 }
               >
                 <span className="block text-xs font-medium">{title}</span>
-                <span className="text-[10px] text-muted">{hint}</span>
+                <span className="text-[10px] text-faint">{hint}</span>
               </button>
             ))}
           </div>
@@ -255,55 +305,43 @@ export function Grabber({ onBack }: { onBack: () => void }) {
             <Download className="size-4" />
           )}
           {tx({
-            ru: busy ? "Загружаем…" : "Скачать по ссылке",
-            en: busy ? "Downloading…" : "Download link",
-            kk: busy ? "Жүктелуде…" : "Сілтемеден жүктеу",
+            ru: busy ? "Загружаем…" : "Скачать",
+            en: busy ? "Downloading…" : "Download",
+            kk: busy ? "Жүктелуде…" : "Жүктеу",
           })}
         </button>
       </form>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <p className="max-w-md text-sm text-muted">
-          {tx({
-            ru: "Instagram, YouTube, TikTok, Pinterest и VK. Видео, фото и сторис ложатся на мегадиск и сами исчезают через пять минут.",
-            en: "Instagram, YouTube, TikTok, Pinterest and VK. Video, photos and stories land on the megadisk and disappear after five minutes.",
-            kk: "Instagram, YouTube, TikTok, Pinterest және VK. Видео, фото және сторис мегадискке түседі де, бес минуттан кейін жоғалады.",
-          })}
-        </p>
         {error ? (
           <div className="mt-4 rounded-2xl border border-danger/30 bg-danger/5 p-4" role="alert">
             <p className="text-sm text-danger">{error}</p>
             <p className="mt-2 text-xs text-muted">
               {tx({
-                ru: "Проверьте, что ролик общедоступен. Можно сменить формат и повторить.",
-                en: "Check that the clip is public. You can change format and retry.",
-                kk: "Видео ашық екенін тексеріңіз. Форматты өзгертіп, қайталауға болады.",
+                ru: "Ролик должен быть открытым. Для YouTube можно сменить формат и повторить.",
+                en: "The clip has to be public. On YouTube you can change the format and retry.",
+                kk: "Видео ашық болуы керек. YouTube форматын өзгертіп, қайталаңыз.",
               })}
             </p>
           </div>
         ) : null}
         {!busy && !files.length && !error ? (
-          <div className="mt-5 overflow-hidden rounded-3xl border border-line">
-            <img
-              src="/services/grab-v2.webp"
-              alt=""
-              className="h-36 w-full object-cover object-center"
-            />
-            <div className="p-4">
-              <p className="font-medium">
-                {tx({
-                  ru: "Ролики, Shorts и музыка",
-                  en: "Clips, Shorts & music",
-                  kk: "Видео, Shorts және музыка",
-                })}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-muted">
-                {tx({
-                  ru: "Вставьте ссылку из приложения или браузера. Для YouTube можно выбрать видео со звуком или отдельную аудиодорожку. До 40 МБ на файл.",
-                  en: "Paste a link from the app or browser. YouTube supports video with sound or audio only. Up to 40 MB per file.",
-                  kk: "Қолданбадан не браузерден сілтеме қойыңыз. YouTube видеосын не аудиосын таңдаңыз. Бір файлға 40 МБ дейін.",
-                })}
-              </p>
+          <div className="mt-4 rounded-3xl border border-line p-4">
+            <p className="text-sm font-medium">
+              {tx({ ru: "Что можно прислать", en: "What you can send", kk: "Қандай сілтеме жарайды" })}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["YouTube", "Instagram", "TikTok", "Pinterest", "VK"].map((name) => (
+                <span key={name} className="rounded-full border border-line px-3 py-1 text-xs text-muted">
+                  {name}
+                </span>
+              ))}
             </div>
+            <p className="mt-3 text-xs leading-relaxed text-muted">
+              {tx({
+                ru: "Вставьте ссылку целиком, даже если рядом есть текст из приложения. Файл до 40 МБ лежит на мегадиске пять минут, потом удаляется сам.",
+                en: "Paste the whole share, even if the app added text around the link. A file up to 40 MB stays on the megadisk for five minutes, then deletes itself.",
+                kk: "Қолданба мәтінімен бірге сілтемені қойыңыз. 40 МБ-қа дейінгі файл мегадискте бес минут тұрады да, өзі жойылады.",
+              })}
+            </p>
           </div>
         ) : null}
         {pull ? (
@@ -361,7 +399,7 @@ export function Grabber({ onBack }: { onBack: () => void }) {
               {file.mime.startsWith("audio/") ? (
                 <audio src={src} controls className="w-full" />
               ) : null}
-              <p className="mt-3 truncate font-serif text-2xl tracking-tight">
+              <p className="mt-3 truncate text-base font-medium">
                 {file.name.replace(/\.(mp4|jpe?g|png|webp|gif|webm|m4a)$/i, "")}
               </p>
               <p className="mt-1 text-xs text-faint">
@@ -386,7 +424,7 @@ export function Grabber({ onBack }: { onBack: () => void }) {
               <button
                 type="button"
                 disabled={Boolean(mine)}
-                className="press mt-3 inline-flex h-10 items-center gap-1.5 rounded-xl bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-40"
+                className="press mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-40"
                 onClick={() => {
                   const at = performance.now();
                   setSaving({

@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { clipHost } from "./grab-url.ts";
 import { youtubeFormat, type GrabMode } from "./grab-options.ts";
 import { instagramTarget, pkToCode, rewriteInstagram } from "./grab-url.ts";
@@ -20,12 +21,18 @@ export type GrabTick = { phase: "open" | "fetch" | "save"; pct: number; loaded: 
 
 function binPath(): string | null {
   const fromEnv = process.env.YTDLP_BIN?.trim();
+  const here = dirname(fileURLToPath(import.meta.url));
+  const task = process.env.LAMBDA_TASK_ROOT || "";
   const candidates = [
     fromEnv || "",
     join(process.cwd(), ".bin", "yt-dlp"),
     join(process.cwd(), "yt-dlp"),
     join(process.cwd(), ".output", "server", "yt-dlp"),
+    join(process.cwd(), ".vercel/output/functions/__server.func/yt-dlp"),
+    task ? join(task, "yt-dlp") : "",
+    "/var/task/yt-dlp",
     "/usr/local/bin/yt-dlp",
+    join(here, "yt-dlp"),
   ].filter(Boolean);
   return candidates.find((item) => existsSync(item)) ?? null;
 }
@@ -182,9 +189,10 @@ async function dumpJson(bin: string, url: string, impersonate: string): Promise<
     "--dump-single-json",
     "--no-warnings",
     "--no-progress",
-    "--no-cache-dir",
+    "--cache-dir",
+    join(tmpdir(), "vv-ytdlp-cache"),
     "--socket-timeout",
-    "20",
+    "15",
     "--retries",
     "1",
     "--playlist-end",
@@ -274,21 +282,26 @@ async function grabInstagram(bin: string, raw: string, onProgress?: (tick: GrabT
   return { files: null, note: noteFor(url, stderr) };
 }
 
-export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) => void, mode: GrabMode = "video", signal?: AbortSignal): Promise<{ files: GrabFile[] | null; note: string }> {
-  const bin = binPath();
-  if (!bin) {
-    console.error("[grab] yt-dlp missing");
-    return { files: null, note: "" };
-  }
-  if (/instagram\.com|instagr\.am/i.test(url)) return grabInstagram(bin, url, onProgress);
+function failureNote(stderr: string): string {
+  if (/not a bot|sign in to confirm|LOGIN_REQUIRED/i.test(stderr)) return "YouTube просит подтверждение входа. Этот ролик сейчас недоступен для загрузки.";
+  if (/private video|members.only|age.restricted/i.test(stderr)) return "Ролик закрыт или требует входа на YouTube.";
+  if (/Video unavailable|has been removed/i.test(stderr)) return "Ролик недоступен или удалён.";
+  if (/HTTP Error 403|403: Forbidden/i.test(stderr)) return "Площадка не отдала файл. Попробуйте ещё раз через минуту.";
+  if (/429|Too Many Requests/i.test(stderr)) return "Площадка не отвечает. Попробуйте ещё раз через минуту";
+  return "";
+}
+
+async function downloadWithYtDlp(bin: string, url: string, mode: GrabMode, extra: string[], onProgress?: (tick: GrabTick) => void, signal?: AbortSignal): Promise<{ files: GrabFile[] | null; stderr: string }> {
   const dir = await mkdtemp(join(tmpdir(), "vv-grab-"));
   const out = join(dir, "%(autonumber)02d.%(ext)s");
+  const host = clipHost(url);
   const args = [
     "--no-warnings",
     "--no-progress",
     "--ignore-config",
-    "--no-cache-dir",
-    "--no-playlist",
+    "--force-ipv4",
+    "--cache-dir",
+    join(tmpdir(), "vv-ytdlp-cache"),
     "--max-filesize",
     "40M",
     "--socket-timeout",
@@ -302,25 +315,41 @@ export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) =
     "-o",
     out,
     "-f",
-    clipHost(url) === "youtube" ? youtubeFormat(mode) : "b[ext=mp4]/b",
+    host === "youtube" ? youtubeFormat(mode) : "b[ext=mp4]/b",
+    ...(host === "instagram" ? ["--yes-playlist", "--playlist-end", "8"] : ["--no-playlist"]),
+    ...extra,
   ];
-  if (clipHost(url) === "youtube") args.push("--js-runtimes", `node:${process.execPath}`);
+  if (host === "youtube") {
+    args.push(
+      "--js-runtimes",
+      `node:${process.execPath}`,
+      "--remote-components",
+      "ejs:github",
+      "--extractor-args",
+      "youtube:player_client=tv_samsung",
+    );
+  }
   const cookies = process.env.YTDLP_COOKIES?.trim();
   if (cookies && existsSync(cookies)) args.push("--cookies", cookies);
   args.push(url);
   onProgress?.({ phase: "fetch", pct: 18, loaded: 0, total: 0 });
-  // Read actual output bytes while yt-dlp writes; no invented download percentage.
   let polling = false;
   const progress = setInterval(async () => {
-    if (polling) return; polling = true;
+    if (polling) return;
+    polling = true;
     try {
       const names = await readdir(dir);
-      const sizes = await Promise.all(names.map(name => stat(join(dir, name)).then(row => row.size).catch(() => 0)));
+      const sizes = await Promise.all(names.map((name) => stat(join(dir, name)).then((row) => row.size).catch(() => 0)));
       const loaded = sizes.reduce((sum, size) => sum + size, 0);
-      onProgress?.({ phase: "fetch", pct: 18, loaded, total: 0 });
-    } catch { /* download may have finished */ } finally { polling = false; }
+      const pct = Math.min(86, 18 + Math.round((loaded / (mode === "audio" ? 4 : 12)) * 66 / (1024 * 1024)));
+      onProgress?.({ phase: "fetch", pct, loaded, total: 0 });
+    } catch {
+      /* download may have finished */
+    } finally {
+      polling = false;
+    }
   }, 800);
-  const result = await run(bin, args, 70_000, 4000, signal).finally(() => clearInterval(progress));
+  const result = await run(bin, args, 42_000, 8000, signal).finally(() => clearInterval(progress));
   if (/max-filesize|File is larger/i.test(result.stderr) && result.code !== 0) {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     throw new Error("Файл слишком большой для временного файла");
@@ -342,15 +371,30 @@ export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) =
       });
     }
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-    if (!files.length) {
-      if (result.code !== 0) console.error("[grab] yt-dlp", result.code);
-      const note = /not a bot|sign in to confirm|LOGIN_REQUIRED/i.test(result.stderr) ? "YouTube просит подтверждение входа. Этот ролик сейчас недоступен для загрузки." : /private video|members.only|age.restricted/i.test(result.stderr) ? "Ролик закрыт или требует входа на YouTube." : "";
-      return { files: null, note };
-    }
-    return { files, note: "" };
+    if (!files.length && result.code !== 0) console.error("[grab] yt-dlp", result.code, result.stderr.replace(/\s+/g, " ").trim().slice(0, 300));
+    return { files: files.length ? files : null, stderr: result.stderr };
   } catch (error) {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     if (error instanceof Error && /слишком большой/.test(error.message)) throw error;
+    if (signal?.aborted) throw error;
+    return { files: null, stderr: result.stderr };
+  }
+}
+
+export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) => void, mode: GrabMode = "video", signal?: AbortSignal): Promise<{ files: GrabFile[] | null; note: string }> {
+  const bin = binPath();
+  if (!bin) {
+    console.error("[grab] yt-dlp missing");
     return { files: null, note: "" };
   }
+  const host = clipHost(url);
+  const started = Date.now();
+  const direct = await downloadWithYtDlp(bin, url, mode, [], onProgress, signal);
+  if (direct.files?.length) return { files: direct.files, note: "" };
+  if (host === "instagram" && Date.now() - started < 20_000) {
+    const via = await grabInstagram(bin, url, onProgress);
+    if (via.files?.length) return via;
+    return { files: null, note: via.note || failureNote(direct.stderr) };
+  }
+  return { files: null, note: failureNote(direct.stderr) };
 }
