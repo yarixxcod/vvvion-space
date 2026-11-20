@@ -672,6 +672,52 @@ function configuredImageRequest(model: string, prompt: string, config: Record<st
   }
   return payload;
 }
+function deapiRequestId(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const outer = payload as Record<string, unknown>;
+  const data = outer.data && typeof outer.data === "object" && !Array.isArray(outer.data)
+    ? outer.data as Record<string, unknown> : outer;
+  const id = data.request_id;
+  return typeof id === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(id) ? id : "";
+}
+
+async function waitForDeapiImage(baseUrl: string, requestId: string, apiKey: string, signal: AbortSignal): Promise<string> {
+  const origin = new URL(baseUrl);
+  // The native v2 API is asynchronous; jobs are retrieved from the same trusted provider.
+  const jobUrl = new URL(`/api/v2/jobs/${encodeURIComponent(requestId)}`, origin.origin).toString();
+  const headers = new Headers({ authorization: `Bearer ${apiKey}`, accept: "application/json" });
+  for (let attempt = 0; attempt < 70; attempt += 1) {
+    if (signal.aborted) throw new Error("Генерация прервана");
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => { signal.removeEventListener("abort", aborted); resolve(); }, 3000);
+      const aborted = () => { clearTimeout(timer); reject(new Error("Генерация прервана")); };
+      signal.addEventListener("abort", aborted, { once: true });
+      if (signal.aborted) aborted();
+    });
+    const response = await publicFetch(jobUrl, { headers, signal }, { hops: 0, timeoutMs: 12000 });
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(`deAPI: ${upstreamErrorMessage(response.status, message, apiKey)} (задание ${requestId})`);
+    }
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== "object") throw new Error("deAPI вернул некорректный статус задания");
+    const outer = payload as Record<string, unknown>;
+    const data = outer.data && typeof outer.data === "object" && !Array.isArray(outer.data)
+      ? outer.data as Record<string, unknown> : outer;
+    const status = typeof data.status === "string" ? data.status.toLowerCase() : "";
+    if (status === "done" || status === "completed" || status === "success") {
+      const url = safeImageRef(data.result_url) || pickImage(data);
+      if (!url) throw new Error(`deAPI завершил задание ${requestId}, но не предоставил ссылку на изображение`);
+      return url;
+    }
+    if (status === "error" || status === "failed" || status === "cancelled") {
+      const reason = typeof data.error === "string" ? data.error : typeof data.message === "string" ? data.message : "Ошибка генерации";
+      throw new Error(`deAPI: ${sanitize(reason, apiKey)} (задание ${requestId})`);
+    }
+    if (!["pending", "processing", "queued", "running"].includes(status)) throw new Error(`Неизвестный статус deAPI: ${status || "пустой"}`);
+  }
+  throw new Error(`deAPI всё ещё генерирует изображение (задание ${requestId}). Проверьте результат у провайдера, прежде чем повторять запрос.`);
+}
 function imageModelName(value: unknown) {
 	if (typeof value !== "string") return "dall-e-3";
 	const model = value.trim();
@@ -1362,6 +1408,18 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 			return seal(json(502, { message: sanitize(failed, secret) }));
 		}
 		let image = pickImage(parsed);
+        const isNativeDeapi = kind === "builtin" && /^https:\/\/api\.deapi\.ai(?:\/|$)/i.test(url);
+        if (!image && isNativeDeapi) {
+          const requestId = deapiRequestId(parsed);
+          if (requestId) {
+            try {
+              image = await waitForDeapiImage(url, requestId, secret, signal);
+            } catch (error) {
+              drop();
+              return seal(json(502, { message: sanitize(error instanceof Error ? error.message : "Ошибка ожидания deAPI", secret) }));
+            }
+          }
+        }
 		if (!image) {
 			drop();
 			return seal(json(502, { message: "Провайдер не вернул картинку" }));
