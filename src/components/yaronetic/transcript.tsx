@@ -695,9 +695,11 @@ function AssistantBubble({
 
 function ImagePlate() {
   return (
-    <div className="image-plate mt-2" role="status" aria-label="Рисую картинку">
-      <i />
-      <i />
+    <div className="relative mt-2 flex h-32 w-full max-w-64 flex-col justify-end overflow-hidden rounded-2xl border border-line bg-elev p-3" role="status" aria-label="Генерация изображения">
+      <div className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-br from-accent/15 via-transparent to-accent/25" />
+      <div className="relative mb-3 flex items-center gap-2 text-xs text-muted"><span className="size-2 animate-pulse rounded-full bg-accent" /> Создаю изображение…</div>
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-line"><div className="h-full w-1/3 animate-[image-scan_2.8s_ease-in-out_infinite] rounded-full bg-accent" style={{ animationName: "image-scan" }} /></div>
+      <style>{`@keyframes image-scan { 0% { transform: translateX(-110%); } 100% { transform: translateX(310%); } }`}</style>
     </div>
   );
 }
