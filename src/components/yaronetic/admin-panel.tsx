@@ -140,7 +140,7 @@ function fromImage(model: AdminImageModel): ImageDraft {
 function blankImage(): ImageDraft {
   return {
     icon: "",
-    requestConfig: JSON.stringify({ width: 1024, height: 1024, steps: 4, seed: 0 }, null, 2),
+    requestConfig: "",
     name: "",
     previousName: "",
     displayName: "",
@@ -720,9 +720,9 @@ function ImageForm({
         {draft.icon ? <button type="button" className="text-xs text-muted" onClick={() => onChange({ icon: "" })}>Убрать</button> : null}
       </div>
       <label className="mt-2 block text-xs text-faint">
-        Параметры генерации (JSON)
+        Дополнительные параметры генерации (JSON, необязательно)
         <textarea className="field mt-1 min-h-36 font-mono text-xs" spellCheck={false} value={draft.requestConfig} onChange={(event) => onChange({ requestConfig: event.target.value })} placeholder={'{"width":1024,"height":1024,"steps":4,"seed":0,"path":"/images/generations"}'} />
-        <span className="mt-1 block text-xs text-muted">Поля: path, width, height, steps, seed, n, size, response_format, extra (объект). Для DeepAI укажи width и height. Для OpenAI оставь пустой JSON.</span>
+        <span className="mt-1 block text-xs text-muted">Можно оставить пустым. Промпт берётся из чата, ID модели — из поля ниже. Поддерживаются path, width, height, steps, seed, n, size, response_format, extra. Для DeepAI укажи width и height, для OpenAI обычно ничего не нужно.</span>
       </label>
       <label className="mt-2 block text-xs text-faint">
         Модель
