@@ -592,11 +592,12 @@ export const chatStats = createServerFn({ method: "GET" })
     };
   });
 
-export type ImageModel = { name: string; displayName: string };
+export type ImageModel = { name: string; displayName: string; icon: string };
 
 export type AdminImageModel = ImageModel & {
   baseUrl: string;
   hasKey: boolean;
+  requestConfig: string;
 };
 
 const DEFAULT_IMAGE_BASE = "https://api.x.ai/v1";
@@ -608,6 +609,8 @@ type ImageSaveInput = {
   apiKey: string;
   clearKey: boolean;
   previousName: string;
+  icon: string;
+  requestConfig: string;
 };
 
 function imageSaveInput(input: unknown): ImageSaveInput {
@@ -624,15 +627,32 @@ function imageSaveInput(input: unknown): ImageSaveInput {
     apiKey,
     clearKey: raw.clearKey === true,
     previousName,
+    icon: modelIcon(raw.icon),
+    requestConfig: imageConfig(raw.requestConfig),
   };
+}
+
+function imageConfig(value: unknown): string {
+  const source = typeof value === "string" && value.trim() ? value : "{}";
+  if (source.length > 8000) throw new Error("Настройки картинки слишком длинные");
+  let parsed: unknown;
+  try { parsed = JSON.parse(source); } catch { throw new Error("Настройки картинки: некорректный JSON"); }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Настройки должны быть JSON-объектом");
+  const obj = parsed as Record<string, unknown>;
+  for (const key of Object.keys(obj)) if (!["path", "width", "height", "steps", "seed", "n", "size", "response_format", "extra"].includes(key)) throw new Error(`Неизвестная настройка: ${key}`);
+  for (const key of ["width", "height", "steps", "seed", "n"]) if (obj[key] !== undefined && (!Number.isSafeInteger(obj[key]) || Number(obj[key]) < (key === "seed" ? 0 : 1) || Number(obj[key]) > (key === "seed" ? 2147483647 : key === "steps" ? 200 : key === "n" ? 4 : 4096))) throw new Error(`Некорректное значение ${key}`);
+  if (obj.path !== undefined && (typeof obj.path !== "string" || !/^\/[a-zA-Z0-9/_-]{1,120}$/.test(obj.path))) throw new Error("Путь API должен начинаться с /");
+  for (const key of ["size", "response_format"]) if (obj[key] !== undefined && (typeof obj[key] !== "string" || obj[key].length > 80)) throw new Error(`Некорректное значение ${key}`);
+  if (obj.extra !== undefined && (!obj.extra || typeof obj.extra !== "object" || Array.isArray(obj.extra) || JSON.stringify(obj.extra).length > 3000)) throw new Error("Некорректные дополнительные параметры");
+  return JSON.stringify(obj);
 }
 
 async function readImageModels(): Promise<ImageModel[]> {
   const sql = await getSql();
   const rows = await sql<{ name: string; display_name: string | null }>`
-    select name, display_name from image_models order by created_at asc, name asc
+    select name, display_name, icon from image_models order by created_at asc, name asc
   `;
-  return rows.map((row) => ({ name: row.name, displayName: row.display_name || row.name }));
+  return rows.map((row) => ({ name: row.name, displayName: row.display_name || row.name, icon: publicIcon((row as { icon?: string }).icon) }));
 }
 
 async function readAdminImageModels(): Promise<AdminImageModel[]> {
@@ -642,8 +662,10 @@ async function readAdminImageModels(): Promise<AdminImageModel[]> {
     display_name: string | null;
     base_url: string | null;
     api_key: string | null;
+    icon: string | null;
+    request_config: unknown;
   }>`
-    select name, display_name, base_url, api_key
+    select name, display_name, base_url, api_key, icon, request_config
     from image_models
     order by created_at asc, name asc
   `;
@@ -652,6 +674,8 @@ async function readAdminImageModels(): Promise<AdminImageModel[]> {
     displayName: row.display_name || row.name,
     baseUrl: row.base_url?.trim() || DEFAULT_IMAGE_BASE,
     hasKey: Boolean(row.api_key && row.api_key.length > 0),
+    icon: publicIcon(row.icon),
+    requestConfig: JSON.stringify(row.request_config || {}),
   }));
 }
 
@@ -677,8 +701,8 @@ export const saveImageModel = createServerFn({ method: "POST" })
       const existing = await sql<{ name: string }>`select name from image_models where name = ${data.name}`;
       if (existing.length) throw new Error("Такая модель уже есть");
       await sql`
-        insert into image_models (name, display_name, base_url, api_key)
-        values (${data.name}, ${data.displayName}, ${data.baseUrl}, ${data.apiKey})
+        insert into image_models (name, display_name, base_url, api_key, icon, request_config)
+        values (${data.name}, ${data.displayName}, ${data.baseUrl}, ${data.apiKey}, ${data.icon}, ${data.requestConfig}::jsonb)
       `;
       return readAdminImageModels();
     }
@@ -691,19 +715,19 @@ export const saveImageModel = createServerFn({ method: "POST" })
     if (data.clearKey) {
       await sql`
         update image_models
-        set name = ${data.name}, display_name = ${data.displayName}, base_url = ${data.baseUrl}, api_key = ''
+        set name = ${data.name}, display_name = ${data.displayName}, base_url = ${data.baseUrl}, api_key = '', icon = ${data.icon}, request_config = ${data.requestConfig}::jsonb
         where name = ${previous}
       `;
     } else if (data.apiKey) {
       await sql`
         update image_models
-        set name = ${data.name}, display_name = ${data.displayName}, base_url = ${data.baseUrl}, api_key = ${data.apiKey}
+        set name = ${data.name}, display_name = ${data.displayName}, base_url = ${data.baseUrl}, api_key = ${data.apiKey}, icon = ${data.icon}, request_config = ${data.requestConfig}::jsonb
         where name = ${previous}
       `;
     } else {
       await sql`
         update image_models
-        set name = ${data.name}, display_name = ${data.displayName}, base_url = ${data.baseUrl}
+        set name = ${data.name}, display_name = ${data.displayName}, base_url = ${data.baseUrl}, icon = ${data.icon}, request_config = ${data.requestConfig}::jsonb
         where name = ${previous}
       `;
     }
