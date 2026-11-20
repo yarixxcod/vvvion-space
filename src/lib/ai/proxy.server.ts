@@ -1269,7 +1269,11 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 		if (kind === "builtin") {
 			const picked = await resolveBuiltinImageModel(body.imageModel);
 			model = picked.name;
-            imageConfig = picked.requestConfig;
+            imageConfig = { ...picked.requestConfig };
+            // DeAPI image generation requires seed; create a fresh one if the admin did not specify it.
+            if (/^https:\/\/api\.deapi\.ai(?:\/|$)/i.test(picked.baseUrl) && imageConfig.seed === undefined) {
+              imageConfig.seed = Math.floor(Math.random() * 2147483647);
+            }
 			secret = picked.apiKey;
 			if (!secret) return json(503, { message: "Встроенная модель сейчас недоступна" });
 			const user = await getSessionUser();
