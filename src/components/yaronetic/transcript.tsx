@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowDown, Check, ChevronDown, Copy, Download, Heart, Info, MoreHorizontal, RefreshCw, Square, Trash2, Volume2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
-import { isDiskPath } from "@/lib/social/disk-path";
+import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { copyText, Markdown } from "@/components/yaronetic/markdown";
 import { looksLikeAscii } from "@/lib/ascii";
@@ -28,16 +28,7 @@ function clock(ts: number) {
 }
 
 function pictureSrc(url?: string) {
-  if (!url) return "";
-  if (isDiskPath(url)) return url;
-  if (url.startsWith("data:image/") && url.length < 2_800_000) return url;
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol === "https:") return parsed.toString();
-  } catch {
-    return "";
-  }
-  return "";
+  return loadableImageUrl(url);
 }
 
 function saveBlob(blob: Blob, name: string) {

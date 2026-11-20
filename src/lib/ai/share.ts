@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { ChatFile, ChatMessage, Source } from "@/lib/ai/types";
 import { getSql } from "@/lib/db";
-import { isDiskPath } from "@/lib/social/disk-path";
+import { asDiskPath, withChatShare } from "@/lib/social/disk-path";
 
 const TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
 const MAX_MESSAGES = 40;
@@ -44,8 +44,10 @@ function asPublicMessage(value: unknown): ChatMessage | null {
   if (raw.truncated) message.truncated = true;
   if (raw.image) message.image = true;
   if (raw.web) message.web = true;
-  if (typeof raw.imageUrl === "string" && (isDiskPath(raw.imageUrl) || (raw.imageUrl.startsWith("https://") && raw.imageUrl.length < 8000))) {
-    message.imageUrl = raw.imageUrl;
+  if (typeof raw.imageUrl === "string") {
+    const disk = asDiskPath(raw.imageUrl);
+    if (disk) message.imageUrl = disk;
+    else if (raw.imageUrl.startsWith("https://") && raw.imageUrl.length < 8000) message.imageUrl = raw.imageUrl;
   }
   if (!message.content && !message.imageUrl && raw.image) message.content = "Картинка";
   if (typeof raw.reasoning === "string" && raw.reasoning.trim()) {
@@ -75,7 +77,10 @@ function asPublicMessage(value: unknown): ChatMessage | null {
         mime: typeof file.mime === "string" ? file.mime.slice(0, 80) : "",
         kind: file.kind,
       };
-      if (typeof file.url === "string" && isDiskPath(file.url)) next.url = file.url;
+      if (typeof file.url === "string") {
+        const disk = asDiskPath(file.url);
+        if (disk) next.url = disk;
+      }
       if (
         file.kind === "image" &&
         typeof file.dataUrl === "string" &&
@@ -109,6 +114,19 @@ function parseMessages(value: unknown): ChatMessage[] {
   const source = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
   if (!Array.isArray(source)) return [];
   return source.map(asPublicMessage).filter((item): item is ChatMessage => item !== null);
+}
+
+function exposeSharedMedia(messages: ChatMessage[], token: string): ChatMessage[] {
+  return messages.map((message) => {
+    const imagePath = message.imageUrl ? asDiskPath(message.imageUrl) : null;
+    const imageUrl = imagePath ? withChatShare(imagePath, token) : message.imageUrl;
+    const files = message.files?.map((file) => {
+      const path = file.url ? asDiskPath(file.url) : null;
+      return path ? { ...file, url: withChatShare(path, token) } : file;
+    });
+    if (imageUrl === message.imageUrl && files === message.files) return message;
+    return { ...message, imageUrl, files };
+  });
 }
 
 export const publishChat = createServerFn({ method: "POST" })
@@ -151,7 +169,7 @@ export const readSharedChat = createServerFn({ method: "GET" })
     `;
     const row = rows[0];
     if (!row) return null;
-    const messages = parseMessages(row.messages);
+    const messages = exposeSharedMedia(parseMessages(row.messages), data);
     if (!messages.length) return null;
     return {
       title: row.title,
