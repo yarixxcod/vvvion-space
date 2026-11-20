@@ -32,7 +32,7 @@ function unwrapShare(url: URL): URL {
 
 function linkCandidates(text: string): string[] {
   const found = [...text.matchAll(/https?:\/\/[^\s<>"'`]+/gi)].map((hit) => hit[0].replace(/[).,!?;]+$/g, ""));
-  const bare = /(?:^|\s)((?:(?:www|m|music|vm|vt)\.)?(?:youtu\.be|youtube\.com|youtube-nocookie\.com|instagram\.com|instagr\.am|tiktok\.com|pin\.it|pinterest\.(?:com|ru)|vk\.com|vk\.ru|vkvideo\.ru)\/[^\s<>"'`]+)/i.exec(text);
+  const bare = /(?:^|\s)((?:(?:www|m|music|vm|vt)\.)?(?:youtu\.be|youtube\.com|youtube-nocookie\.com|instagram\.com|instagr\.am|ig\.me|tiktok\.com|pin\.it|pinterest\.(?:com|ru)|vk\.com|vk\.ru|vkvideo\.ru)\/[^\s<>"'`]+)/i.exec(text);
   if (bare?.[1]) found.push(`https://${bare[1].replace(/[).,!?;]+$/g, "")}`);
   return found;
 }

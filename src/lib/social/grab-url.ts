@@ -12,7 +12,7 @@ const ALPH = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 const CLIP_DOMAINS: Record<ClipHost, readonly string[]> = {
   youtube: ["youtube.com", "youtu.be", "youtube-nocookie.com"],
-  instagram: ["instagram.com", "instagr.am"],
+  instagram: ["instagram.com", "instagr.am", "ig.me"],
   tiktok: ["tiktok.com"],
   pinterest: ["pinterest.com", "pin.it", "pinterest.ru"],
   vk: ["vk.com", "vk.ru", "vkvideo.ru"],

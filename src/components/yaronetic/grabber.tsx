@@ -205,8 +205,10 @@ export function Grabber({ onBack }: { onBack: () => void }) {
           {tx({ ru: "Загрузчик", en: "Downloader", kk: "Жүктеуіш" })}
         </h3>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-      <form className="space-y-3 rounded-3xl border border-line bg-elev p-3" onSubmit={(event) => void run(event)}>
+      <form
+        className="mx-4 mt-3 space-y-3 rounded-3xl border border-line bg-elev p-3"
+        onSubmit={(event) => void run(event)}
+      >
         <div className="flex items-center gap-2 rounded-2xl border border-line bg-bg px-3">
           <Link className="size-4 shrink-0 text-faint" aria-hidden="true" />
           <input
@@ -256,11 +258,13 @@ export function Grabber({ onBack }: { onBack: () => void }) {
           </button>
         </div>
         {hostName ? (
-          <p className="px-1 text-xs text-muted">
-            {hostName}
-            {isYoutube
-              ? tx({ ru: " · можно выбрать формат", en: " · pick a format", kk: " · форматты таңдаңыз" })
-              : ""}
+          <p className="px-1">
+            <span className="inline-flex rounded-full bg-subtle px-2.5 py-1 text-xs text-muted">
+              {hostName}
+              {isYoutube
+                ? tx({ ru: " · формат ниже", en: " · format below", kk: " · формат төменде" })
+                : ""}
+            </span>
           </p>
         ) : null}
         {isYoutube ? (
@@ -311,8 +315,9 @@ export function Grabber({ onBack }: { onBack: () => void }) {
           })}
         </button>
       </form>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {error ? (
-          <div className="mt-4 rounded-2xl border border-danger/30 bg-danger/5 p-4" role="alert">
+          <div className="rounded-2xl border border-danger/30 bg-danger/5 p-4" role="alert">
             <p className="text-sm text-danger">{error}</p>
             <p className="mt-2 text-xs text-muted">
               {tx({
@@ -324,7 +329,7 @@ export function Grabber({ onBack }: { onBack: () => void }) {
           </div>
         ) : null}
         {!busy && !files.length && !error ? (
-          <div className="mt-4 rounded-3xl border border-line p-4">
+          <div className="rounded-3xl border border-line p-4">
             <p className="text-sm font-medium">
               {tx({ ru: "Что можно прислать", en: "What you can send", kk: "Қандай сілтеме жарайды" })}
             </p>

@@ -14,6 +14,7 @@ test("shared YouTube links normalize without tracking or playlist expansion", ()
     for (const raw of ['https://youtu.be/short','https://youtube.com/@channel','https://youtube.com/playlist?list=a','https://youtube.com.evil.test/watch?v=dQw4w9WgXcQ','https://u:p@youtube.com/watch?v=dQw4w9WgXcQ']) assert.throws(()=>normalizeGrabUrl(raw));
     assert.match(normalizeGrabUrl('Вот ролик https://vm.tiktok.com/Zabc/'), /tiktok\\.com\\/Zabc/);
     assert.match(normalizeGrabUrl('https://www.instagram.com/reel/AbC123/?igsh=1'), /instagram\\.com\\/reel\\/AbC123/);
+    assert.match(normalizeGrabUrl('смотри https://ig.me/s/AbCdEf'), /ig\\.me\\/s\\/AbCdEf/);
     assert.equal(youtubeFormat('audio'),'ba[ext=m4a]/ba');
     assert.ok(youtubeFormat('small').includes('height<=360')); assert.ok(!youtubeFormat('video').includes('bv'));`);
 });

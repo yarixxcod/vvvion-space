@@ -531,6 +531,7 @@ export async function runGrab(userId: string, raw: string, onProgress?: (tick: G
     if (!files?.length) {
       signal?.throwIfAborted();
       if (mode !== "video") clipFail(502, via.note || "Этот формат сейчас недоступен. Попробуйте обычное видео.");
+      if (via.ran && clipHost(link) === "youtube") clipFail(502, via.note || "По этой ссылке ролик не открылся");
       try {
         onProgress?.({ phase: "fetch", pct: 30, loaded: 0, total: 0 });
         files = await Promise.all((await resolve(link)).map(async (item) => ({ ...(await takeBytes(item.url, item.referer)), title: item.title })));

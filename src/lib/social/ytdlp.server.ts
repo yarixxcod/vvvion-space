@@ -39,7 +39,17 @@ function binPath(): string | null {
 
 function run(bin: string, args: string[], ms: number, maxOut = 4000, signal?: AbortSignal): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(bin, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        HOME: "/tmp",
+        TMPDIR: "/tmp",
+        TMP: "/tmp",
+        TEMP: "/tmp",
+        XDG_CACHE_HOME: "/tmp",
+      },
+    });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill("SIGKILL"), ms);
@@ -282,9 +292,13 @@ async function grabInstagram(bin: string, raw: string, onProgress?: (tick: GrabT
   return { files: null, note: noteFor(url, stderr) };
 }
 
-function failureNote(stderr: string): string {
-  if (/not a bot|sign in to confirm|LOGIN_REQUIRED/i.test(stderr)) return "YouTube просит подтверждение входа. Этот ролик сейчас недоступен для загрузки.";
-  if (/private video|members.only|age.restricted/i.test(stderr)) return "Ролик закрыт или требует входа на YouTube.";
+function failureNote(stderr: string, host: string): string {
+  if (/not a bot|sign in to confirm|LOGIN_REQUIRED/i.test(stderr)) {
+    return host === "youtube"
+      ? "YouTube просит подтверждение входа. Этот ролик сейчас недоступен для загрузки."
+      : "Площадка просит вход. Нужна открытая ссылка на пост или ролик.";
+  }
+  if (/private video|members.only|age.restricted/i.test(stderr)) return "Ролик закрыт или требует входа на площадку.";
   if (/Video unavailable|has been removed/i.test(stderr)) return "Ролик недоступен или удалён.";
   if (/HTTP Error 403|403: Forbidden/i.test(stderr)) return "Площадка не отдала файл. Попробуйте ещё раз через минуту.";
   if (/429|Too Many Requests/i.test(stderr)) return "Площадка не отвечает. Попробуйте ещё раз через минуту";
@@ -381,20 +395,20 @@ async function downloadWithYtDlp(bin: string, url: string, mode: GrabMode, extra
   }
 }
 
-export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) => void, mode: GrabMode = "video", signal?: AbortSignal): Promise<{ files: GrabFile[] | null; note: string }> {
+export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) => void, mode: GrabMode = "video", signal?: AbortSignal): Promise<{ files: GrabFile[] | null; note: string; ran: boolean }> {
   const bin = binPath();
   if (!bin) {
     console.error("[grab] yt-dlp missing");
-    return { files: null, note: "" };
+    return { files: null, note: "", ran: false };
   }
   const host = clipHost(url);
   const started = Date.now();
   const direct = await downloadWithYtDlp(bin, url, mode, [], onProgress, signal);
-  if (direct.files?.length) return { files: direct.files, note: "" };
+  if (direct.files?.length) return { files: direct.files, note: "", ran: true };
   if (host === "instagram" && Date.now() - started < 20_000) {
     const via = await grabInstagram(bin, url, onProgress);
-    if (via.files?.length) return via;
-    return { files: null, note: via.note || failureNote(direct.stderr) };
+    if (via.files?.length) return { ...via, ran: true };
+    return { files: null, note: via.note || failureNote(direct.stderr, host || ""), ran: true };
   }
-  return { files: null, note: failureNote(direct.stderr) };
+  return { files: null, note: failureNote(direct.stderr, host || ""), ran: true };
 }
