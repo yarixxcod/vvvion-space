@@ -639,6 +639,9 @@ function imageConfig(value: unknown): string {
   try { parsed = JSON.parse(source); } catch { throw new Error("Настройки картинки: некорректный JSON"); }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Настройки должны быть JSON-объектом");
   const obj = parsed as Record<string, unknown>;
+  // The prompt and model are always supplied by the chat and model selector, not stored as fixed parameters.
+  delete obj.prompt;
+  delete obj.model;
   for (const key of Object.keys(obj)) if (!["path", "width", "height", "steps", "seed", "n", "size", "response_format", "extra"].includes(key)) throw new Error(`Неизвестная настройка: ${key}`);
   for (const key of ["width", "height", "steps", "seed", "n"]) if (obj[key] !== undefined && ((typeof obj[key] !== "number" || !Number.isSafeInteger(obj[key])) || Number(obj[key]) < (key === "seed" ? 0 : 1) || Number(obj[key]) > (key === "seed" ? 2147483647 : key === "steps" ? 200 : key === "n" ? 4 : 4096))) throw new Error(`Некорректное значение ${key}`);
   if (obj.path !== undefined && (typeof obj.path !== "string" || !/^\/[a-zA-Z0-9/_-]{1,120}$/.test(obj.path))) throw new Error("Путь API должен начинаться с /");
