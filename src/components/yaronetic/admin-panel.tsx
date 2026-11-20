@@ -66,6 +66,8 @@ type ModelDraft = {
 };
 
 type ImageDraft = {
+  icon: string;
+  requestConfig: string;
   name: string;
   previousName: string;
   displayName: string;
@@ -123,6 +125,8 @@ function blankModel(): ModelDraft {
 
 function fromImage(model: AdminImageModel): ImageDraft {
   return {
+    icon: model.icon,
+    requestConfig: model.requestConfig,
     name: model.name,
     previousName: model.name,
     displayName: model.displayName,
@@ -135,6 +139,8 @@ function fromImage(model: AdminImageModel): ImageDraft {
 
 function blankImage(): ImageDraft {
   return {
+    icon: "",
+    requestConfig: JSON.stringify({ width: 1024, height: 1024, steps: 4, seed: 0 }, null, 2),
     name: "",
     previousName: "",
     displayName: "",
@@ -686,6 +692,8 @@ function ImageForm({
           baseUrl: draft.baseUrl.trim(),
           apiKey: draft.apiKey.trim(),
           clearKey: draft.clearKey,
+          icon: draft.icon,
+          requestConfig: draft.requestConfig,
         },
       });
       onSaved(rows);
@@ -703,6 +711,18 @@ function ImageForm({
       <label className="mt-3 block text-xs text-faint">
         Название в списке
         <input className="field mt-1" value={draft.displayName} maxLength={48} placeholder="Flux" onChange={(event) => onChange({ displayName: event.target.value })} />
+      </label>
+      <div className="mt-3 flex items-center gap-3">
+        {draft.icon ? <img src={draft.icon} alt="" className="size-12 rounded-xl object-cover" /> : <span className="grid size-12 place-items-center rounded-xl border border-line text-xs text-faint">Нет иконки</span>}
+        <label className="cursor-pointer rounded-xl border border-line px-3 py-2 text-sm">Загрузить иконку
+          <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readIcon(file).then((icon) => onChange({ icon })).catch((error: unknown) => toast.error(messageOf(error, "Ошибка иконки"))); event.target.value = ""; }} />
+        </label>
+        {draft.icon ? <button type="button" className="text-xs text-muted" onClick={() => onChange({ icon: "" })}>Убрать</button> : null}
+      </div>
+      <label className="mt-2 block text-xs text-faint">
+        Параметры генерации (JSON)
+        <textarea className="field mt-1 min-h-36 font-mono text-xs" spellCheck={false} value={draft.requestConfig} onChange={(event) => onChange({ requestConfig: event.target.value })} placeholder={'{"width":1024,"height":1024,"steps":4,"seed":0,"path":"/images/generations"}'} />
+        <span className="mt-1 block text-xs text-muted">Поля: path, width, height, steps, seed, n, size, response_format, extra (объект). Для DeepAI укажи width и height. Для OpenAI оставь пустой JSON.</span>
       </label>
       <label className="mt-2 block text-xs text-faint">
         Модель
