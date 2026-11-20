@@ -603,13 +603,14 @@ function AssistantBubble({
           </span>
         </div>
         {usageOpen && tokens ? <p className="mb-1 text-xs text-faint tabular-nums">{tokens}</p> : null}
-        {pending && !message.web ? (
+        {pending && !message.web && !message.image ? (
           <p className="mt-0.5 text-xs text-muted">
             <LiveLine />
           </p>
         ) : null}
-        {message.reasoning || (waiting && reasoningOn && !message.web) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
+        {message.reasoning || (waiting && reasoningOn && !message.web && !message.image) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
         {continuing ? <p className="mb-2 text-sm text-muted">Ответ дописывается сам. Экран можно выключить.</p> : null}
+        {pending && message.image && !src ? <ImagePlate /> : null}
         {src ? <ChatPicture url={src} alt={message.content || "Сгенерированная картинка"} /> : null}
         {message.web || message.sources?.length ? <SearchEvidence sources={message.sources} summary={message.search} pending={pending} failed={Boolean(message.error || message.stopped)} /> : null}
         {message.content ? (
@@ -692,6 +693,15 @@ function AssistantBubble({
   );
 }
 
+function ImagePlate() {
+  return (
+    <div className="image-plate mt-2" role="status" aria-label="Рисую картинку">
+      <i />
+      <i />
+    </div>
+  );
+}
+
 function ChatPicture({ url, alt }: { url: string; alt: string }) {
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -721,7 +731,7 @@ function ChatPicture({ url, alt }: { url: string; alt: string }) {
         <img
           src={url}
           alt={alt}
-          className="max-h-[28rem] w-full rounded-2xl border border-line object-contain"
+          className="image-reveal max-h-[28rem] w-full rounded-2xl border border-line object-contain"
           onError={() => setFailed(true)}
         />
       </button>

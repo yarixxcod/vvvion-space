@@ -424,3 +424,12 @@ html.light .game-tile { background:#fffdfa; border-color:#ddd4e4; }
 .sticker-picker button:hover .sticker-art { transform:translateY(-2px); }
 .like-chip { font-variant-numeric:tabular-nums; }
 @media(prefers-reduced-motion:reduce){.sticker-picker .sticker-art{transition:none}.sticker-picker button:hover .sticker-art{transform:none}}
+
+.image-plate{position:relative;aspect-ratio:1;width:min(100%,36rem);overflow:hidden;border-radius:1.15rem;border:1px solid var(--line);background:#121216}
+html.light .image-plate{background:#e7e1d8}
+.image-plate i{position:absolute;inset:-22%;filter:blur(28px);background:radial-gradient(circle at 28% 32%,#c4b5e8 0,transparent 42%),radial-gradient(circle at 72% 58%,#7f96c4 0,transparent 46%),radial-gradient(circle at 42% 82%,#e4c7a4 0,transparent 40%);animation:image-fog 7s ease-in-out infinite alternate}
+.image-plate i:nth-child(2){opacity:.55;animation-duration:9s;animation-direction:alternate-reverse}
+@keyframes image-fog{from{transform:translate3d(-4%,-3%,0) scale(1.05)}to{transform:translate3d(6%,4%,0) scale(1.14)}}
+.image-reveal{animation:image-clear 1.05s cubic-bezier(.22,1,.36,1) both}
+@keyframes image-clear{from{filter:blur(22px);transform:scale(1.045);opacity:.72}to{filter:blur(0);transform:scale(1);opacity:1}}
+

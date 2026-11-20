@@ -648,6 +648,13 @@ function lastUserText(body: ChatBody) {
 	}
 	return "";
 }
+const IMAGE_WAIT = 240_000;
+function imageRequest(model: string, prompt: string, rich: boolean): Record<string, unknown> {
+	if (!rich) return { model, prompt, n: 1 };
+	// Qwen Image 3 wants width*height. OpenAI-style clients keep b64_json.
+	if (/qwen/i.test(model)) return { model, prompt, n: 1, size: "1024*1024", watermark: false, prompt_extend: false };
+	return { model, prompt, n: 1, response_format: "b64_json" };
+}
 function imageModelName(value: unknown) {
 	if (typeof value !== "string") return "dall-e-3";
 	const model = value.trim();
@@ -676,18 +683,20 @@ function pickImage(payload: Record<string, unknown>) {
 	}
 	return "";
 }
-function imageFromValue(value: unknown): string {
+function imageFromValue(value: unknown, depth = 0): string {
+	if (depth > 6) return "";
 	if (Array.isArray(value)) {
 		for (const item of value) {
-			const found = imageFromValue(item);
+			const found = imageFromValue(item, depth + 1);
 			if (found) return found;
 		}
 		return "";
 	}
-	if (value && typeof value === "object") return imageFromRecord(value as Record<string, unknown>);
+	if (value && typeof value === "object") return imageFromRecord(value as Record<string, unknown>, depth);
 	return safeImageRef(value);
 }
-function imageFromRecord(row: Record<string, unknown>) {
+function imageFromRecord(row: Record<string, unknown>, depth = 0): string {
+	if (depth > 6) return "";
 	const rawB64 = row.b64_json ?? row.b64 ?? row.base64;
 	const b64 = typeof rawB64 === "string" ? rawB64.replace(/\s+/g, "") : "";
 	if (b64.startsWith("data:image/") && b64.length < 12_000_000) return b64;
@@ -699,10 +708,20 @@ function imageFromRecord(row: Record<string, unknown>) {
 		const item = row[key];
 		const direct = safeImageRef(item);
 		if (direct) return direct;
-		if (item && typeof item === "object") {
+		if (Array.isArray(item)) {
+			const found = imageFromValue(item, depth + 1);
+			if (found) return found;
+		} else if (item && typeof item === "object") {
 			const boxed = safeImageRef((item as { url?: unknown }).url);
 			if (boxed) return boxed;
+			const nested = imageFromRecord(item as Record<string, unknown>, depth + 1);
+			if (nested) return nested;
 		}
+	}
+	for (const key of ["choices", "message", "content", "results", "result"] as const) {
+		if (!(key in row)) continue;
+		const found = imageFromValue(row[key], depth + 1);
+		if (found) return found;
 	}
 	return "";
 }
@@ -1290,24 +1309,15 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 			headers,
 			body: JSON.stringify(imagePayload),
 			signal
-		}, { hops: 0 });
-		let res = await send({
-			model,
-			prompt,
-			n: 1,
-			response_format: "b64_json"
-		});
+		}, { hops: 0, timeoutMs: IMAGE_WAIT });
+		let res = await send(imageRequest(model, prompt, true));
 		if (res.status >= 300 && res.status < 400) {
 			drop();
 			return seal(json(502, { message: "Провайдер вернул редирект — запрос остановлен" }));
 		}
 		if (!res.ok) {
 			const text = await res.text();
-			if (/response_format|b64_json|unknown parameter|unsupported/i.test(text)) res = await send({
-				model,
-				prompt,
-				n: 1
-			});
+			if (res.status >= 400 && res.status < 500 && /response_format|b64_json|size|watermark|prompt_extend|unknown parameter|unsupported|unrecognized/i.test(text)) res = await send(imageRequest(model, prompt, false));
 			else {
 				drop();
 				return seal(json(res.status, { message: upstreamErrorMessage(res.status, text, secret) }));
@@ -1330,17 +1340,13 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 		}
 		let image = pickImage(parsed);
 		if (!image) {
-			const again = await send({ model, prompt, n: 1 });
-			if (again.ok) {
-				const second = await again.json();
-				const secondError = extractError(second, secret);
-				if (!secondError) image = pickImage(second);
-			}
-		}
-		if (image.startsWith("https://")) image = await inlineImage(image, signal);
-		if (!image) {
 			drop();
 			return seal(json(502, { message: "Провайдер не вернул картинку" }));
+		}
+		const remote = image.startsWith("https://") ? image : "";
+		if (remote) {
+			const inlined = await inlineImage(remote, signal);
+			if (inlined.startsWith("data:image/")) image = inlined;
 		}
 		if (userId && image.startsWith("data:image/")) {
 			const stored = await storeDiskImage(userId, image);
@@ -1349,6 +1355,7 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 				return seal(json(409, { message: "На диске не хватило места под эту картинку." }));
 			}
 			if (stored) image = stored;
+			else if (remote) image = remote;
 		}
 		if (guest) {
 			const spent = await commitBuiltinGuest(request, guestSeal);

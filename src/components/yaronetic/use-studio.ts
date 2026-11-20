@@ -989,7 +989,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
           if (stopRef.current) stopped = true;
           else if (abandonRef.current) left = true;
           else stopped = true;
-        } else if (userIdRef.current && isNetworkDrop(err)) {
+        } else if (userIdRef.current && !wantImage && isNetworkDrop(err)) {
           detached = true;
         } else {
           error = err instanceof Error ? err.message : "Не удалось получить ответ";
