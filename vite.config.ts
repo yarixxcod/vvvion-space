@@ -307,17 +307,6 @@ export default defineConfig(({ command, isPreview }) => ({
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
             vercel: { functions: { maxDuration: 60 } },
-            hooks: {
-              async compiled(nitro) {
-                const from = join(process.cwd(), ".bin", "yt-dlp");
-                const serverDir = nitro.options?.output?.serverDir;
-                if (!serverDir || !existsSync(from)) return;
-                mkdirSync(serverDir, { recursive: true });
-                const dest = join(serverDir, "yt-dlp");
-                copyFileSync(from, dest);
-                chmodSync(dest, 0o755);
-              },
-            },
           }),
           pgliteBundleAssetsPlugin(),
           appAssetsManifestPlugin(),
