@@ -224,8 +224,8 @@ function drainToClient(stream: ReadableStream<Uint8Array>, onGone: () => void) {
 	});
 }
 async function resolveBuiltinImageModel(value: unknown) {
-	const rows = await (await getSql())<{ name: string; base_url: string | null; api_key: string | null }>`
-    select name, base_url, api_key from image_models order by created_at asc, name asc
+	const rows = await (await getSql())<{ name: string; base_url: string | null; api_key: string | null; request_config: Record<string, unknown> | null }>`
+    select name, base_url, api_key, request_config from image_models order by created_at asc, name asc
   `;
 	const clean = rows.filter((row) => /^[A-Za-z0-9._:/-]+$/.test(row.name));
 	const asked = typeof value === "string" ? value.trim() : "";
@@ -233,7 +233,8 @@ async function resolveBuiltinImageModel(value: unknown) {
 	return {
 		name: row?.name || BUILTIN_IMAGE_MODEL,
 		baseUrl: row?.base_url?.trim() || BUILTIN_BASE,
-		apiKey: row?.api_key?.trim() || process.env.XAI_API_KEY || ""
+		apiKey: row?.api_key?.trim() || process.env.XAI_API_KEY || "",
+        requestConfig: row?.request_config || {}
 	};
 }
 async function handleStop(request: Request, body: ChatBody) {
@@ -654,6 +655,19 @@ function imageRequest(model: string, prompt: string, rich: boolean): Record<stri
 	// Qwen Image 3 wants width*height. OpenAI-style clients keep b64_json.
 	if (/qwen/i.test(model)) return { model, prompt, n: 1, size: "1024*1024", watermark: false, prompt_extend: false };
 	return { model, prompt, n: 1, response_format: "b64_json" };
+}
+function configuredImageRequest(model: string, prompt: string, config: Record<string, unknown>): Record<string, unknown> {
+  const payload = imageRequest(model, prompt, true);
+  for (const key of ["width", "height", "steps", "seed", "n", "size", "response_format"]) if (config[key] !== undefined) payload[key] = config[key];
+  if (config.extra && typeof config.extra === "object" && !Array.isArray(config.extra)) {
+    for (const [key, value] of Object.entries(config.extra)) {
+      if (["model", "prompt", "api_key", "authorization", "__proto__", "constructor", "prototype"].includes(key)) continue;
+      payload[key] = value;
+    }
+  }
+  // Providers requiring explicit dimensions should not receive an incompatible OpenAI size field.
+  if (payload.width !== undefined && payload.height !== undefined && config.size === undefined) delete payload.size;
+  return payload;
 }
 function imageModelName(value: unknown) {
 	if (typeof value !== "string") return "dall-e-3";
@@ -1248,9 +1262,11 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 		let guest = false;
 		let guestId = null;
 		let imageLimit: { remainingPct: number } | null = null;
+        let imageConfig: Record<string, unknown> = {};
 		if (kind === "builtin") {
 			const picked = await resolveBuiltinImageModel(body.imageModel);
 			model = picked.name;
+            imageConfig = picked.requestConfig;
 			secret = picked.apiKey;
 			if (!secret) return json(503, { message: "Встроенная модель сейчас недоступна" });
 			const user = await getSessionUser();
@@ -1280,7 +1296,7 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 				if (limit.blocked) return seal(json(429, { message: limit.message }));
 				if (limit.remainingPct != null && limit.remainingPct <= 50) imageLimit = { remainingPct: limit.remainingPct };
 			}
-			url = joinParsed(adminBase(picked.baseUrl || BUILTIN_BASE), "/images/generations");
+			url = joinParsed(adminBase(picked.baseUrl || BUILTIN_BASE), typeof imageConfig.path === "string" ? imageConfig.path : "/images/generations");
 			headers.set("authorization", `Bearer ${secret}`);
 		} else {
 			const baseUrl = typeof body.baseUrl === "string" ? body.baseUrl.trim() : "";
@@ -1310,14 +1326,14 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 			body: JSON.stringify(imagePayload),
 			signal
 		}, { hops: 0, timeoutMs: IMAGE_WAIT });
-		let res = await send(imageRequest(model, prompt, true));
+		let res = await send(kind === "builtin" ? configuredImageRequest(model, prompt, imageConfig) : imageRequest(model, prompt, true));
 		if (res.status >= 300 && res.status < 400) {
 			drop();
 			return seal(json(502, { message: "Провайдер вернул редирект — запрос остановлен" }));
 		}
 		if (!res.ok) {
 			const text = await res.text();
-			if (res.status >= 400 && res.status < 500 && /response_format|b64_json|size|watermark|prompt_extend|unknown parameter|unsupported|unrecognized/i.test(text)) res = await send(imageRequest(model, prompt, false));
+			if (Object.keys(imageConfig).length === 0 && res.status >= 400 && res.status < 500 && /response_format|b64_json|size|watermark|prompt_extend|unknown parameter|unsupported|unrecognized/i.test(text)) res = await send(imageRequest(model, prompt, false));
 			else {
 				drop();
 				return seal(json(res.status, { message: upstreamErrorMessage(res.status, text, secret) }));
