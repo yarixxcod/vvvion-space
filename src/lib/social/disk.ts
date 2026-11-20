@@ -115,7 +115,7 @@ async function putFile(
   const extra = (await isPremium(userId)) ? PREMIUM_DISK : 0;
   const rows = await sql<{ id: string }>`
     with room as (
-      select ( ${DISK_BASE} + ${extra} + bonus_bytes
+      select ( ${DISK_BASE}::bigint + ${extra}::bigint + bonus_bytes
                - coalesce((select sum(bytes) from disk_files where user_id = ${userId}), 0)
              ) as free
       from disk_accounts
@@ -255,7 +255,7 @@ async function replaceAudio(userId: string, form: FormData): Promise<Response> {
   const rows = await sql<{ id: string }>`
     with room as (
       select (
-        ${DISK_BASE} + ${extra} + a.bonus_bytes
+        ${DISK_BASE}::bigint + ${extra}::bigint + a.bonus_bytes
         - coalesce((select sum(bytes) from disk_files where user_id = ${userId}), 0)
         + f.bytes
       ) as free
