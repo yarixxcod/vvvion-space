@@ -108,6 +108,17 @@ function asMessage(value: unknown): ChatMessage | null {
   if (typeof raw.reasoning === "string" && raw.reasoning.trim()) {
     message.reasoning = raw.reasoning.trim().slice(0, 24_000);
   }
+  if (Array.isArray(raw.steps)) {
+    const steps = raw.steps.slice(0, 24).flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const step = item as { id?: unknown; tool?: unknown; label?: unknown; status?: unknown };
+      const label = typeof step.label === "string" ? step.label.slice(0, 80) : "";
+      if (!label || (step.status !== "running" && step.status !== "done" && step.status !== "error")) return [];
+      const status = step.status as "running" | "done" | "error";
+      return [{ id: typeof step.id === "string" ? step.id.slice(0, 80) : label, tool: typeof step.tool === "string" ? step.tool.slice(0, 40) : "", label, status }];
+    });
+    if (steps.length) message.steps = steps;
+  }
   return message;
 }
 

@@ -595,6 +595,7 @@ export function App({
                     field?.scrollIntoView({ block: "nearest" });
                   }, 30);
                 }}
+                onContinue={() => void studio.send("продолжай")}
               />
             </Suspense>
           )}

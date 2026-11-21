@@ -154,7 +154,18 @@ function blankImage(): ImageDraft {
 type TtsDraft = ImageDraft & { voice: string };
 
 function fromTts(model: AdminTtsModel): TtsDraft {
-  return { ...fromImage(model), voice: model.voice || "alloy" };
+  return {
+    icon: "",
+    requestConfig: "",
+    name: model.name,
+    previousName: model.name,
+    displayName: model.displayName,
+    baseUrl: model.baseUrl,
+    apiKey: "",
+    clearKey: false,
+    hasKey: model.hasKey,
+    voice: model.voice || "alloy",
+  };
 }
 
 function blankTts(): TtsDraft {
@@ -554,8 +565,9 @@ function ModelForm({
         </label>
       </div>
       <label className="mt-2 block text-xs text-faint">
-        Системный промпт
-        <textarea className="field mt-1 min-h-20 resize-y" value={draft.prompt} maxLength={4000} onChange={(event) => onChange({ prompt: event.target.value })} />
+        Стиль и особенности модели
+        <textarea className="field mt-1 min-h-20 resize-y" value={draft.prompt} maxLength={8000} onChange={(event) => onChange({ prompt: event.target.value })} />
+        <span className="mt-1 block">Агентные правила добавляются автоматически и этим полем не отменяются.</span>
       </label>
       <div className="mt-3 space-y-2">
         {draft.providers.map((provider, index) => (

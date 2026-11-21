@@ -115,7 +115,7 @@ function saveInput(input: unknown): SaveModelInput {
     name,
     displayName: displayOf(raw.displayName, name),
     icon: modelIcon(raw.icon),
-    prompt: typeof raw.prompt === "string" ? raw.prompt.trim().slice(0, 4000) : "",
+    prompt: typeof raw.prompt === "string" ? raw.prompt.trim().slice(0, 8000) : "",
     providers: providersOf(raw.providers),
     previousName,
   };
@@ -161,7 +161,7 @@ async function readPublicModels(): Promise<PublicModel[]> {
     .map((row) => ({
       name: row.name,
       displayName: row.display_name || row.name,
-      prompt: (row.system_prompt || "").trim().slice(0, 4000),
+      prompt: (row.system_prompt || "").trim().slice(0, 8000),
       icon: publicIcon(row.icon),
     }));
 }

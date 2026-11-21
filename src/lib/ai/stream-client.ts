@@ -25,6 +25,7 @@ export type StreamPayload = {
   mcp?: string[];
   diskAccess?: boolean;
   memory?: string[];
+  agent?: { autonomy: "auto" | "ask"; web: boolean; image: boolean; files: boolean };
 };
 
 type Handlers = {
@@ -37,6 +38,7 @@ type Handlers = {
   onError: (message: string) => void;
   onImage?: (url: string) => void;
   onSources?: (sources: Source[], search?: SearchSummary) => void;
+  onStep?: (step: { id: string; tool: string; label: string; status: "running" | "done" | "error" }) => void;
 };
 
 export async function streamChat(payload: StreamPayload, handlers: Handlers): Promise<void> {
@@ -102,7 +104,7 @@ function parseEvent(raw: string, handlers: Handlers) {
     else if (line.startsWith("data:")) data += line.slice(5).trim();
   }
   if (!data) return;
-  let json: { text?: string; message?: string; usage?: Usage; truncated?: boolean; url?: string; sources?: Source[]; search?: SearchSummary; remainingPct?: number };
+  let json: { text?: string; message?: string; usage?: Usage; truncated?: boolean; url?: string; sources?: Source[]; search?: SearchSummary; remainingPct?: number; id?: string; tool?: string; label?: string; status?: "running" | "done" | "error" };
   try {
     json = JSON.parse(data) as typeof json;
   } catch {
@@ -116,6 +118,7 @@ function parseEvent(raw: string, handlers: Handlers) {
   else if (event === "error" && json.message) handlers.onError(json.message);
   else if (event === "image" && json.url) handlers.onImage?.(json.url);
   else if (event === "sources" && Array.isArray(json.sources)) handlers.onSources?.(json.sources, cleanSearchSummary(json.search));
+  else if (event === "step" && json.id && json.label && json.status) handlers.onStep?.({ id: json.id, tool: json.tool || "", label: json.label, status: json.status });
   return event;
 }
 

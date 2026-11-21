@@ -65,7 +65,7 @@ function callFromRecord(row: Record<string, unknown>): Call | null {
       return null;
     }
   } else if (argsSource !== undefined && typeof argsSource !== "object") return null;
-  const limit = name === "save_my_text" || name === "write_my_file" ? 110_000 : 4_000;
+  const limit = /^(save_my_text|write_my_file|save_files|edit_my_file)$/.test(name) ? 110_000 : 8_000;
   const id = typeof row.id === "string" && row.id.trim() ? row.id.trim().slice(0, 80) : `json_${crypto.randomUUID()}`;
   return { id, name: name.slice(0, 80), args: args.slice(0, limit) || "{}" };
 }
@@ -93,7 +93,7 @@ export function embeddedToolCalls(text: string): Call[] {
   const calls: Call[] = [];
   const take = (body: string) => {
     const call = callFromBlock(body);
-    if (call && calls.length < 4) calls.push(call);
+    if (call && calls.length < 6) calls.push(call);
   };
   for (const block of text.matchAll(/<tool_call>([\s\S]*?)<\/tool_call>/gi)) take(block[1] ?? "");
   if (calls.length) return calls;
@@ -125,7 +125,7 @@ export function toolCallsFromMessage(message: unknown): Call[] {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const call = callFromRecord(item as Record<string, unknown>);
     if (call) calls.push(call);
-    if (calls.length >= 4) break;
+    if (calls.length >= 6) break;
   }
   return calls;
 }
@@ -165,6 +165,7 @@ export async function runAgentLoop(options: {
   hasChanges: () => boolean;
   hasFiles?: () => boolean;
   onStep?: (secret?: string) => void;
+  onProgress?: (step: { id: string; tool: string; label: string; status: "running" | "done" | "error" }) => void;
   forcePlain?: () => void;
   afterTools?: () => void;
 }): Promise<AgentResult | null> {
@@ -173,7 +174,7 @@ export async function runAgentLoop(options: {
   let lastToolError = "";
   let releaseAnswer = false;
   const usage: AgentUsage = {};
-  for (let round = 0; round < 12; round++) {
+  for (let round = 0; round < 24; round++) {
     signal.throwIfAborted();
     // Keep identifiers and receipts while limiting repeated document text in smaller contexts.
     const oldTools = wire
@@ -196,7 +197,7 @@ export async function runAgentLoop(options: {
         /* External tool result formats remain unchanged. */
       }
     }
-    const attempt = await options.send({
+    const sent: Record<string, unknown> = {
       ...options.payload,
       messages: wire,
       // A forced tool call cannot be the final answer. Once the files exist, or the tool says to stop, let the model speak or ask.
@@ -205,7 +206,9 @@ export async function runAgentLoop(options: {
           (options.hasChanges() && (!options.filesRequested || options.hasFiles?.()))))
         ? { tool_choice: "auto" }
         : {}),
-    });
+    };
+    if (round > 0 && sent.reasoning_effort === "medium") sent.reasoning_effort = "low";
+    const attempt = await options.send(sent);
     if (attempt.failed) break;
     options.onStep?.(attempt.secret);
     const parsed = (await attempt.response.json()) as Record<string, unknown>;
@@ -230,7 +233,7 @@ export async function runAgentLoop(options: {
         wire.push({
           role: "user",
           content: finish === "length" || !parts.text.trim().endsWith("}")
-            ? "Ответ обрезан. Верни один целый JSON без пояснений: save_my_text с одним файлом и полным text либо {\"answer\":\"итог\"} только после saved=true."
+            ? "Вызов не поместился. Раздели содержимое на несколько файлов меньшего размера и вызови save_files заново, одним JSON."
             : 'Исправь формат: только JSON {"tool":"имя","arguments":{...}} или {"answer":"итог"}. Успех возможен только после результата инструмента.',
         });
         continue;
@@ -247,8 +250,8 @@ export async function runAgentLoop(options: {
         wire.push({
           role: "user",
           content: filesMissing
-            ? "Папка без файлов задачу не закрывает. Верни один JSON без пояснений: {\"tool\":\"save_my_text\",\"arguments\":{\"name\":\"имя.ext\",\"text\":\"полное содержимое\",\"storage\":\"disk\",\"folder_id\":\"id из create_my_folder\"}}. Не пиши ответ, пока в результате нет saved=true. Если не хватает одного факта — верни только {\"answer\":\"один короткий вопрос?\"}."
-            : "Запись ещё не выполнена. Вызови save_my_text, write_my_file или create_my_folder. Если нативные инструменты недоступны, верни только JSON {\"tool\":\"имя\",\"arguments\":{...}} без пояснений и без текста файла вместо вызова. Если данных не хватает — верни только {\"answer\":\"один короткий вопрос?\"}.",
+            ? "Папка без файлов задачу не закрывает. Сохрани все файлы одним вызовом save_files. Если не хватает одного факта — верни только {\"answer\":\"один короткий вопрос?\"}."
+            : "Результат ещё не сохранён. Вызови save_files (папка и все файлы сразу) или save_my_text. Если не хватает одного факта — верни только {\"answer\":\"один короткий вопрос?\"}.",
         });
         continue;
       }
@@ -270,29 +273,52 @@ export async function runAgentLoop(options: {
         function: { name: call.name, arguments: call.args },
       })),
     });
-    for (const call of calls.slice(0, 4)) {
+    const batch = calls.slice(0, 6);
+    const runCall = async (call: Call) => {
       signal.throwIfAborted();
+      const label = stepLabel(call.name);
+      options.onProgress?.({ id: call.id, tool: call.name, label, status: "running" });
       const args = parseToolArguments(call.args);
       const cut = !call.args.trim().endsWith("}") || finish === "length";
       const text = args
         ? await options.invoke(call.name, args)
         : JSON.stringify({
             error: cut
-              ? "Аргументы обрезаны. Повтори один save_my_text: полный text одного файла, без пояснений вокруг JSON."
+              ? "Вызов не поместился. Раздели содержимое на несколько файлов меньшего размера и вызови save_files заново."
               : "Некорректный JSON arguments. Передай объект аргументов, не массив.",
           });
+      let failed = false;
       try {
         const result = JSON.parse(text);
         if (typeof result.error === "string") {
+          failed = true;
           lastToolError = result.error.slice(0, 300);
           if (/достигнут предел|сообщите пользователю|квот|подписк/i.test(result.error))
             releaseAnswer = true;
-        } else if (result.saved || result.created) lastToolError = "";
+        } else if (result.saved || result.created || (Array.isArray(result.files) && result.files.some((item: { saved?: boolean }) => item?.saved))) lastToolError = "";
       } catch {
         /* External tool replies may be non-JSON. */
       }
-      wire.push({ role: "tool", tool_call_id: call.id, content: text });
+      options.onProgress?.({ id: call.id, tool: call.name, label, status: failed ? "error" : "done" });
+      return text;
+    };
+    const writes = (name: string) => /^(save_my_text|save_files|create_my_folder|write_my_file|generate_image)$/.test(name);
+    const texts: string[] = [];
+    for (let index = 0; index < batch.length; ) {
+      if (writes(batch[index].name)) {
+        texts.push(await runCall(batch[index]));
+        index += 1;
+        continue;
+      }
+      const group: Call[] = [];
+      while (index < batch.length && !writes(batch[index].name)) {
+        group.push(batch[index]);
+        index += 1;
+      }
+      texts.push(...(await Promise.all(group.map((call) => runCall(call)))));
     }
+    for (let index = 0; index < batch.length; index += 1)
+      wire.push({ role: "tool", tool_call_id: batch[index].id, content: texts[index] });
     options.afterTools?.();
   }
   if (options.hasChanges())
@@ -300,7 +326,7 @@ export async function runAgentLoop(options: {
       text:
         options.filesRequested && !(options.hasFiles?.() ?? false)
           ? `Папка создана, файлы не записаны. ${lastToolError || "Напишите, какой один файл сохранить следующим."}`
-          : "Готово. Файлы сохранены, список ниже. Если нужно ещё что-то — напишите, что добавить.",
+          : "Готово. Сохранённое уже на диске. Напишите «продолжай», если нужно доделать остальное.",
       reason: "",
       usage,
     };
@@ -317,6 +343,16 @@ export async function runAgentLoop(options: {
       usage,
     };
   return null;
+}
+
+function stepLabel(name: string): string {
+  if (name === "web_search") return "Ищу";
+  if (name === "fetch_url") return "Читаю страницу";
+  if (name === "generate_image") return "Рисую";
+  if (name === "save_files" || name === "save_my_text" || name === "write_my_file") return "Сохраняю файлы";
+  if (name === "create_my_folder") return "Создаю папку";
+  if (name === "read_my_file" || name === "my_files") return "Читаю файлы";
+  return name;
 }
 
 function finishReason(payload: Record<string, unknown>): string {

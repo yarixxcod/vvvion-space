@@ -82,6 +82,7 @@ export function Transcript({
   assistantName = "",
   onQuote,
   onLike,
+  onContinue,
 }: {
   onLike?: (id:string)=>void;
   messages: ChatMessage[];
@@ -98,6 +99,7 @@ export function Transcript({
   reasoningOn?: boolean;
   assistantName?: string;
   onQuote?: (text: string) => void;
+  onContinue?: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -257,6 +259,7 @@ export function Transcript({
                       askNote={messages[index + 1]?.role === "user" ? messages[index + 1].content : undefined}
                       onDelete={readonly || pending || !onDelete ? undefined : () => onDelete(message.id)}
                       onQuote={onQuote}
+                      onContinue={!readonly && !pending && message.id === lastAssistantId && onContinue && /продолжай/i.test(message.content) ? onContinue : undefined}
                     />
                   )}
                                   {visual.stickers.length?<div className={message.role==="user"?"flex gap-2":"mt-2 flex gap-2"}>{visual.stickers.map((code,i)=><StickerImage key={`${code}-${i}`} code={code} className="size-36 max-w-full"/>)}</div>:null}
@@ -493,6 +496,7 @@ function AssistantBubble({
   askNote,
   onDelete,
   onQuote,
+  onContinue,
 }: {
   message: ChatMessage;
   pending: boolean;
@@ -510,6 +514,7 @@ function AssistantBubble({
   askNote?: string;
   onDelete?: () => void;
   onQuote?: (text: string) => void;
+  onContinue?: () => void;
 }) {
   const tokens = usageLine(message.usage);
   const waiting = pending && !message.content && !message.error && !message.imageUrl;
@@ -594,10 +599,17 @@ function AssistantBubble({
           </span>
         </div>
         {usageOpen && tokens ? <p className="mb-1 text-xs text-faint tabular-nums">{tokens}</p> : null}
-        {pending && !message.web && !message.image ? (
+        {pending && !message.web && !message.image && !message.steps?.length ? (
           <p className="mt-0.5 text-xs text-muted">
             <LiveLine />
           </p>
+        ) : null}
+        {message.steps?.length ? (
+          <ul className="mb-2 space-y-0.5 text-xs text-muted">
+            {message.steps.slice(-8).map((step) => (
+              <li key={`${step.id}:${step.status}`}>{step.status === "error" ? "!" : step.status === "running" ? "…" : "•"} {step.label}</li>
+            ))}
+          </ul>
         ) : null}
         {message.reasoning || (waiting && reasoningOn && !message.web && !message.image) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
         {continuing ? <p className="mb-2 text-sm text-muted">Ответ дописывается сам. Экран можно выключить.</p> : null}
@@ -613,6 +625,7 @@ function AssistantBubble({
           <p className="mt-2 rounded-2xl border border-line bg-subtle px-3 py-2 text-sm text-danger">{message.error}</p>
         ) : null}
         {message.error && canRegenerate ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onRegenerate}>Повторить ответ</button> : null}
+        {onContinue ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onContinue}>Продолжить</button> : null}
         {message.stopped ? <p className="mt-2 text-sm text-faint">Остановлено</p> : null}
         {done ? (
           <div className={full ? "msg-actions msg-actions-last mt-1 flex gap-1" : "msg-actions mt-1 flex gap-1"}>
