@@ -81,7 +81,7 @@ export type ChatMessage = {
   search?: SearchSummary;
   files?: ChatFile[];
   reasoning?: string;
-  steps?: { id: string; tool: string; label: string; status: "running" | "done" | "error" }[];
+  steps?: { id: string; tool: string; label: string; detail?: string; status: "running" | "done" | "error" }[];
 };
 
 export type Chat = {

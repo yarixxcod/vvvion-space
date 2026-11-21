@@ -6,7 +6,7 @@ import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowDown, Check, ChevronDown, Copy, Download, Heart, Info, MoreHorizontal, RefreshCw, Square, Trash2, Volume2, X } from "lucide-react";
+import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, Download, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, Trash2, Volume2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
@@ -479,6 +479,64 @@ function UserBubble({
   );
 }
 
+function stepWord(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "шаг";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "шага";
+  return "шагов";
+}
+
+function StepMark({ tool, status }: { tool: string; status: string }) {
+  const tone = status === "error" ? "text-danger" : status === "running" ? "text-accent" : "text-muted";
+  const cls = `size-3.5 ${tone}${status === "running" ? " animate-spin" : ""}`;
+  if (status === "running") return <Loader2 className={cls} />;
+  if (status === "error") return <AlertCircle className="size-3.5 text-danger" />;
+  if (tool === "web_search") return <Search className={cls} />;
+  if (tool === "fetch_url") return <Globe className={cls} />;
+  if (tool === "generate_image") return <ImageIcon className={cls} />;
+  if (tool === "save_files" || tool === "save_my_text" || tool === "write_my_file") return <FileText className={cls} />;
+  if (tool === "create_my_folder" || tool === "my_folders") return <FolderPlus className={cls} />;
+  if (tool === "read_my_file" || tool === "my_files") return <FileSearch className={cls} />;
+  return <Check className={cls} />;
+}
+
+function AgentTrace({ steps, pending }: { steps: NonNullable<ChatMessage["steps"]>; pending: boolean }) {
+  const work = steps.filter((step) => step.tool !== "plan");
+  const [open, setOpen] = useState(true);
+  if (!work.length && !pending) return null;
+  const rows = work.length ? steps : steps.filter((step) => step.tool === "plan").slice(-1);
+  const failed = work.some((step) => step.status === "error");
+  const title = pending ? "Работаю" : failed ? "Остановилось" : "Сделано";
+  const count = work.length || rows.length;
+  return (
+    <div className="mb-3 overflow-hidden rounded-2xl border border-line bg-elev">
+      <button type="button" className="flex min-h-10 w-full items-center gap-2 px-3 text-left" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <span className={`size-1.5 rounded-full ${pending ? "animate-pulse bg-accent" : failed ? "bg-danger" : "bg-accent"}`} />
+        <span className="text-sm font-medium">{title}</span>
+        <span className="text-xs text-faint">{count} {stepWord(count)}</span>
+        <ChevronDown className={`ml-auto size-3.5 text-faint transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <ol className="border-t border-line px-3 py-2">
+          {rows.map((step, index) => (
+            <li key={step.id} className="relative flex gap-3 pb-3 last:pb-0">
+              {index < rows.length - 1 ? <span className="absolute top-6 left-[11px] h-[calc(100%-12px)] w-px bg-line" /> : null}
+              <span className={`relative z-10 mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border bg-bg ${step.status === "running" ? "border-accent" : step.status === "error" ? "border-danger" : "border-line"}`}>
+                <StepMark tool={step.tool} status={step.status} />
+              </span>
+              <span className="min-w-0 pt-0.5">
+                <span className={`block text-sm ${step.status === "running" ? "text-fg" : "text-muted"}`}>{step.label}</span>
+                {step.detail ? <span className="mt-0.5 block truncate text-xs text-faint">{step.detail}</span> : null}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
 function AssistantBubble({
   message,
   pending,
@@ -604,13 +662,7 @@ function AssistantBubble({
             <LiveLine />
           </p>
         ) : null}
-        {message.steps?.length ? (
-          <ul className="mb-2 space-y-0.5 text-xs text-muted">
-            {message.steps.slice(-8).map((step) => (
-              <li key={`${step.id}:${step.status}`}>{step.status === "error" ? "!" : step.status === "running" ? "…" : "•"} {step.label}</li>
-            ))}
-          </ul>
-        ) : null}
+        {message.steps?.length ? <AgentTrace steps={message.steps} pending={pending} /> : null}
         {message.reasoning || (waiting && reasoningOn && !message.web && !message.image) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
         {continuing ? <p className="mb-2 text-sm text-muted">Ответ дописывается сам. Экран можно выключить.</p> : null}
         {pending && message.image && !src ? <ImagePlate /> : null}

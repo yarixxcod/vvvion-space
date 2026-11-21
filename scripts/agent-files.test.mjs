@@ -16,7 +16,7 @@ function load(path, deps = {}) {
   return exports;
 }
 const { createProviderRouter } = load("provider-router");
-const { runAgentLoop } = load("agent-loop");
+const { runAgentLoop, filesFromAnswer } = load("agent-loop");
 
 test("a weak model creates a folder, saves, reads and versions a disk file across provider failure", async () => {
   const db = new PGlite();
@@ -290,5 +290,36 @@ test("a clarifying question stops the disk agent instead of a fake failure", asy
   });
   assert.equal(sends, 1);
   assert.equal(result.text, "Какой цвет фона сделать?");
+});
+
+test("a site written in the answer is saved instead of a one-file error", async () => {
+  const calls = [];
+  const html = "<!doctype html><html><title>Кофе</title><body><p>Тёплый свет и тишина</p></body></html>";
+  const result = await runAgentLoop({
+    wire: [{ role: "user", content: "Собери сайт" }],
+    payload: {},
+    send: async () => reply("```html\n" + html + "\n```\n```css\nbody{margin:0;background:#1b1410;color:#f3e6d0}\n```"),
+    invoke: async (name, args) => {
+      calls.push([name, args.folder, args.files.map((file) => file.path)]);
+      return JSON.stringify({ files: args.files.map((file) => ({ path: file.path, saved: true, name: file.path, url: "/api/disk/file" })) });
+    },
+    split: (body) => ({ text: body.choices[0].message.content ?? "", reason: "" }),
+    calls: () => [],
+    usage: () => undefined,
+    signal: new AbortController().signal,
+    writeRequested: true,
+    filesRequested: true,
+    hasChanges: () => calls.length > 0,
+    hasFiles: () => calls.length > 0,
+  });
+  assert.deepEqual(calls[0], ["save_files", "Кофе", ["index.html", "styles.css"]]);
+  assert.match(result.text, /сохранён/);
+  assert.doesNotMatch(result.text, /один файл|после папки/);
+});
+
+test("prose without a page is not turned into files", () => {
+  assert.deepEqual(filesFromAnswer("Просто объяснение, без страницы."), []);
+  const page = filesFromAnswer("<!doctype html><html><title>Схемы</title><body><p>Необычный сайт по схемам, с крупной типографикой и тёплым фоном.</p></body></html>");
+  assert.equal(page[0].path, "index.html");
 });
 

@@ -111,11 +111,12 @@ function asMessage(value: unknown): ChatMessage | null {
   if (Array.isArray(raw.steps)) {
     const steps = raw.steps.slice(0, 24).flatMap((item) => {
       if (!item || typeof item !== "object") return [];
-      const step = item as { id?: unknown; tool?: unknown; label?: unknown; status?: unknown };
-      const label = typeof step.label === "string" ? step.label.slice(0, 80) : "";
+      const step = item as { id?: unknown; tool?: unknown; label?: unknown; detail?: unknown; status?: unknown };
+      const label = typeof step.label === "string" ? step.label.slice(0, 120) : "";
       if (!label || (step.status !== "running" && step.status !== "done" && step.status !== "error")) return [];
       const status = step.status as "running" | "done" | "error";
-      return [{ id: typeof step.id === "string" ? step.id.slice(0, 80) : label, tool: typeof step.tool === "string" ? step.tool.slice(0, 40) : "", label, status }];
+      const detail = typeof step.detail === "string" ? step.detail.slice(0, 120) : "";
+      return [{ id: typeof step.id === "string" ? step.id.slice(0, 80) : label, tool: typeof step.tool === "string" ? step.tool.slice(0, 40) : "", label, status, ...(detail ? { detail } : {}) }];
     });
     if (steps.length) message.steps = steps;
   }

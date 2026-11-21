@@ -176,7 +176,7 @@ export async function prepareDiskTools(
           signal,
         );
         if (folder.id) recentFolder = { id: folder.id, storage: folder.storage };
-        return JSON.stringify(folder);
+        return JSON.stringify({ ...folder, note: "Папка создана. Сразу вызови save_files со всеми файлами проекта. Не останавливайся и не пиши код вместо вызова." });
       }
       if (name === "my_files") {
         const query = typeof args.query === "string" ? args.query.slice(0, 80) : "";
