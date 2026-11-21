@@ -9,6 +9,7 @@ import { WhisperCard } from "@/components/yaronetic/whisper-card";
 import { AppReleaseCard } from "@/components/yaronetic/app-release-admin";
 import { TelegramAdmin } from "@/components/yaronetic/telegram-admin";
 import { PriceAdmin } from "@/components/yaronetic/price-admin";
+import { ApiAdmin } from "@/components/yaronetic/api-admin";
 import { ModerationDesk } from "@/components/yaronetic/moderation-desk";
 import { getUsagePolicy, saveUsagePolicy, type UsagePolicy } from "@/lib/social/limits";
 import {
@@ -50,6 +51,7 @@ const TABS = [
   ["servers", "Серверы"],
   ["release", "Обновление"],
   ["prices", "Цены"],
+  ["api", "API"],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
@@ -269,6 +271,7 @@ export function AdminPanel() {
       {tab === "stats" ? <Stats /> : null}
       {tab === "release" ? <AppReleaseCard /> : null}
       {tab === "prices" ? <PriceAdmin /> : null}
+      {tab === "api" ? <ApiAdmin /> : null}
       {tab === "servers" ? (
         <div className="mt-4">
           <WhisperCard />

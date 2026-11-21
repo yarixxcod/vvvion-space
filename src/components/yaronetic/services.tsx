@@ -11,6 +11,8 @@ import { NEWS_COUNTRIES, type NewsCode, type NewsItem } from "@/lib/news/parse";
 import { loadRates } from "@/lib/fx/service";
 import { FX_CODES, type FxBoard, type FxCode } from "@/lib/fx/parse";
 import { VpnService } from "@/components/yaronetic/vpn";
+import { ApiService } from "@/components/yaronetic/api-service";
+import { getApiEntry } from "@/lib/api/desk";
 import { SpeedTest } from "@/components/yaronetic/speed-test";
 import { Grabber } from "@/components/yaronetic/grabber";
 import { useTx } from "@/lib/lang";
@@ -59,9 +61,13 @@ const FX_COIN: Record<FxCode, { paper: string; ink: string }> = {
 
 export function Services() {
   const tx = useTx();
-  const [view, setView] = useState<"weather" | "news" | "fx" | "vpn" | "grab" | "speed" | null>(
+  const [view, setView] = useState<"weather" | "news" | "fx" | "vpn" | "grab" | "speed" | "api" | null>(
     null,
   );
+  const [apiOn, setApiOn] = useState(false);
+  useEffect(() => {
+    void getApiEntry().then((row) => setApiOn(row.visible)).catch(() => setApiOn(false));
+  }, []);
   useCircleNest(view !== null, () => setView(null));
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("vv-circle-nested", { detail: view !== null }));
@@ -75,6 +81,7 @@ export function Services() {
   if (view === "vpn") return <VpnService onBack={() => setView(null)} />;
   if (view === "speed") return <SpeedTest onBack={() => setView(null)} />;
   if (view === "grab") return <Grabber onBack={() => setView(null)} />;
+  if (view === "api") return <ApiService onBack={() => setView(null)} />;
   const tiles = [
     {
       id: "weather",
@@ -110,6 +117,17 @@ export function Services() {
         kk: "Интернетті тексеру",
       }),
     },
+    ...(apiOn
+      ? [{
+          id: "api" as const,
+          title: "API",
+          desc: tx({
+            ru: "Ключи и подключение к своим инструментам",
+            en: "Keys for your own tools",
+            kk: "Өз құралдарыңызға кілттер",
+          }),
+        }]
+      : []),
   ] as const;
   return (
     <div className="h-full overflow-y-auto px-4 py-4" data-services-grid>

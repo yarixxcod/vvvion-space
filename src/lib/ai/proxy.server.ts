@@ -1862,3 +1862,19 @@ export async function completeTelegramChat(userId: string, model: string, histor
   await sql`update chat_attempts set ok = true, total_tokens = ${Math.max(0, Math.min(10_000_000, Number(body.usage?.total_tokens) || 0))} where id = ${attempt}`;
   return answer.slice(0,28000);
 }
+
+export {
+  loadCatalog,
+  builtinTargets,
+  callChat,
+  configuredImageRequest,
+  pickImage,
+  inlineImage,
+  waitForDeapiImage,
+  deapiRequestId,
+  extractError,
+  sanitize,
+  adminBase,
+  joinParsed,
+  IMAGE_WAIT,
+};
