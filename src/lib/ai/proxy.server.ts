@@ -15,6 +15,7 @@ import { finishCloudReply } from "@/lib/ai/cloud";
 import { waitUntil } from "@vercel/functions";
 import { assertDiskRoom, storeDiskImage } from "@/lib/social/disk";
 import { getSql } from "@/lib/db";
+import { listImageModels } from "@/lib/social/admin";
 import { getSessionUser } from "@/lib/auth/verify.server";
 import { assertBuiltinChat, loadAccess } from "@/lib/social/access";
 import { explainApiError, readApiFailure } from "@/lib/ai/api-error";
@@ -1150,7 +1151,7 @@ export async function handleChat(request: Request): Promise<Response> {
         const profile = modelProfile(model, kind);
         const enabledTools = [
           agent.web ? "web_search, fetch_url" : "",
-          actorUser && agent.image ? "generate_image" : "",
+          actorUser && agent.image ? "list_image_models, generate_image" : "",
           actorUser && agent.files ? "my_files, read_my_file, save_files, create_my_folder, write_my_file" : "",
           mcpUrlsOf(body.mcp).length ? "mcp" : "",
         ].filter(Boolean).join("; ") || "нет";
@@ -1159,7 +1160,7 @@ export async function handleChat(request: Request): Promise<Response> {
           catalogPrompt: kind === "builtin" ? catalogPrompt : "",
           userPrompt: kind === "builtin" && catalogPrompt ? "" : userPrompt,
           persona: personaText,
-          protocols: [toolNote, stickerNote].filter(Boolean).join("\n\n"),
+          protocols: [toolNote, stickerNote, agent.image ? "Генерация изображений: сначала вызови list_image_models, покажи пользователю варианты моделей и спроси, какую выбрать. Не запускай generate_image до выбора пользователем, кроме случая, когда пользователь явно назвал модель в запросе. Не выводи сырой JSON промпта вместо выбора. После выбора передай исходный промпт в generate_image с точным ID выбранной модели. Если пользователь прислал промпт в прошлом сообщении, сохрани его смысл при следующем вызове." : ""].filter(Boolean).join("\n\n"),
           runtime: `Сейчас ${new Date().toISOString().slice(0, 16)}. Доступные инструменты: ${enabledTools}. Если инструмента нет в списке, отвечай текстом и не вызывай его. На Диске папки одноуровневые: путь a/b.css сохраняется как a__b.css.`,
           memoryNote: memoryText,
           searchNote,
@@ -1179,14 +1180,21 @@ export async function handleChat(request: Request): Promise<Response> {
                 const web = wantWebTools ? createWebTools(isSearchEngine(typeof body.searchEngine === "string" ? body.searchEngine : "") ? body.searchEngine : "duck", signal) : null;
                 let drawn = 0;
                 const imageTool = wantImageTool ? {
-                  tools: [{ type: "function", function: { name: "generate_image", description: "Нарисовать картинку и сохранить её на диск пользователя. Вернёт url.", parameters: { type: "object", properties: { prompt: { type: "string" }, size: { type: "string", enum: ["square", "landscape", "portrait"] } }, required: ["prompt"], additionalProperties: false } } }],
-                  invoke: async (_name: string, args: unknown) => {
+                  tools: [
+                    { type: "function", function: { name: "list_image_models", description: "Получить актуальный список моделей генерации изображений из админки VVVion. Вызвать перед предложением пользователю выбора модели.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
+                    { type: "function", function: { name: "generate_image", description: "Генерировать картинку ТОЛЬКО после выбора модели пользователем. Передать точный model_id из list_image_models и промпт пользователя.", parameters: { type: "object", properties: { prompt: { type: "string" }, model_id: { type: "string" }, size: { type: "string", enum: ["square", "landscape", "portrait"] } }, required: ["prompt", "model_id"], additionalProperties: false } } }
+                  ],
+                  invoke: async (name: string, args: unknown) => {
+                    const models = await listImageModels();
+                    if (name === "list_image_models") return JSON.stringify({ models: models.map(m => ({ id: m.name, name: m.displayName })), instruction: "Попроси пользователя выбрать одну из перечисленных моделей. Не запускай генерацию до ответа пользователя." });
                     if (drawn >= 2) return JSON.stringify({ error: "За запрос можно две картинки" });
-                    drawn += 1;
                     const row = args && typeof args === "object" ? args as Record<string, unknown> : {};
                     const prompt = typeof row.prompt === "string" ? row.prompt.trim() : "";
+                    const modelId = typeof row.model_id === "string" ? row.model_id.trim() : "";
                     if (!prompt) return JSON.stringify({ error: "Опишите картинку" });
-                    const made = await generateImageForUser(actorUser!, prompt, body.imageModel, signal, row.size);
+                    if (!modelId || !models.some(m => m.name === modelId)) return JSON.stringify({ error: "Модель не найдена. Вызови list_image_models и предложи выбор из доступных моделей." });
+                    drawn += 1;
+                    const made = await generateImageForUser(actorUser!, prompt, modelId, signal, row.size);
                     return JSON.stringify(made.url ? { url: made.url, markdown: `![картинка](${made.url})` } : { error: made.error || "Картинка не создалась" });
                   },
                 } : null;
