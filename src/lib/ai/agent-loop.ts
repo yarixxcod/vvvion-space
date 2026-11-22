@@ -90,11 +90,11 @@ export function embeddedToolCalls(text: string): Call[] {
   };
   // Some providers emit DSML-style tool invocations as assistant text rather than tool_calls.
   // Execute only explicitly named tools; the agent pack still checks that the name is registered.
-  for (const match of text.matchAll(/<\\s*\\|\\s*DSML\\s*\\|\\s*invoke\\s+name\\s*=\\s*["']([A-Za-z][A-Za-z0-9_.:-]{0,79})["']\\s*>/gi)) {
+  for (const match of text.matchAll(/<\s*\|\s*DSML\s*\|\s*invoke\s+name\s*=\s*["']([A-Za-z][A-Za-z0-9_.:-]{0,79})["']\s*>/gi)) {
     if (calls.length >= 6) break;
     const name = match[1];
     const rest = text.slice((match.index ?? 0) + match[0].length);
-    const end = /<\\s*\\/\\s*\\|\\s*DSML\\s*\\|\\s*invoke\\s*>/i.exec(rest);
+    const end = /<\s*\/\s*\|\s*DSML\s*\|\s*invoke\s*>/i.exec(rest);
     if (!end) continue;
     const body = rest.slice(0, end.index).trim();
     const parsed = body ? plainAgentReply(body) : null;
