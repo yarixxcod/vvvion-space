@@ -332,7 +332,7 @@ export function splitStickerContent(content: string): { text: string; stickers: 
   // Handle standalone and inline sticker tags, including harmless spaces emitted by LLMs.
   // Never expose a recognized sticker command as raw text in the chat.
   const text = content
-    .replace(/\\[\\[\\s*sticker\\s*:\\s*([A-Za-z0-9-]{3,40})\\s*\\]\\]/gi, (full, code: string) => {
+    .replace(/\[\[\s*sticker\s*:\s*([A-Za-z0-9-]{3,40})\s*\]\]/gi, (full, code: string) => {
       if (!isKnownSticker(code)) return full;
       if (stickers.length < 2) stickers.push(code);
       return "";
