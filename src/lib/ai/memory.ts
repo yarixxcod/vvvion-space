@@ -46,7 +46,9 @@ export function readMemory(owner: string | null): MemoryState {
 }
 
 export function writeMemory(owner: string, state: MemoryState): void {
-  localStorage.setItem(key(owner), JSON.stringify(cleanMemory(state)));
+  const serialized = JSON.stringify(cleanMemory(state));
+  localStorage.setItem(key(owner), serialized);
+  if (localStorage.getItem(key(owner)) !== serialized) throw new Error("VVVion Memory: запись не подтверждена");
   window.dispatchEvent(new Event("vv-memory-change"));
 }
 
@@ -83,6 +85,12 @@ export function factsFromUserText(text: string): string[] {
   for (const match of src.matchAll(/(?:^|[.!?]\s+)(?:запомни|не забудь)[:,\s]+([^.\n?]{3,180})/gi)) take(match[1]);
   const name = /(?:^|\.\s+)меня зовут\s+([\p{L}][\p{L}\-]{1,40})/iu.exec(src);
   if (name) take(`Имя: ${name[1]}`);
+  const age = /(?:^|[.!?]\\s+)(?:мне|мой возраст)\\s+(\\d{1,3})(?:\\s+(?:год|года|лет))?(?=$|[.!?,\\s])/iu.exec(src);
+  if (age && Number(age[1]) >= 1 && Number(age[1]) <= 120) take(`Возраст: ${Number(age[1])} лет (со слов пользователя)`);
+  const pets = /(?:^|[.!?]\\s+)(?:у меня|у нас)\\s+(\\d{1,2})\\s+(кош(?:ки|ек|ка)|собак(?:и|а)?|собаки|кота|котов|кошек)/iu.exec(src);
+  if (pets) take(`Домашние животные: ${Number(pets[1])} ${pets[2]}`);
+  const morePets = /(?:^|[.!?]\\s+)(?:и\\s+)?(\\d{1,2})\\s+(собаки|собак|кошки|кошек|кота|котов)(?=$|[.!?,\\s])/iu.exec(src);
+  if (morePets && !pets) take(`Домашние животные: ${Number(morePets[1])} ${morePets[2]}`);
   const city = /(?:^|\.\s+)я живу в\s+([^,.]{2,60})/i.exec(src);
   if (city) take(`Город: ${city[1].trim()}`);
   const from = /(?:^|\.\s+)я из\s+([^,.]{2,40})/i.exec(src);
