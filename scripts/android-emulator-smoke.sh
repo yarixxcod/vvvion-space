@@ -58,17 +58,57 @@ grep -q 'version.*3.0.2.*forgedRejected.*true' emulator-evidence/bridge.txt
 adb shell uiautomator dump /sdcard/window.xml >/dev/null
 adb pull /sdcard/window.xml emulator-evidence/portrait.xml >/dev/null
 adb exec-out screencap -p > emulator-evidence/portrait.png
+# The fixed-version test APK can legitimately be older than the public APK feed.
+# Postpone ONLY the known VVVion update prompt; never install an update or dismiss unknown dialogs.
+python3 - <<'PYUPDATE' > emulator-evidence/update-tap.txt
+import re, xml.etree.ElementTree as ET
+nodes = list(ET.parse('emulator-evidence/portrait.xml').getroot().iter('node'))
+owned = [n for n in nodes if n.get('package') == 'space.vvvion.app']
+title = any(n.get('text') == 'Доступно обновление' for n in owned)
+button = next((n for n in owned if n.get('text') == 'Позже' and n.get('enabled') == 'true'), None)
+if title and button is not None:
+    x1,y1,x2,y2 = map(int,re.findall(r'\d+',button.get('bounds')))
+    print((x1+x2)//2,(y1+y2)//2)
+PYUPDATE
+if [[ -s emulator-evidence/update-tap.txt ]]; then
+  cp emulator-evidence/portrait.xml emulator-evidence/update-prompt.xml
+  read -r UPDATE_X UPDATE_Y < emulator-evidence/update-tap.txt
+  adb shell input tap "$UPDATE_X" "$UPDATE_Y"
+  sleep 2
+  adb shell uiautomator dump /sdcard/window.xml >/dev/null
+  adb pull /sdcard/window.xml emulator-evidence/portrait.xml >/dev/null
+  adb exec-out screencap -p > emulator-evidence/portrait.png
+fi
 # Focus a real web input; exercise native IME resizing without sending a message.
 adb shell settings put secure show_ime_with_hard_keyboard 1
-python3 - <<'PYINPUT' > emulator-evidence/input-tap.txt
+# A dismissed native window may leave WebView's accessibility subtree stale briefly.
+# Focus navigation activates no button and sends no text or model request.
+adb shell input keyevent KEYCODE_TAB
+INPUT_READY=false
+for attempt in {1..20}; do
+  recover_system_overlay
+  adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/window.xml emulator-evidence/portrait.xml >/dev/null 2>&1 || true
+  if python3 - <<'PYINPUT' > emulator-evidence/input-tap.txt
 import re, xml.etree.ElementTree as ET
 nodes = ET.parse('emulator-evidence/portrait.xml').getroot().iter('node')
-field = next((n for n in nodes if n.get('class') == 'android.widget.EditText' and n.get('enabled') == 'true'), None)
+field = next((n for n in nodes if n.get('package') == 'space.vvvion.app' and n.get('class') == 'android.widget.EditText' and n.get('enabled') == 'true'), None)
 if field is None:
-    raise SystemExit('No enabled input in the rendered chat screen')
+    raise SystemExit(1)
 x1,y1,x2,y2 = map(int,re.findall(r'\d+',field.get('bounds')))
 print((x1+x2)//2,(y1+y2)//2)
 PYINPUT
+  then
+    INPUT_READY=true
+    break
+  fi
+  sleep 2
+done
+if [[ "$INPUT_READY" != true ]]; then
+  echo 'No enabled input in the rendered chat screen after accessibility readiness wait'
+  exit 1
+fi
+adb exec-out screencap -p > emulator-evidence/portrait.png
 read -r INPUT_X INPUT_Y < emulator-evidence/input-tap.txt
 adb shell input tap "$INPUT_X" "$INPUT_Y"
 for attempt in {1..20}; do

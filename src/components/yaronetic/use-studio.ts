@@ -955,6 +955,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             diskAccess: !wantImage && (diskAccessEnabled() || readAgentPrefs().files),
             agent: wantImage ? undefined : readAgentPrefs(),
             memory: wantImage ? undefined : memory,
+            memoryInput: wantImage ? undefined : {text:trimmed,attachments:pending.length>0},
             stickerReplies: (()=>{try{return localStorage.getItem("vvvion.stickers.replies")!=="0";}catch{return true;}})(),
             messages: wireTurns(nextMessages.filter((item) => item.id !== asstId).slice(-32)),
           },

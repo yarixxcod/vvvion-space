@@ -1,3 +1,4 @@
+import { encodeDiskBlob, decodeDiskBlob } from "@/lib/storage/disk-blob";
 import { createServerFn } from "@tanstack/react-start";
 import { createHash } from "node:crypto";
 import { authMiddleware } from "@/lib/auth/middleware";
@@ -39,7 +40,7 @@ async function read(userId: string, file: Target, preview = false) {
     if (!row || !(preview ? isSiteAsset(row.name) : documentKind(row.name)))
       throw new Error("Этот формат нельзя редактировать");
     if (Number(row.bytes) > DOCUMENT_MAX) throw new Error("Документ больше 3 МБ");
-    return { name: row.name, mime: row.mime, bytes: Buffer.from(row.data, "base64") };
+    return { name: row.name, mime: row.mime, bytes: await decodeDiskBlob(userId, row.data) };
   }
   const meta = await sql<{
     name: string;
@@ -120,7 +121,7 @@ export const saveDocument = createServerFn({ method: "POST" })
         if (
           !rows[0] ||
           rows[0].name !== old.name ||
-          hash(Buffer.from(rows[0].data, "base64"), rows[0].name) !== data.version
+          hash(await decodeDiskBlob(userId, rows[0].data), rows[0].name) !== data.version
         )
           throw new Error("Файл уже изменён. Откройте свежую версию.");
         const used = await sql<{
@@ -131,7 +132,7 @@ export const saveDocument = createServerFn({ method: "POST" })
           DISK_BASE + extra + Number(accounts[0].bonus_bytes)
         )
           throw new Error("На диске недостаточно места");
-        await sql`update disk_files set data=${bytes.toString("base64")},bytes=${bytes.length} where id=${data.id} and user_id=${userId}`;
+        await sql`update disk_files set data=${await encodeDiskBlob(userId, bytes)},bytes=${bytes.length} where id=${data.id} and user_id=${userId}`;
       });
       return { id: data.id, name: old.name, backup: false, version: hash(bytes, old.name) };
     }
@@ -193,6 +194,7 @@ export const uploadDiskDocument = createServerFn({ method: "POST" })
       typeof row.name !== "string" ||
       !row.name.trim() ||
       row.name.length > 75 ||
+      // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted text.
       /[/\\\u0000-\u001f]/.test(row.name) ||
       !(documentKind(row.name) || isSiteAsset(row.name))
     )
@@ -239,7 +241,7 @@ export const uploadDiskDocument = createServerFn({ method: "POST" })
         documentKind(data.name) === "docx"
           ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           : "text/plain";
-      await sql`insert into disk_files(id,user_id,name,mime,bytes,kind,data,folder_id) values(${id},${userId},${data.name},${mime},${bytes.length},'file',${bytes.toString("base64")},${data.folder})`;
+      await sql`insert into disk_files(id,user_id,name,mime,bytes,kind,data,folder_id) values(${id},${userId},${data.name},${mime},${bytes.length},'file',${await encodeDiskBlob(userId, bytes)},${data.folder})`;
     });
     return { id, name: data.name };
   });

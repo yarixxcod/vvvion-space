@@ -123,6 +123,8 @@ async function setup() {
     documentKind: (name) =>
       name.endsWith(".docx") ? "docx" : /\.(md|txt|js|html|css)$/.test(name) ? "text" : null,
     isSiteAsset: (name) => /\.(js|html|css|png)$/.test(name),
+    encodeDiskBlob: async (_owner, bytes) => Buffer.from(bytes).toString("base64"),
+    decodeDiskBlob: async (_owner, data) => Buffer.from(data, "base64"),
     createHash,
     createServerFn: () => {
       let validate;

@@ -18,15 +18,15 @@ function briefTools(tools: unknown): string {
   if (!Array.isArray(tools)) return "";
   return tools
     .map((tool) => {
-      const fn = tool && typeof tool === "object" ? (tool as { function?: { name?: unknown; description?: unknown; parameters?: { properties?: Record<string, unknown> } } }).function : undefined;
+      const fn = tool && typeof tool === "object" ? (tool as { function?: { name?: unknown; description?: unknown; parameters?: Record<string, unknown> } }).function : undefined;
       const name = typeof fn?.name === "string" ? fn.name : "";
       const description = typeof fn?.description === "string" ? fn.description : "";
-      const names = fn?.parameters?.properties ? Object.keys(fn.parameters.properties).join(",") : "";
-      return name ? `${name}: ${description} (${names})` : "";
+      const schema = fn?.parameters ? JSON.stringify(fn.parameters) : "{}";
+      return name ? `${name}: ${description.slice(0, 240)} arguments=${schema}` : "";
     })
     .filter(Boolean)
     .join("; ")
-    .slice(0, 4000);
+    .slice(0, 12_000);
 }
 
 export function plainToolPayload(payload: Record<string, unknown>): Record<string, unknown> {
@@ -50,7 +50,7 @@ export function plainToolPayload(payload: Record<string, unknown>): Record<strin
   if (first?.role === "system" && typeof first.content === "string") {
     return {
       ...rest,
-      messages: [{ ...first, content: `${first.content}\n\n${instruction}`.slice(0, 24_000) }, ...messages.slice(1)],
+      messages: [{ ...first, content: `${first.content.slice(0, Math.max(0, 24_000 - instruction.length - 2))}\n\n${instruction}` }, ...messages.slice(1)],
     };
   }
   return { ...rest, messages: [{ role: "system", content: instruction }, ...messages] };

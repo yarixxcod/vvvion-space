@@ -55,5 +55,6 @@
       "source": "/(favicon.ico|favicon.svg|icon-192.png|icon-512.png|icon-maskable-512.png|og.jpg|manifest.webmanifest|robots.txt|sitemap.xml)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
     }
-  ]
+  ],
+  "git": { "deploymentEnabled": { "feature/vvvion-memory": false } }
 }

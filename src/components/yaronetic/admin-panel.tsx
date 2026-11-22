@@ -1,3 +1,4 @@
+import { MemoryAdmin } from "@/components/yaronetic/memory-admin";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PageLoader } from "@/components/yaronetic/page-loader";
@@ -43,6 +44,7 @@ const MODEL_RE = /^[A-Za-z0-9._:/-]+$/;
 const TABS = [
   ["people", "Участники"],
   ["telegram", "Telegram"],
+  ["memory", "Память"],
   ["models", "Модели"],
   ["images", "Картинки"],
   ["voice", "Голос"],
@@ -262,6 +264,7 @@ export function AdminPanel() {
           </button>
         ))}
       </div>
+      {tab === "memory" ? <MemoryAdmin /> : null}
       {tab === "telegram" ? <TelegramAdmin /> : null}
       {tab === "people" ? <People members={members} onChange={setMembers} /> : null}
       {tab === "models" ? <Models models={models} policy={policy} onModels={setModels} onPolicy={setPolicy} /> : null}

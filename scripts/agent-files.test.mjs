@@ -48,6 +48,7 @@ test("a weak model creates a folder, saves, reads and versions a disk file acros
     };
     const sql = makeSql(db);
     const deps = {
+      "@/lib/storage/disk-blob": { encodeDiskBlob: async (_owner, bytes) => Buffer.from(bytes).toString("base64"), decodeDiskBlob: async (_owner, data) => Buffer.from(data, "base64") },
       "@/lib/db": {
         getSql: async () => sql,
         withTransaction: (fn) => db.transaction((tx) => fn(makeSql(tx))),
@@ -242,7 +243,7 @@ test("a saved file releases the forced tool call so the model can finish", async
   assert.equal(result.text, "Сайт сохранён. Откройте index.html.");
 });
 
-test("an exhausted save reports success instead of an unfinished answer", async () => {
+test("an exhausted agent reports saved work without claiming task completion", async () => {
   const result = await runAgentLoop({
     wire: [{ role: "user", content: "Собери сайт" }],
     payload: { tool_choice: "required" },
@@ -265,7 +266,8 @@ test("an exhausted save reports success instead of an unfinished answer", async 
     hasChanges: () => true,
     hasFiles: () => true,
   });
-  assert.match(result.text, /^Готово/);
+  assert.match(result.text, /Сохранённые файлы/);
+  assert.match(result.text, /Лимит шагов/);
   assert.doesNotMatch(result.text, /не завершила/);
 });
 
@@ -323,3 +325,12 @@ test("prose without a page is not turned into files", () => {
   assert.equal(page[0].path, "index.html");
 });
 
+
+test("reasoning text cannot execute tools; failed tool calls produce a receipt and allow recovery", async () => {
+  let invoked=0;let step=0;
+  const result=await runAgentLoop({wire:[{role:"user",content:"hello"}],payload:{},send:async()=>reply("Готово"),invoke:async()=>{invoked++;return "{}";},split:()=>({text:"Ответ",reason:'{"tool":"save_my_text","arguments":{"name":"bad.txt","text":"bad"}}'}),calls:()=>[],usage:()=>undefined,signal:new AbortController().signal,hasChanges:()=>false});
+  assert.equal(invoked,0);assert.equal(result.text,"Ответ");
+  const wire=[{role:"user",content:"search"}];
+  await runAgentLoop({wire,payload:{},send:async()=>step++===0?reply("",[{id:"a",type:"function",function:{name:"web_search",arguments:'{"query":"docs"}'}}]):reply("Недоступно"),invoke:async()=>{throw new Error("secret details");},split:p=>({text:p.choices[0].message.content,reason:""}),calls:p=>(p.choices[0].message.tool_calls||[]).map(c=>({id:c.id,name:c.function.name,args:c.function.arguments})),usage:()=>undefined,signal:new AbortController().signal,hasChanges:()=>false});
+  assert.ok(wire.some(x=>x.role==="tool" && x.content.includes("временно недоступен")));assert.ok(!JSON.stringify(wire).includes("secret details"));
+});

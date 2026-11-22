@@ -2,7 +2,7 @@ import { MemoryPanel } from "@/components/yaronetic/memory-panel";
 import { ServiceStatus } from "@/components/yaronetic/service-status";
 import { diskAccessEnabled, setDiskAccess } from "@/lib/ai/disk-access";
 import { readAgentPrefs, writeAgentPrefs, type AgentPrefs } from "@/lib/ai/agent-prefs";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useRef, type ReactNode } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
@@ -70,6 +70,8 @@ export function SettingsDialog({
   onPersona?: (id: string | null) => void;
   onClear: () => Promise<void> | void;
 }) {
+  const memorySection = useRef<HTMLDivElement>(null);
+  const agentSection = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState(prompt);
   const lang = useLang();
   const tx = useTx();
@@ -103,6 +105,10 @@ export function SettingsDialog({
             </Dialog.Close>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+            <nav aria-label="Быстрые настройки ИИ" className="mb-4 grid grid-cols-2 gap-2">
+              <button type="button" className="press min-h-11 rounded-2xl border border-line bg-subtle px-3 text-sm" onClick={() => memorySection.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Память ИИ</button>
+              <button type="button" className="press min-h-11 rounded-2xl border border-line bg-subtle px-3 text-sm" onClick={() => agentSection.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Инструменты агента</button>
+            </nav>
             <Field label={tx({ ru: "Название", en: "Name", kk: "Атауы" })}>
               <input value={displayName} onChange={(event) => onDisplayName(event.target.value)} className="field" maxLength={32} />
             </Field>
@@ -195,9 +201,9 @@ export function SettingsDialog({
               </button>
               <p className="mt-1.5 px-1 text-[13px] text-muted">{tx({ ru: "Инструменты сервера попадут в следующий ответ чата.", en: "The server’s tools go into the next chat reply.", kk: "Сервер құралдары келесі чат жауабына кіреді." })}</p>
             </div>
-            <MemoryPanel chatId={chatId} />
+            <div ref={memorySection} className="scroll-mt-4"><MemoryPanel chatId={chatId} /></div>
             <DiskAiAccess />
-            <AgentAccess />
+            <div ref={agentSection} className="scroll-mt-4"><AgentAccess /></div>
             <ServiceStatus />
             <AppTools />
             <SoundChoices />

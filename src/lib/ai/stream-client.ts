@@ -25,6 +25,8 @@ export type StreamPayload = {
   mcp?: string[];
   diskAccess?: boolean;
   memory?: string[];
+  memoryInput?: {text:string;attachments:boolean};
+  memoryMode?: "off";
   agent?: { autonomy: "auto" | "ask"; web: boolean; image: boolean; files: boolean };
 };
 

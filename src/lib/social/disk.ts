@@ -1,3 +1,4 @@
+import { encodeDiskBlob, decodeDiskBlob } from "@/lib/storage/disk-blob";
 import { createServerOnlyFn } from "@tanstack/react-start";
 import { zipSync } from "fflate";
 import { getSql } from "@/lib/db";
@@ -111,7 +112,7 @@ async function putFile(
     on conflict (user_id) do nothing
   `;
   const id = newId();
-  const data = Buffer.from(bytes).toString("base64");
+  const data = await encodeDiskBlob(userId, bytes);
   const extra = (await isPremium(userId)) ? PREMIUM_DISK : 0;
   const rows = await sql<{ id: string }>`
     with room as (
@@ -177,8 +178,8 @@ function contentTag(bytes: Uint8Array): string {
   return `W/"${(hash >>> 0).toString(16)}"`;
 }
 
-function fileResponse(request: Request, row: { data: string; mime: string; name: string }, download: boolean): Response {
-  const bytes = Buffer.from(row.data, "base64");
+async function fileResponse(request: Request, row: { data: string; mime: string; name: string }, download: boolean, owner: string): Promise<Response> {
+  const bytes = await decodeDiskBlob(owner, row.data);
   const etag = contentTag(bytes);
   const headers = new Headers({
     "content-type": playbackType(row.name, row.mime || ""),
@@ -247,7 +248,7 @@ export const readDiskFile = createServerOnlyFn(async (request: Request, id: stri
   const row = rows[0];
   if (!row) return json(404, { message: "Файл не найден" });
   const download = new URL(request.url).searchParams.get("dl") === "1";
-  return fileResponse(request, row, download);
+  return fileResponse(request, row, download, ownerId);
 });
 
 async function replaceAudio(userId: string, form: FormData): Promise<Response> {
@@ -268,7 +269,7 @@ async function replaceAudio(userId: string, form: FormData): Promise<Response> {
   `;
   if (!owned[0]) return json(404, { message: "Файл не найден" });
   const extra = (await isPremium(userId)) ? PREMIUM_DISK : 0;
-  const data = Buffer.from(bytes).toString("base64");
+  const data = await encodeDiskBlob(userId, bytes);
   const rows = await sql<{ id: string }>`
     with room as (
       select (
@@ -331,7 +332,7 @@ export async function zipDisk(request: Request): Promise<Response> {
   if (!rows.length) return json(404, { message: "Диск пуст" });
   const files: Record<string, Uint8Array> = {};
   const used = new Set<string>();
-  rows.forEach((row, index) => {
+  for (const [index, row] of rows.entries()) {
     let name = cleanName(row.name, `file-${index + 1}`);
     if (!name.includes(".")) {
       const ext = row.mime === "image/jpeg" ? "jpg" : row.mime.startsWith("image/") ? row.mime.slice(6) : row.mime.includes("mp4") ? "m4a" : "webm";
@@ -345,8 +346,8 @@ export async function zipDisk(request: Request): Promise<Response> {
       n += 1;
     }
     used.add(name);
-    files[name] = new Uint8Array(Buffer.from(row.data, "base64"));
-  });
+    files[name] = new Uint8Array(await decodeDiskBlob(userId, row.data));
+  }
   const zipped = zipSync(files, { level: 0 });
   const body = Buffer.from(zipped);
   return new Response(body, {

@@ -1,3 +1,4 @@
+import { decodeDiskBlob } from "@/lib/storage/disk-blob";
 import { peopleQuery, peopleLike } from "@/lib/social/people-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
@@ -775,7 +776,7 @@ export const sendFromPlace = createServerFn({ method: "POST" })
       `;
       const row = rows[0];
       if (!row?.data) throw new Error("Файл не найден на диске");
-      file = { name: row.name, mime: row.mime, size: Number(row.bytes), data: row.data };
+      file = { name: row.name, mime: row.mime, size: Number(row.bytes), data: (await decodeDiskBlob(context.userId, row.data)).toString("base64") };
       body = "";
     }
     const id = crypto.randomUUID();

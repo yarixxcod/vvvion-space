@@ -35,8 +35,8 @@ function sameSecret(a: string, b: string) {
 }
 
 function oneLine(text: string, max = 120) {
-  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   const clean = text
+    // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -46,7 +46,7 @@ function oneLine(text: string, max = 120) {
 
 function clip(text: string) {
   const clean = text
-    // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
+      // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -216,7 +216,15 @@ type TgFile = {
   file_name?: string;
   mime_type?: string;
 };
+function isDirectMemoryMessage(message: TgMessage) {
+  return !message.forward_origin && !message.forward_date && !message.quote &&
+    !message.entities?.some(e => ["blockquote", "expandable_blockquote", "pre", "code"].includes(e.type || ""));
+}
 type TgMessage = {
+  forward_origin?: unknown;
+  forward_date?: unknown;
+  quote?: unknown;
+  entities?: { type?: string }[];
   text?: string;
   caption?: string;
   chat?: TgChat;
@@ -1041,7 +1049,7 @@ async function processTelegramUpdate(
     }
     if (!command) {
       const { aiMessage } = await import("@/lib/social/telegram-workspace.server");
-      if (!(await aiMessage(bot.token, chatId, userId, text)))
+      if (!(await aiMessage(bot.token, chatId, userId, text, false, isDirectMemoryMessage(message))))
         await say(
           bot.token,
           chatId,
@@ -1052,7 +1060,7 @@ async function processTelegramUpdate(
     }
     if (command.name === "ask" && command.arg) {
       const { aiMessage } = await import("@/lib/social/telegram-workspace.server");
-      await aiMessage(bot.token, chatId, userId, command.arg, true);
+      await aiMessage(bot.token, chatId, userId, command.arg, true, isDirectMemoryMessage(message));
       return new Response("ok");
     }
     if (command.name === "say") {

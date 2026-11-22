@@ -1,3 +1,4 @@
+import { encodeDiskBlob } from "@/lib/storage/disk-blob";
 import { getSql, withTransaction } from "@/lib/db";
 import { isPremium, PREMIUM_DISK } from "@/lib/social/premium";
 import { storeMegaBytes, createMegaFolderForUser } from "@/lib/social/mega";
@@ -5,6 +6,7 @@ import { DISK_BASE, newId } from "@/lib/social/disk";
 
 export function agentName(value: unknown): string {
   const name = typeof value === "string" ? value.trim() : "";
+  // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted text.
   if (!name || name.length > 75 || /[/\\\u0000-\u001f]/.test(name) || name === "." || name === "..")
     throw new Error("Укажите имя до 75 символов без слешей и управляющих знаков");
   return name;
@@ -76,7 +78,7 @@ export async function saveAgentText(
     const label = duplicates.length
       ? `${name.slice(0, dot >= 0 ? dot : name.length).slice(0, 75 - suffix.length - extension.length)}${suffix}${extension}`
       : name;
-    const encoded = Buffer.from(bytes).toString("base64");
+    const encoded = await encodeDiskBlob(userId, bytes);
     signal?.throwIfAborted();
     await sql`insert into disk_files (id, user_id, name, mime, bytes, kind, data, folder_id) values (${id}, ${userId}, ${label}, ${mime}, ${bytes.length}, 'file', ${encoded}, ${folder})`;
     signal?.throwIfAborted();
