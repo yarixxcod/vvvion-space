@@ -10,6 +10,7 @@ function load(path, replacement = "") {
   return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 }
 const memory = await load("src/lib/ai/memory.ts");
+const agentLoop = await load("src/lib/ai/agent-loop.ts");
 const drafts = await load("src/lib/ai/drafts.ts");
 const stream = await load("src/lib/ai/stream-client.ts", "const getBearerToken = () => null;\n");
 const storage = () => {
@@ -144,4 +145,13 @@ test("explicit API errors remain visible and CRLF frames parse correctly", async
     "event: done\r\ndata: {}\r\n\r\n",
   ]);
   assert.deepEqual(crlf.delta, ["ok"]);
+});
+
+
+test("VVVion Memory tool calls emitted as DSML text are executed as calls", () => {
+  const raw = '< | DSML | calls>< | DSML | invoke name="memory_list">\n< / | DSML | invoke>< / | DSML | calls>';
+  const calls = agentLoop.embeddedToolCalls(raw);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, "memory_list");
+  assert.deepEqual(JSON.parse(calls[0].args), {});
 });
