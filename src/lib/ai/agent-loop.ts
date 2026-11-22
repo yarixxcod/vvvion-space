@@ -301,9 +301,9 @@ export async function runAgentLoop(options: {
       try {
         const reply = JSON.parse(parts.text.trim()) as Record<string, unknown>;
         if (reply && typeof reply === "object" && ("ok" in reply || "entries" in reply || "old_text" in reply)) {
-          if (lastMemoryResult.name === "memory_save" && reply.ok === true)
+          if (lastMemoryResult.name === "memory_save" && lastMemoryResult.data.saved === true)
             parts.text = "Запомнил. Факт добавлен в VVVion Memory.";
-          else if (lastMemoryResult.name === "memory_forget" && reply.ok === true)
+          else if (lastMemoryResult.name === "memory_forget" && typeof lastMemoryResult.data.forgotten === "number")
             parts.text = "Удалил выбранный факт из VVVion Memory.";
           else if (lastMemoryResult.name === "memory_list") {
             const entries = lastMemoryResult.data.entries;
