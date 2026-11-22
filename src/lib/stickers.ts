@@ -172,13 +172,18 @@ export function stickerCode(body: string): string | null {
   return STICKER.exec(body.trim())?.[1] ?? null;
 }
 
+const STICKER_ALIASES: Record<string, string> = { "cosmo-list": "cosmo-think" };
+function canonicalSticker(code: string): string { return STICKER_ALIASES[code.toLowerCase()] ?? code; }
+
 export function stickerUrl(code: string): string {
+  code = canonicalSticker(code);
   if (code.startsWith("cosmo-") && isKnownSticker(code)) return `/stickers/${code}-v1.webp`;
   if (isKnownSticker(code)) return `/stickers/openmoji/${code}.svg`;
   return /^[0-9A-F]{3,8}$/.test(code) ? `${CDN}/${code}.svg` : "";
 }
 
 export function isKnownSticker(code: string): boolean {
+  code = canonicalSticker(code);
   return STICKER_PACKS.some((pack) => (pack.codes as readonly string[]).includes(code));
 }
 
@@ -194,6 +199,7 @@ const CAT_LABELS: Record<string, string> = {
   "cosmo-coffee": "Перерыв · сонный кот с кофе",
 };
 export function stickerLabel(code: string): string {
+  code = canonicalSticker(code);
   if (CAT_LABELS[code]) return CAT_LABELS[code];
   const pack = STICKER_PACKS.find((p) => (p.codes as readonly string[]).includes(code));
   if (!pack) return "Стикер";
@@ -334,7 +340,7 @@ export function splitStickerContent(content: string): { text: string; stickers: 
   const text = content
     .replace(/\[\[\s*sticker\s*:\s*([A-Za-z0-9-]{3,40})\s*\]\]/gi, (full, code: string) => {
       if (!isKnownSticker(code)) return full;
-      if (stickers.length < 2) stickers.push(code);
+      if (stickers.length < 2) stickers.push(canonicalSticker(code));
       return "";
     })
     .trim();
