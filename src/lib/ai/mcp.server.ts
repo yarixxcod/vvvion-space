@@ -167,7 +167,8 @@ export async function prepareMcp(urls: string[]): Promise<Pack | null> {
       const tools = await toolsOf(url, index);
       for (const tool of tools) {
         if (where.has(tool.exposed) || defs.length >= 16) continue;
-        defs.push(tool);
+        const host = new URL(url).hostname.replace(/^www\./, "");
+        defs.push({ ...tool, description: `MCP ${host}: ${tool.description}`.slice(0, 400) });
         where.set(tool.exposed, { url, name: tool.name });
       }
     } catch (error) {

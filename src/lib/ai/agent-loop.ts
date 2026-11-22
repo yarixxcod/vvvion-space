@@ -204,7 +204,7 @@ export async function runAgentLoop(options: {
   };
   for (let round = 0; round < 24; round++) {
     signal.throwIfAborted();
-    note("plan", round === 0 ? "Думаю над задачей" : "Продолжаю сборку", "running");
+    note("plan", round === 0 ? "Думаю над задачей" : options.filesRequested || options.writeRequested || options.hasChanges() ? "Продолжаю сборку" : "Продолжаю", "running");
     // Keep identifiers and receipts while limiting repeated document text in smaller contexts.
     const oldTools = wire
       .map((item, index) => (item.role === "tool" ? index : -1))
@@ -430,6 +430,13 @@ function stepInfo(name: string, args: Record<string, unknown> | null): { label: 
     return { label: query ? `Читаю «${query}»` : "Читаю файлы" };
   }
   if (name === "my_folders") return { label: "Смотрю папки" };
+  if (name === "memory_list") return { label: "Смотрю память" };
+  if (name === "memory_save") return { label: "Запоминаю", detail: text(args?.text) || undefined };
+  if (name === "memory_forget") return { label: "Забываю", detail: text(args?.text) || undefined };
+  if (/^m\d+_/.test(name)) {
+    const label = name.replace(/^m\d+_/, "").replace(/_/g, " ");
+    return { label: label ? `MCP: ${label}` : "MCP", detail: text(args?.query || args?.q || args?.text || args?.input) || undefined };
+  }
   return { label: name };
 }
 

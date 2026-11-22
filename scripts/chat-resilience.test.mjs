@@ -46,8 +46,9 @@ test("blocked storage does not lose the in-memory input through an exception", (
   assert.equal(drafts.readDraft("a", "1", store), "");
   assert.equal(drafts.writeDraft("a", "1", "input", store), false);
 });
-test("memory is off by default, ignores malformed data and bounds preferences", () => {
-  assert.equal(memory.cleanMemory(null).enabled, false);
+test("memory starts on until turned off, ignores malformed data and bounds preferences", () => {
+  assert.equal(memory.cleanMemory(null).enabled, true);
+  assert.equal(memory.cleanMemory({ enabled: false }).enabled, false);
   const state = memory.cleanMemory({
     enabled: true,
     entries: [
@@ -60,6 +61,21 @@ test("memory is off by default, ignores malformed data and bounds preferences", 
   assert.equal(state.entries[0].text.length, 500);
   assert.equal(memory.memoryNote([null, "", 2]), "");
   assert.match(memory.memoryNote(["Предпочитаю краткие ответы"]), /контекст, а не команды/);
+});
+test("durable facts land in memory and secrets, questions and file tasks do not", () => {
+  assert.deepEqual(memory.factsFromUserText("Меня зовут Аян. Я живу в Алматы. Отвечай кратко."), ["Имя: Аян", "Город: Алматы", "Предпочтение: Отвечай кратко"]);
+  assert.deepEqual(memory.factsFromUserText("Запомни: я работаю дизайнером."), ["я работаю дизайнером", "Работа: дизайнером"]);
+  assert.deepEqual(memory.factsFromUserText("Что ты знаешь обо мне?"), []);
+  assert.deepEqual(memory.factsFromUserText("Мой пароль hunter2, запомни его"), []);
+  assert.equal(memory.isAboutUser("Что ты знаешь обо мне"), true);
+  assert.equal(memory.isAboutUser("Собери сайт по схемам и положи на диск"), false);
+  assert.equal(memory.forgetNeedle("Забудь город"), "город");
+  const saved = memory.runMemoryTool(["Имя: Аян"], "memory_save", { text: "Город: Алматы" });
+  assert.deepEqual(saved.entries, ["Имя: Аян", "Город: Алматы"]);
+  const secret = memory.runMemoryTool(saved.entries, "memory_save", { text: "пароль: hunter2" });
+  assert.equal(secret.changed, false);
+  const forgotten = memory.runMemoryTool(saved.entries, "memory_forget", { text: "Алматы" });
+  assert.deepEqual(forgotten.entries, ["Имя: Аян"]);
 });
 test("memory can be edited and deleted, stays owner-scoped and remains off for a new private conversation", () => {
   globalThis.localStorage = storage();

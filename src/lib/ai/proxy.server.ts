@@ -5,7 +5,7 @@ import { runAgentLoop, toolCallsFromMessage } from "@/lib/ai/agent-loop";
 import { createWebTools } from "@/lib/ai/agent-web";
 import { modelProfile } from "@/lib/ai/model-profile";
 import type { SearchSummary } from "@/lib/ai/search-types";
-import { memoryNote } from "@/lib/ai/memory";
+import { isAboutUser, memoryNote, runMemoryTool } from "@/lib/ai/memory";
 import { prepareDiskTools } from "@/lib/ai/disk-tools.server";
 import { mcpUrlsOf, prepareMcp } from "@/lib/ai/mcp.server";
 import { isBlockedHost, publicFetch } from "@/lib/security/net-guard";
@@ -52,6 +52,7 @@ type ChatBody = {
   mcp?: unknown;
   diskAccess?: unknown;
   memory?: unknown;
+  memoryOn?: unknown;
   agent?: unknown;
 };
 type AgentChoice = { autonomy: "auto" | "ask"; web: boolean; image: boolean; files: boolean };
@@ -1127,6 +1128,9 @@ export async function handleChat(request: Request): Promise<Response> {
 		const lastUser = [...messages].reverse().find((item) => item.role === "user");
 		payload.vvReason = reasoningOn;
 		payload.vvUser = contentToText(lastUser?.content).slice(0, 4_000);
+		const userAsk = String(payload.vvUser || "");
+		const aboutUser = isAboutUser(userAsk);
+		const memoryOn = Boolean(actorUser) && body.memoryOn === true;
 		track = actorUser ? readTrack(body) : null;
 		let releaseWork = () => {};
 		keep(new Promise<void>((resolve) => {
@@ -1135,7 +1139,7 @@ export async function handleChat(request: Request): Promise<Response> {
 		try {
 		const signal = armRun(actorUser, track, request, 24e4);
         const providerRouter = createProviderRouter(targets, (url, headers, body, signal, secret) => callChat(url, headers, applyChatReasoning(body, typeof body.model === "string" ? body.model : "", model), signal, secret), signal);
-        if (body.webSearch === true) {
+        if (body.webSearch === true && !aboutUser) {
           const rawQuery = contentToText([...messages].reverse().find(item => item.role === "user")?.content);
           const engine = isSearchEngine(typeof body.searchEngine === "string" ? body.searchEngine : "") ? body.searchEngine : "duck";
           const result = await searchWeb(rawQuery, engine, signal);
@@ -1150,9 +1154,10 @@ export async function handleChat(request: Request): Promise<Response> {
 		const agent = readAgent(body);
         const profile = modelProfile(model, kind);
         const enabledTools = [
-          agent.web ? "web_search, fetch_url" : "",
-          actorUser && agent.image ? "list_image_models, generate_image" : "",
-          actorUser && agent.files ? "my_files, read_my_file, save_files, create_my_folder, write_my_file" : "",
+          agent.web && !aboutUser ? "web_search, fetch_url" : "",
+          actorUser && agent.image && !aboutUser ? "list_image_models, generate_image" : "",
+          actorUser && agent.files && !aboutUser ? "my_files, read_my_file, save_files, create_my_folder, write_my_file" : "",
+          memoryOn ? "memory_list, memory_save, memory_forget" : "",
           mcpUrlsOf(body.mcp).length ? "mcp" : "",
         ].filter(Boolean).join("; ") || "нет";
         const builtPrompt = buildSystemPrompt({
@@ -1168,14 +1173,20 @@ export async function handleChat(request: Request): Promise<Response> {
         if (builtPrompt.cut) console.info("[prompt]", { cut: true, length: builtPrompt.text.length });
         messages.unshift({ role: "system", content: builtPrompt.text });
 		const mcpUrls = mcpUrlsOf(body.mcp);
-        const wantDisk = Boolean(actorUser && agent.files);
-        const wantWebTools = agent.web;
-        const wantImageTool = Boolean(actorUser && agent.image);
+        const wantDisk = Boolean(actorUser && agent.files) && !aboutUser;
+        const wantWebTools = agent.web && !aboutUser;
+        const wantImageTool = Boolean(actorUser && agent.image) && !aboutUser;
 		if (mcpUrls.length || wantDisk || wantWebTools || wantImageTool) {
 			try {
 				const pendingImages: ChatPart[] = [];
                 const userText = contentToText([...messages].reverse().find(item => item.role === "user")?.content);
                 const remote = mcpUrls.length ? await prepareMcp(mcpUrls) : null;
+                const noteMcp = (line: string) => {
+                  const sys = messages[0];
+                  if (sys && sys.role === "system" && typeof sys.content === "string") sys.content = `${sys.content}\n\n${line}`.slice(0, 24000);
+                };
+                if (remote) noteMcp(`Подключённые MCP. Вызывай по имени, если описание подходит: ${remote.tools.map((tool) => `${tool.function.name}: ${tool.function.description}`).join("; ").slice(0, 2500)}`);
+                else if (mcpUrls.length) noteMcp("Серверы MCP сейчас не ответили. Не выдумывай их результат.");
                 const local = wantDisk && actorUser ? await prepareDiskTools(actorUser, userText, part => pendingImages.push(part), signal, { autonomy: agent.autonomy }) : null;
                 const web = wantWebTools ? createWebTools(isSearchEngine(typeof body.searchEngine === "string" ? body.searchEngine : "") ? body.searchEngine : "duck", signal) : null;
                 let drawn = 0;
@@ -1198,7 +1209,27 @@ export async function handleChat(request: Request): Promise<Response> {
                     return JSON.stringify(made.url ? { url: made.url, markdown: `![картинка](${made.url})` } : { error: made.error || "Картинка не создалась" });
                   },
                 } : null;
-                const packs = [remote, local, web, imageTool].filter(Boolean) as Array<{ tools: Array<{ function: { name: string } }>; invoke: (name: string, args: unknown) => Promise<string> }>;
+                let memoryEntries: string[] = [];
+                if (Array.isArray(body.memory)) {
+                  for (const item of body.memory) {
+                    if (typeof item === "string" && item.trim() && memoryEntries.length < 40) memoryEntries.push(item.trim());
+                  }
+                }
+                let publishMemory: (entries: string[]) => void = () => {};
+                const memoryTool = memoryOn ? {
+                  tools: [
+                    { type: "function" as const, function: { name: "memory_list", description: "Что VVVion уже помнит об этом человеке. Вызови на вопрос «что ты знаешь обо мне», не ищи это в файлах.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
+                    { type: "function" as const, function: { name: "memory_save", description: "Запомнить устойчивый факт: имя, город, язык, профессия, постоянное предпочтение. Не для паролей, ключей и разовых задач.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false } } },
+                    { type: "function" as const, function: { name: "memory_forget", description: "Забыть записи памяти, в которых есть эта фраза.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false } } },
+                  ],
+                  invoke: async (name: string, args: unknown) => {
+                    const next = runMemoryTool(memoryEntries, name, args);
+                    memoryEntries = next.entries;
+                    if (next.changed) publishMemory(next.entries);
+                    return next.text;
+                  },
+                } : null;
+                const packs = [remote, local, web, imageTool, memoryTool].filter(Boolean) as Array<{ tools: Array<{ function: { name: string } }>; invoke: (name: string, args: unknown) => Promise<string> }>;
                 const pack = packs.length ? {
                   tools: packs.flatMap(item => item.tools),
                   invoke: (name: string, args: unknown) => {
@@ -1226,6 +1257,7 @@ export async function handleChat(request: Request): Promise<Response> {
                           if (gone) return;
                           try { controller.enqueue(sse(event, data)); } catch { gone = true; }
                         };
+                        publishMemory = (entries) => push("memory", { entries });
                         const ping = setInterval(() => push("ping", {}), 10_000);
                         const shut = () => {
                           clearInterval(ping);

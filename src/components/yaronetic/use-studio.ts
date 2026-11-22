@@ -1,7 +1,7 @@
 import {stickerMeaning} from "@/lib/stickers";
 import { peelQuestionLike } from "@/lib/ai/question-like";
 import { readDraft, writeDraft } from "@/lib/ai/drafts";
-import { memoryForChat, moveNewChatMemory } from "@/lib/ai/memory";
+import { factsFromUserText, forgetNeedle, memoryActive, memoryForChat, moveNewChatMemory, readMemory, replaceMemoryTexts, upsertMemoryFacts, writeMemory } from "@/lib/ai/memory";
 import { diskAccessEnabled } from "@/lib/ai/disk-access";
 import { readAgentPrefs } from "@/lib/ai/agent-prefs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -820,7 +820,25 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         ? chatsRef.current.find((item) => item.id === activeChatRef.current)
         : undefined;
       const draftOrigin = pendingDraftChat;
-      const memory = memoryForChat(userIdRef.current, draftOrigin);
+      const memoryOn = !wantImage && memoryActive(userIdRef.current, draftOrigin);
+      if (memoryOn && userIdRef.current) {
+        const needle = forgetNeedle(trimmed);
+        try {
+          if (needle) {
+            const state = readMemory(userIdRef.current);
+            writeMemory(userIdRef.current, {
+              ...state,
+              entries: state.entries.filter((entry) => !entry.text.toLowerCase().includes(needle.toLowerCase())),
+            });
+          } else {
+            const facts = factsFromUserText(trimmed);
+            if (facts.length) writeMemory(userIdRef.current, upsertMemoryFacts(readMemory(userIdRef.current), facts));
+          }
+        } catch {
+          /* хранилище переполнено — ответ всё равно уходит */
+        }
+      }
+      const memory = memoryOn ? memoryForChat(userIdRef.current, draftOrigin) : undefined;
       const chatId = existing?.id ?? crypto.randomUUID();
       const nextMessages = [...history, userMsg, asst];
       activeChatRef.current = chatId;
@@ -954,7 +972,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             mcp: wantImage ? undefined : enabledMcpUrls(),
             diskAccess: !wantImage && (diskAccessEnabled() || readAgentPrefs().files),
             agent: wantImage ? undefined : readAgentPrefs(),
-            memory: wantImage ? undefined : memory,
+            memory: memoryOn ? memory : undefined,
+            memoryOn: memoryOn || undefined,
             stickerReplies: (()=>{try{return localStorage.getItem("vvvion.stickers.replies")!=="0";}catch{return true;}})(),
             messages: wireTurns(nextMessages.filter((item) => item.id !== asstId).slice(-32)),
           },
@@ -993,6 +1012,15 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
               const at = steps.findIndex((item) => item.id === step.id);
               steps = at >= 0 ? steps.map((item, index) => (index === at ? step : item)) : [...steps, step];
               schedule();
+            },
+            onMemory(entries) {
+              const owner = userIdRef.current;
+              if (!owner) return;
+              try {
+                writeMemory(owner, replaceMemoryTexts(readMemory(owner), entries));
+              } catch {
+                /* запись памяти не должна обрывать ответ */
+              }
             },
           },
         );
