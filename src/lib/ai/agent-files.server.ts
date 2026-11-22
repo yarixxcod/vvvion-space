@@ -5,6 +5,7 @@ import { DISK_BASE, newId } from "@/lib/social/disk";
 
 export function agentName(value: unknown): string {
   const name = typeof value === "string" ? value.trim() : "";
+  // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted input.
   if (!name || name.length > 75 || /[/\\\u0000-\u001f]/.test(name) || name === "." || name === "..")
     throw new Error("Укажите имя до 75 символов без слешей и управляющих знаков");
   return name;

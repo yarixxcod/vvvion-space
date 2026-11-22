@@ -83,7 +83,7 @@ export function factsFromUserText(text: string): string[] {
     found.push(clean);
   };
   for (const match of src.matchAll(/(?:^|[.!?]\s+)(?:запомни|не забудь)[:,\s]+([^.\n?]{3,180})/gi)) take(match[1]);
-  const name = /(?:^|\.\s+)меня зовут\s+([\p{L}][\p{L}\-]{1,40})/iu.exec(src);
+  const name = /(?:^|\.\s+)меня зовут\s+([\p{L}][\p{L}-]{1,40})/iu.exec(src);
   if (name) take(`Имя: ${name[1]}`);
   const age = /(?:^|[.!?]\\s+)(?:мне|мой возраст)\\s+(\\d{1,3})(?:\\s+(?:год|года|лет))?(?=$|[.!?,\\s])/iu.exec(src);
   if (age && Number(age[1]) >= 1 && Number(age[1]) <= 120) take(`Возраст: ${Number(age[1])} лет (со слов пользователя)`);

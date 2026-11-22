@@ -1,10 +1,27 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { getSql } from "@/lib/db";
+import { getSql, withTransaction } from "@/lib/db";
 import { assertActive, assertAdmin } from "@/lib/social/access";
-import { isUniqueViolation } from "@/lib/social/sql-error";
 import { priceOf } from "@/lib/social/prices";
-import { accessOf, afterAgent, clientsToInstall, counterDelta, keyEmail, newHySecret, nextBaseline, openSlots, personalUri, pullLimit, purchaseOutcome, sharedCredential, subscriptionInfo, syncState, usedBytes, type VpnUsage } from "@/lib/social/vpn-core";
+import {
+  accessOf,
+  quotaForPlan,
+  canSwitchPlan,
+  afterAgent,
+  clientsToInstall,
+  counterDelta,
+  keyEmail,
+  newHySecret,
+  nextBaseline,
+  openSlots,
+  personalUri,
+  pullLimit,
+  sharedCredential,
+  subscriptionInfo,
+  syncState,
+  usedBytes,
+  type VpnUsage,
+} from "@/lib/social/vpn-core";
 
 export const VPN_PRICE = 2000;
 export const VPN_DAYS = 30;
@@ -39,6 +56,8 @@ export type VpnPlace = {
   maintenance: boolean;
   personal: boolean;
   cut: boolean;
+  pingMs: number | null;
+  lastCheck: string | null;
 };
 
 export type VpnDevice = {
@@ -51,6 +70,15 @@ export type VpnDevice = {
 };
 
 export type VpnShowcase = {
+  balance: number;
+  plans: (VpnPlanRow & { current: boolean; canSwitch: boolean; reason: string })[];
+  trialAvailable: boolean;
+  lastPull: string | null;
+  trialDays: number;
+  trialTraffic: number;
+  trialReason: string;
+  highUsage: boolean;
+  outages: { nodeId: string; name: string; at: string; minutes: number }[];
   locations: string[];
   places: VpnPlace[];
   price: number;
@@ -85,6 +113,10 @@ export type VpnDesk = {
   totalLinks: number;
   pullsDay: number;
   plans: VpnPlanRow[];
+  suspiciousGb: number;
+  topUsage: { email: string; bytes: number; devices: number; pulls: number }[];
+  audit: { email: string; kind: string; note: string; at: string }[];
+  events: { name: string; reach: string; at: string }[];
 };
 
 export type VpnPlanRow = {
@@ -116,14 +148,16 @@ function nodeUri(value: unknown): string {
 
 function gbOf(value: unknown): number {
   const n = typeof value === "number" ? value : Number(typeof value === "string" ? value : NaN);
-  if (!Number.isInteger(n) || n < 1 || n > 10000) throw new Error("Трафик — целое число гигабайт, от 1 до 10000");
+  if (!Number.isInteger(n) || n < 1 || n > 10000)
+    throw new Error("Трафик — целое число гигабайт, от 1 до 10000");
   return n;
 }
 
 function emailOf(value: unknown): string {
   if (typeof value !== "string") throw new Error("Нужна почта");
   const email = value.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) throw new Error("Почта не похожа на адрес");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200)
+    throw new Error("Почта не похожа на адрес");
   return email;
 }
 
@@ -144,6 +178,37 @@ async function trafficBytes(): Promise<number> {
   return Number.isFinite(n) && n > 0 ? n : 100 * GIB;
 }
 
+export async function planQuota(planId = "base"): Promise<number> {
+  const sql = await getSql();
+  const rows = await sql<{
+    traffic_bytes: string | number;
+  }>`select traffic_bytes from vpn_plans where id = ${planId}`;
+  return quotaForPlan(planId, rows[0]?.traffic_bytes, await trafficBytes());
+}
+async function availablePlans() {
+  const sql = await getSql();
+  const rows = await sql<{
+    id: string;
+    title: string;
+    days: number;
+    price: number;
+    traffic_bytes: string | number;
+    device_cap: number;
+    enabled: boolean;
+  }>`select * from vpn_plans order by price, id`;
+  const legacy = await trafficBytes();
+  const price = await priceOf("vpn", VPN_PRICE);
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    days: Number(r.days),
+    price: r.id === "base" ? price : Number(r.price),
+    trafficBytes: quotaForPlan(r.id, r.traffic_bytes, legacy),
+    deviceCap: Number(r.device_cap),
+    enabled: r.enabled,
+  }));
+}
+
 async function verified(userId: string): Promise<boolean> {
   const sql = await getSql();
   const rows = await sql<{ ok: boolean | null }>`
@@ -154,7 +219,10 @@ async function verified(userId: string): Promise<boolean> {
 
 async function ipHash(request: Request): Promise<string> {
   const { createHash } = await import("node:crypto");
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip")?.trim() || "0";
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    "0";
   return createHash("sha256").update(ip).digest("hex").slice(0, 32);
 }
 
@@ -199,7 +267,8 @@ export async function renderVpnSubscription(token: string, request?: Request): P
     "support-url": "https://vvvion.space",
   };
   const method = request?.method === "HEAD" ? "HEAD" : "GET";
-  const empty = (status: number) => new Response(method === "HEAD" ? null : "not found", { status, headers });
+  const empty = (status: number) =>
+    new Response(method === "HEAD" ? null : "not found", { status, headers });
   if (!TOKEN.test(token)) return empty(404);
   const sql = await getSql();
   if (request) {
@@ -209,11 +278,18 @@ export async function renderVpnSubscription(token: string, request?: Request): P
     `;
     if (pullLimit(Number(misses[0]?.n ?? 0)) === "limited") return empty(429);
   }
-  const passes = await sql<{ user_id: string; until_ms: string | number; blocked_at: string | null; kind: string; device_id: string }>`
-    select user_id, floor(extract(epoch from until_at))::bigint as until_ms, blocked_at::text as blocked_at, 'pass' as kind, '' as device_id
+  const passes = await sql<{
+    user_id: string;
+    until_ms: string | number;
+    blocked_at: string | null;
+    kind: string;
+    device_id: string;
+    plan_id: string;
+  }>`
+    select user_id, floor(extract(epoch from until_at))::bigint as until_ms, blocked_at::text as blocked_at, 'pass' as kind, '' as device_id, plan_id
     from vpn_passes where token = ${token}
     union all
-    select d.user_id, floor(extract(epoch from p.until_at))::bigint, p.blocked_at::text, 'device', d.id
+    select d.user_id, floor(extract(epoch from p.until_at))::bigint, p.blocked_at::text, 'device', d.id, p.plan_id
     from vpn_devices d
     join vpn_passes p on p.user_id = d.user_id
     where d.token = ${token} and d.revoked_at is null
@@ -234,7 +310,7 @@ export async function renderVpnSubscription(token: string, request?: Request): P
   }
   const expire = Number(pass.until_ms);
   const usage = await readUsage(pass.user_id);
-  const quota = await trafficBytes();
+  const quota = await planQuota(pass.plan_id || "base");
   const state = accessOf({
     found: true,
     untilMs: expire * 1000,
@@ -243,24 +319,44 @@ export async function renderVpnSubscription(token: string, request?: Request): P
     used: usedBytes(usage),
     quota,
   });
-  const nodes = state === "ok"
-    ? await sql<{ id: string; name: string; uri: string; protocol: string; agent_enrolled: boolean }>`
+  const nodes =
+    state === "ok"
+      ? await sql<{
+          id: string;
+          name: string;
+          uri: string;
+          protocol: string;
+          agent_enrolled: boolean;
+        }>`
         select id, name, uri, protocol, agent_enrolled
         from vpn_nodes
         where enabled = true and maintenance = false
-        order by created_at asc
+        order by ping_ms asc nulls last, created_at asc
       `
-    : [];
-  const info = subscriptionInfo(usage, quota, state === "ok" && Number.isFinite(expire) ? expire : 0);
+      : [];
+  const info = subscriptionInfo(
+    usage,
+    quota,
+    state === "ok" && Number.isFinite(expire) ? expire : 0,
+  );
   const lines = [
     "#profile-title: VVVION",
     "#profile-update-interval: 1",
     `#subscription-userinfo: ${info}`,
   ];
+  const slots: KeySlot[] = nodes.map((node) => ({
+    userId: pass.user_id,
+    nodeId: node.id,
+    deviceId: pass.kind === "device" ? pass.device_id : "",
+    protocol: protocolOf(node.uri, node.protocol),
+  }));
+  const secrets = await ensureKeys(slots);
   for (const node of nodes) {
     const protocol = protocolOf(node.uri, node.protocol);
     const slot = pass.kind === "device" ? pass.device_id : "";
-    const secret = await ensureKey(pass.user_id, node.id, slot, protocol);
+    const secret = secrets.get(
+      slotId({ userId: pass.user_id, nodeId: node.id, deviceId: slot, protocol }),
+    )!;
     const built = personalUri(node.uri, secret, node.name, Boolean(node.agent_enrolled));
     if (built) lines.push(built.uri);
   }
@@ -278,11 +374,11 @@ export async function renderVpnSubscription(token: string, request?: Request): P
   }
   const body = Buffer.from(lines.join("\n"), "utf8").toString("base64");
   await sql`insert into vpn_pulls (id, user_id) values (${crypto.randomUUID()}, ${pass.user_id})`;
-  if (pass.kind === "device" && pass.device_id) {
+  if (method === "GET" && state === "ok" && pass.kind === "device" && pass.device_id) {
     await sql`update vpn_devices set last_pull_at = now() where id = ${pass.device_id} and user_id = ${pass.user_id}`;
   }
-  await sql`delete from vpn_miss where at < now() - interval '1 day'`;
-  await sql`delete from vpn_pulls where at < now() - interval '2 days'`;
+  if (method === "GET" && state === "ok")
+    await sql`update vpn_passes set last_pull_at = now() where user_id = ${pass.user_id}`;
   return new Response(method === "HEAD" ? null : body, {
     status: 200,
     headers: {
@@ -306,56 +402,103 @@ async function readUsage(userId: string): Promise<VpnUsage> {
   return { upload: Number(rows[0].upload), download: Number(rows[0].download) };
 }
 
-async function ensureKey(userId: string, nodeId: string, deviceId: string, protocol: "vless" | "hy2"): Promise<string> {
+type KeySlot = { userId: string; nodeId: string; deviceId: string; protocol: "vless" | "hy2" };
+const slotId = (v: KeySlot) => JSON.stringify([v.userId, v.nodeId, v.deviceId]);
+async function ensureKeys(slots: KeySlot[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (!slots.length) return result;
   const sql = await getSql();
-  const slot = deviceId || "";
-  const existing = await sql<{ secret: string }>`
-    select secret from vpn_keys
-    where user_id = ${userId} and node_id = ${nodeId} and device_id = ${slot} and revoked_at is null
-    limit 1
-  `;
-  if (existing[0]?.secret) return existing[0].secret;
-  const secret = freshSecret(protocol);
-  await sql`
-    insert into vpn_keys (id, user_id, node_id, device_id, protocol, secret)
-    values (${crypto.randomUUID()}, ${userId}, ${nodeId}, ${slot}, ${protocol}, ${secret})
-    on conflict (user_id, node_id, device_id) do update
-      set secret = case when vpn_keys.revoked_at is null then vpn_keys.secret else excluded.secret end,
-          protocol = excluded.protocol,
-          revoked_at = null
-  `;
-  const again = await sql<{ secret: string }>`
-    select secret from vpn_keys
-    where user_id = ${userId} and node_id = ${nodeId} and device_id = ${slot} and revoked_at is null
-    limit 1
-  `;
-  return again[0]?.secret || secret;
+  const wanted = [...new Map(slots.map((v) => [slotId(v), v])).values()];
+  const payload = JSON.stringify(wanted);
+  const read = () =>
+    sql.query<{ user_id: string; node_id: string; device_id: string; secret: string }>(
+      `
+    select k.user_id,k.node_id,k.device_id,k.secret from vpn_keys k
+    join jsonb_to_recordset($1::jsonb) as w("userId" text,"nodeId" text,"deviceId" text)
+    on k.user_id=w."userId" and k.node_id=w."nodeId" and k.device_id=w."deviceId"
+    where k.revoked_at is null`,
+      [payload],
+    );
+  for (const k of await read())
+    result.set(
+      slotId({ userId: k.user_id, nodeId: k.node_id, deviceId: k.device_id, protocol: "vless" }),
+      k.secret,
+    );
+  const missing = wanted
+    .filter((v) => !result.has(slotId(v)))
+    .map((v) => ({ ...v, id: crypto.randomUUID(), secret: freshSecret(v.protocol) }));
+  if (missing.length) {
+    await sql.query(
+      `insert into vpn_keys(id,user_id,node_id,device_id,protocol,secret)
+      select id,"userId","nodeId","deviceId",protocol,secret
+      from jsonb_to_recordset($1::jsonb) as w(id text,"userId" text,"nodeId" text,"deviceId" text,protocol text,secret text)
+      on conflict(user_id,node_id,device_id) do update
+      set secret=case when vpn_keys.revoked_at is null then vpn_keys.secret else excluded.secret end,
+          protocol=excluded.protocol,revoked_at=null`,
+      [JSON.stringify(missing)],
+    );
+    // Re-read winners: concurrent pulls must receive the same persisted secrets.
+    for (const k of await read())
+      result.set(
+        slotId({ userId: k.user_id, nodeId: k.node_id, deviceId: k.device_id, protocol: "vless" }),
+        k.secret,
+      );
+  }
+  return result;
 }
 
 async function planCap(planId: string): Promise<number> {
   const sql = await getSql();
-  const rows = await sql<{ device_cap: number }>`select device_cap from vpn_plans where id = ${planId} limit 1`;
+  const rows = await sql<{
+    device_cap: number;
+  }>`select device_cap from vpn_plans where id = ${planId} limit 1`;
   const cap = Number(rows[0]?.device_cap ?? 3);
   return Number.isFinite(cap) && cap > 0 ? cap : 3;
 }
 
 async function readShowcase(userId: string): Promise<VpnShowcase> {
   const sql = await getSql();
-  const nodes = await sql<{ name: string; country: string; city: string; reach: string; maintenance: boolean; agent_enrolled: boolean; shared_cut: boolean }>`
-    select name, country, city, reach, maintenance, agent_enrolled, shared_cut
+  const nodes = await sql<{
+    name: string;
+    country: string;
+    city: string;
+    reach: string;
+    maintenance: boolean;
+    agent_enrolled: boolean;
+    shared_cut: boolean;
+    ping_ms: number | null;
+    last_check_at: string | null;
+  }>`
+    select name, country, city, reach, maintenance, agent_enrolled, shared_cut, ping_ms, last_check_at::text as last_check_at
     from vpn_nodes
     where enabled = true
     order by created_at asc
   `;
-  const pass = await sql<{ token: string; until_at: string | null; blocked_at: string | null; auto_renew: boolean; until_ms: string | number; plan_id: string; quota_reset_at: string | null }>`
+  const pass = await sql<{
+    token: string;
+    until_at: string | null;
+    blocked_at: string | null;
+    auto_renew: boolean;
+    until_ms: string | number;
+    plan_id: string;
+    quota_reset_at: string | null;
+    last_pull_at: string | null;
+  }>`
     select token, until_at::text as until_at, blocked_at::text as blocked_at, auto_renew, plan_id,
-           quota_reset_at::text as quota_reset_at,
+           quota_reset_at::text as quota_reset_at, last_pull_at::text as last_pull_at,
            floor(extract(epoch from until_at) * 1000)::bigint as until_ms
     from vpn_passes
     where user_id = ${userId}
   `;
   const usage = await readUsage(userId);
-  const devices = await sql<{ id: string; name: string; token: string; revoked_at: string | null; created_at: string; last_pull_at: string | null }>`
+  const devices = await sql<{
+    id: string;
+    name: string;
+    token: string;
+    revoked_at: string | null;
+    created_at: string;
+    last_pull_at: string | null;
+  }>`
     select id, name, token, revoked_at::text as revoked_at, created_at::text as created_at, last_pull_at::text as last_pull_at
     from vpn_devices
     where user_id = ${userId}
@@ -379,7 +522,60 @@ async function readShowcase(userId: string): Promise<VpnShowcase> {
   const untilMs = Number(row?.until_ms ?? 0);
   const active = Boolean(row) && !row?.blocked_at && untilMs > Date.now();
   const plan = row?.plan_id || "base";
+  const allPlans = await availablePlans();
+  const purse = await sql<{
+    balance: number;
+  }>`select balance from wallets where user_id = ${userId}`;
+  const currentPlan = allPlans.find((p) => p.id === plan);
+  const trial = allPlans.find((p) => p.id === "trial");
+  const claims = await sql`select user_id from vpn_trials where user_id=${userId}`;
+  const isVerified = await verified(userId);
+  const trialReason = !isVerified
+    ? "email"
+    : row || claims.length
+      ? "used"
+      : !trial?.enabled
+        ? "disabled"
+        : "";
+  const outages = await sql<{ node_id: string; name: string; at: string; minutes: number }>`
+    with events as (
+      select e.node_id,e.reach,e.at,lead(e.at) over(partition by e.node_id order by e.at,e.id) as next_at
+      from vpn_node_events e where e.at>now()-interval '7 days'
+        or e.id in (select distinct on(node_id) id from vpn_node_events where at<=now()-interval '7 days' order by node_id,at desc,id desc)
+    ) select e.node_id,n.name,greatest(e.at,now()-interval '7 days')::text as at,
+      greatest(0,extract(epoch from(coalesce(e.next_at,now())-greatest(e.at,now()-interval '7 days')))/60)::float as minutes
+      from events e join vpn_nodes n on n.id=e.node_id where n.enabled and e.reach='down' and coalesce(e.next_at,now())>now()-interval '7 days' order by e.at desc limit 50`;
+  const high = await sql<{
+    high: boolean;
+  }>`select coalesce(sum(u.upload_bytes+u.download_bytes),0) > coalesce((select suspicious_gb from vpn_settings where id=1),30)::bigint*1073741824 as high from vpn_usage_days u where u.user_id=${userId} and day=current_date`;
   return {
+    balance: Number(purse[0]?.balance ?? 0),
+    plans: allPlans
+      .filter((p) => p.enabled || (Boolean(row) && p.id === plan))
+      .map((p) => ({
+        ...p,
+        current: Boolean(row) && p.id === plan,
+        canSwitch: p.enabled && p.id !== "trial" && canSwitchPlan(plan, p.id, untilMs),
+        reason: !p.enabled
+          ? "disabled"
+          : p.id === "trial"
+            ? "trial"
+            : canSwitchPlan(plan, p.id, untilMs)
+              ? ""
+              : "switch-window",
+      })),
+    trialAvailable: !trialReason,
+    trialDays: trial?.days ?? 3,
+    trialTraffic: trial?.trafficBytes ?? GIB,
+    trialReason,
+    highUsage: Boolean(high[0]?.high),
+    outages: outages.map((e) => ({
+      nodeId: e.node_id,
+      name: e.name,
+      at: e.at,
+      minutes: Number(e.minutes),
+    })),
+    lastPull: row?.last_pull_at ?? null,
     locations: nodes.map((item) => item.name),
     places: nodes.map((item) => ({
       name: item.name,
@@ -389,19 +585,21 @@ async function readShowcase(userId: string): Promise<VpnShowcase> {
       maintenance: Boolean(item.maintenance),
       personal: Boolean(item.agent_enrolled),
       cut: Boolean(item.shared_cut),
+      pingMs: item.ping_ms == null ? null : Number(item.ping_ms),
+      lastCheck: item.last_check_at,
     })),
     price: await priceOf("vpn", VPN_PRICE),
-    days: VPN_DAYS,
-    trafficBytes: await trafficBytes(),
+    days: currentPlan?.days ?? VPN_DAYS,
+    trafficBytes: await planQuota(plan),
     usedBytes: usedBytes(usage),
     uploadBytes: usage?.upload ?? null,
     downloadBytes: usage?.download ?? null,
-    verified: await verified(userId),
+    verified: isVerified,
     active,
     blocked: Boolean(row?.blocked_at),
     until: row?.until_at ?? null,
     daysLeft: active ? Math.max(0, Math.ceil((untilMs - Date.now()) / 86_400_000)) : 0,
-    token: active ? row?.token ?? null : null,
+    token: active ? (row?.token ?? null) : null,
     sharedNodes: nodes.filter((item) => !item.agent_enrolled).length,
     enrolledNodes: nodes.filter((item) => item.agent_enrolled).length,
     autoRenew: Boolean(row?.auto_renew),
@@ -416,7 +614,11 @@ async function readShowcase(userId: string): Promise<VpnShowcase> {
     deviceCap: await planCap(plan),
     plan,
     quotaReset: row?.quota_reset_at ?? null,
-    usageDays: days.map((item) => ({ day: item.day, upload: Number(item.upload), download: Number(item.download) })),
+    usageDays: days.map((item) => ({
+      day: item.day,
+      upload: Number(item.upload),
+      download: Number(item.download),
+    })),
     history: history.map((item) => ({ id: item.id, amount: Number(item.amount), at: item.at })),
   };
 }
@@ -447,16 +649,38 @@ async function readDesk(): Promise<VpnDesk> {
     from vpn_nodes
     order by created_at asc
   `;
-  const plans = await sql<{ id: string; title: string; days: number; price: number; traffic_bytes: string | number; device_cap: number; enabled: boolean }>`
-    select id, title, days, price, traffic_bytes, device_cap, enabled from vpn_plans order by price asc
-  `;
+  const plans = await availablePlans();
   const stats = await sql<{ active: number; total: number; pulls: number }>`
     select
       (select count(*) from vpn_passes where until_at > now())::int as active,
       (select count(*) from vpn_passes)::int as total,
       (select count(*) from vpn_pulls where at > now() - interval '24 hours')::int as pulls
   `;
+  const top = await sql<{ email: string; bytes: string; devices: number; pulls: number }>`
+    select u.email,coalesce(sum(d.upload_bytes+d.download_bytes),0)::text bytes,
+      (select count(*)::int from vpn_devices v where v.user_id=u.id and revoked_at is null) devices,
+      (select count(*)::int from vpn_pulls p where p.user_id=u.id and at>now()-interval '3 days') pulls
+    from "user" u join vpn_usage_days d on d.user_id=u.id and day>=current_date-2
+    group by u.id,u.email order by sum(d.upload_bytes+d.download_bytes) desc limit 20`;
+  const logs = await sql<{
+    email: string;
+    kind: string;
+    note: string;
+    at: string;
+  }>`select coalesce(u.email,'') email,a.kind,a.note,a.created_at::text at from vpn_audit a left join "user" u on u.id=a.user_id order by a.created_at desc limit 50`;
+  const events = await sql<{
+    name: string;
+    reach: string;
+    at: string;
+  }>`select n.name,e.reach,e.at::text at from vpn_node_events e join vpn_nodes n on n.id=e.node_id order by e.at desc limit 50`;
+  const settings = await sql<{
+    suspicious_gb: number;
+  }>`select suspicious_gb from vpn_settings where id=1`;
   return {
+    suspiciousGb: Number(settings[0]?.suspicious_gb || 30),
+    topUsage: top.map((r) => ({ ...r, bytes: Number(r.bytes) })),
+    audit: logs,
+    events,
     nodes: nodes.map((row) => ({
       id: row.id,
       name: row.name,
@@ -482,15 +706,7 @@ async function readDesk(): Promise<VpnDesk> {
     activeLinks: Number(stats[0]?.active ?? 0),
     totalLinks: Number(stats[0]?.total ?? 0),
     pullsDay: Number(stats[0]?.pulls ?? 0),
-    plans: plans.map((item) => ({
-      id: item.id,
-      title: item.title,
-      days: Number(item.days),
-      price: Number(item.price),
-      trafficBytes: Number(item.traffic_bytes),
-      deviceCap: Number(item.device_cap),
-      enabled: Boolean(item.enabled),
-    })),
+    plans,
   };
 }
 
@@ -501,88 +717,91 @@ export const getVpnShowcase = createServerFn({ method: "GET" })
     return readShowcase(context.userId);
   });
 
-export async function purchaseVpn(userId: string, idem?: string): Promise<VpnShowcase> {
-  if (!(await verified(userId))) {
+export async function purchaseVpn(
+  userId: string,
+  idem?: string,
+  planId = "base",
+): Promise<VpnShowcase> {
+  if (!(await verified(userId)))
     throw new Error("Сначала подтвердите почту в профиле. Без этого подписку не купить.");
-  }
-  const price = await priceOf("vpn", VPN_PRICE);
-  const sql = await getSql();
-  await sql`
-    insert into wallets (user_id, balance, last_grant_at)
-    values (${userId}, 1000, now())
-    on conflict (user_id) do nothing
-  `;
   const id = idem ? `vpn-${idem}` : `vpn-${crypto.randomUUID()}`;
-  if (idem) {
-    const prev = await sql<{ id: string }>`select id from wallet_transfers where id = ${id}`;
+  const plans = await availablePlans();
+  const chosen = plans.find((p) => p.id === planId);
+  let charged = false;
+  await withTransaction(async (sql) => {
+    await sql`insert into wallets(user_id,balance,last_grant_at) values(${userId},1000,now()) on conflict(user_id) do nothing`;
+    // Serializes purchases and plan changes for this wallet. All money/pass changes remain one statement.
+    await sql`select user_id from wallets where user_id=${userId} for update`;
+    const prev = await sql<{
+      from_id: string;
+    }>`select from_id from wallet_transfers where id=${id}`;
     if (prev.length) {
-      const pass = await sql<{ user_id: string }>`select user_id from vpn_passes where user_id = ${userId}`;
-      const step = purchaseOutcome({ balance: 0, price, transferExists: true, passExists: pass.length > 0 });
-      if (step === "repair") {
-        await sql`
-          insert into vpn_passes (user_id, token, until_at, quota_reset_at)
-          values (${userId}, ${newToken()}, now() + interval '30 days', now())
-          on conflict (user_id) do nothing
-        `;
-      }
-      return readShowcase(userId);
+      if (prev[0].from_id !== userId) throw new Error("Некорректный ключ покупки");
+      const repair = chosen && chosen.id !== "trial" ? chosen : plans.find((p) => p.id === "base");
+      if (repair)
+        await sql`insert into vpn_passes(user_id,token,until_at,quota_reset_at,plan_id) values(${userId},${newToken()},now()+${repair.days}*interval '1 day',now(),${repair.id}) on conflict(user_id) do nothing`;
+      return;
     }
-  }
-  let done: { id: string }[];
-  try {
-    done = await sql<{ id: string }>`
+    if (!chosen?.enabled || planId === "trial") throw new Error("Тариф недоступен для покупки");
+    const current = await sql<{
+      plan_id: string;
+      until_at: string;
+    }>`select plan_id,until_at::text from vpn_passes where user_id=${userId} for update`;
+    if (current[0] && !canSwitchPlan(current[0].plan_id, planId, Date.parse(current[0].until_at)))
+      throw new Error("Сменить тариф можно в последние 3 дня подписки или после её окончания");
+    const done = await sql`
       with debit as (
-        update wallets
-        set balance = balance - ${price}
-        where user_id = ${userId} and balance >= ${price}
+        update wallets set balance=balance-${chosen.price}
+        where user_id=${userId} and balance>=${chosen.price}
+          and exists(select 1 from vpn_plans where id=${planId} and enabled=true and id<>'trial')
         returning user_id
-      ),
-      pass as (
-        insert into vpn_passes (user_id, token, until_at, quota_reset_at)
-        select user_id, ${newToken()}, now() + interval '30 days', now()
-        from debit
-        on conflict (user_id) do update
-          set until_at = greatest(vpn_passes.until_at, now()) + interval '30 days',
-              updated_at = now(),
-              blocked_at = null,
-              quota_reset_at = now()
+      ), pass as (
+        insert into vpn_passes(user_id,token,until_at,quota_reset_at,plan_id)
+        select user_id,${newToken()},now()+${chosen.days}*interval '1 day',now(),${planId} from debit
+        on conflict(user_id) do update set until_at=greatest(vpn_passes.until_at,now())+${chosen.days}*interval '1 day', updated_at=now(), blocked_at=null,quota_reset_at=now(),plan_id=excluded.plan_id
         returning user_id
-      ),
-      baseline as (
-        update vpn_counters
-        set baseline_upload = upload_bytes, baseline_download = download_bytes
-        where user_id = ${userId} and exists (select 1 from pass)
-        returning user_id
+      ), baseline as (
+        update vpn_counters set baseline_upload=upload_bytes,baseline_download=download_bytes
+        where user_id=${userId} and exists(select 1 from pass) returning user_id
       )
-      insert into wallet_transfers (id, from_id, to_id, amount, note)
-      select ${id}, ${userId}, null, ${price}, 'VPN'
-      where exists (select 1 from pass)
-      returning id
-    `;
-  } catch (err) {
-    if (idem && isUniqueViolation(err)) return readShowcase(userId);
-    throw err;
-  }
-  if (!done.length) throw new Error(`Нужно ${price} вублей`);
-  void import("@/lib/social/push.server")
-    .then((mod) =>
-      mod.pushNotice(userId, "subs", {
-        id: `shop:${id}`,
-        title: "VPN",
-        body: "Подписка VPN на 30 дней",
-        url: "/c/services",
-      }),
-    )
-    .catch(() => undefined);
+      insert into wallet_transfers(id,from_id,to_id,amount,note)
+      select ${id},${userId},null,${chosen.price},'VPN' where exists(select 1 from pass) returning id`;
+    if (!done.length) throw new Error(`Нужно ${chosen.price} вублей`);
+    charged = true;
+  });
+  if (charged && !idem?.startsWith("auto-"))
+    void import("@/lib/social/push.server")
+      .then((mod) =>
+        mod.pushNotice(userId, "subs", {
+          id: `shop:${id}`,
+          title: "VPN",
+          body: `Подписка VPN на ${chosen!.days} дней · ${chosen!.price} вублей`,
+          url: "/c/services",
+        }),
+      )
+      .catch(() => undefined);
   return readShowcase(userId);
 }
 
 export const buyVpn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<VpnShowcase> => {
+  .validator((input: unknown) => {
+    const row =
+      input && typeof input === "object" ? (input as { planId?: unknown; idem?: unknown }) : {};
+    const planId = typeof row.planId === "string" ? row.planId : "base";
+    if (!/^[a-z0-9_-]{1,32}$/.test(planId)) throw new Error("Тариф не найден");
+    return {
+      planId,
+      idem: typeof row.idem === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(row.idem) ? row.idem : "",
+    };
+  })
+  .handler(async ({ context, data }): Promise<VpnShowcase> => {
     await assertActive(context.userId);
-    const bucket = Math.floor(Date.now() / 15000);
-    return purchaseVpn(context.userId, `${context.userId}-tap-${bucket}`);
+    return purchaseVpn(
+      context.userId,
+      `${context.userId}-${data.idem || `tap-${Math.floor(Date.now() / 15000)}`}`,
+      data.planId,
+    );
   });
 
 export const getVpnDesk = createServerFn({ method: "GET" })
@@ -595,19 +814,43 @@ export const getVpnDesk = createServerFn({ method: "GET" })
 export const saveVpnNode = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { id?: unknown; name?: unknown; uri?: unknown; country?: unknown; city?: unknown; host?: unknown; protocol?: unknown }) : {};
+    const raw =
+      input && typeof input === "object"
+        ? (input as {
+            id?: unknown;
+            name?: unknown;
+            uri?: unknown;
+            country?: unknown;
+            city?: unknown;
+            host?: unknown;
+            protocol?: unknown;
+          })
+        : {};
     const id = typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : "";
     if (id && !/^[A-Za-z0-9_-]{8,80}$/.test(id)) throw new Error("Сервер не найден");
-    const clip = (value: unknown, max: number) => (typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "");
+    const clip = (value: unknown, max: number) =>
+      typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : "";
     const protocol = clip(raw.protocol, 16);
-    if (protocol && protocol !== "vless" && protocol !== "hy2") throw new Error("Протокол: vless или hy2");
-    return { id, name: nodeName(raw.name), uri: nodeUri(raw.uri), country: clip(raw.country, 40), city: clip(raw.city, 40), host: clip(raw.host, 120), protocol };
+    if (protocol && protocol !== "vless" && protocol !== "hy2")
+      throw new Error("Протокол: vless или hy2");
+    return {
+      id,
+      name: nodeName(raw.name),
+      uri: nodeUri(raw.uri),
+      country: clip(raw.country, 40),
+      city: clip(raw.city, 40),
+      host: clip(raw.host, 120),
+      protocol,
+    };
   })
   .handler(async ({ context, data }): Promise<VpnDesk> => {
     await assertAdmin(context.userId);
     const sql = await getSql();
     if (data.id) {
-      const prev = await sql<{ protocol: string; uri: string }>`select protocol, uri from vpn_nodes where id = ${data.id}`;
+      const prev = await sql<{
+        protocol: string;
+        uri: string;
+      }>`select protocol, uri from vpn_nodes where id = ${data.id}`;
       const rows = await sql<{ id: string }>`
         update vpn_nodes
         set name = ${data.name}, uri = ${data.uri}, country = ${data.country}, city = ${data.city}, host = ${data.host}, protocol = ${data.protocol}
@@ -632,8 +875,10 @@ export const saveVpnNode = createServerFn({ method: "POST" })
 export const setVpnNodeEnabled = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { id?: unknown; enabled?: unknown }) : {};
-    if (typeof raw.id !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(raw.id)) throw new Error("Сервер не найден");
+    const raw =
+      input && typeof input === "object" ? (input as { id?: unknown; enabled?: unknown }) : {};
+    if (typeof raw.id !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(raw.id))
+      throw new Error("Сервер не найден");
     if (typeof raw.enabled !== "boolean") throw new Error("Некорректное действие");
     return { id: raw.id, enabled: raw.enabled };
   })
@@ -647,7 +892,8 @@ export const setVpnNodeEnabled = createServerFn({ method: "POST" })
 export const removeVpnNode = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    if (typeof input !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(input)) throw new Error("Сервер не найден");
+    if (typeof input !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(input))
+      throw new Error("Сервер не найден");
     return input;
   })
   .handler(async ({ context, data }): Promise<VpnDesk> => {
@@ -659,7 +905,9 @@ export const removeVpnNode = createServerFn({ method: "POST" })
 
 export const saveVpnTraffic = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => gbOf(input && typeof input === "object" ? (input as { gb?: unknown }).gb : input))
+  .validator((input: unknown) =>
+    gbOf(input && typeof input === "object" ? (input as { gb?: unknown }).gb : input),
+  )
   .handler(async ({ context, data }): Promise<VpnDesk> => {
     await assertAdmin(context.userId);
     const sql = await getSql();
@@ -681,7 +929,9 @@ function daysOf(value: unknown): number {
 
 async function userByEmail(email: string): Promise<string> {
   const sql = await getSql();
-  const users = await sql<{ id: string }>`select id from "user" where lower(email) = ${email} limit 1`;
+  const users = await sql<{
+    id: string;
+  }>`select id from "user" where lower(email) = ${email} limit 1`;
   const id = users[0]?.id;
   if (!id) throw new Error("Такой почты нет");
   return id;
@@ -702,7 +952,9 @@ async function extendPass(userId: string, days: number, plan: string) {
 
 export const grantVpn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input))
+  .validator((input: unknown) =>
+    emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input),
+  )
   .handler(async ({ context, data }): Promise<VpnDesk> => {
     await assertAdmin(context.userId);
     const userId = await userByEmail(data);
@@ -714,8 +966,10 @@ export const grantVpn = createServerFn({ method: "POST" })
 export const setVpnMaintenance = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { id?: unknown; maintenance?: unknown }) : {};
-    if (typeof raw.id !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(raw.id)) throw new Error("Сервер не найден");
+    const raw =
+      input && typeof input === "object" ? (input as { id?: unknown; maintenance?: unknown }) : {};
+    if (typeof raw.id !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(raw.id))
+      throw new Error("Сервер не найден");
     if (typeof raw.maintenance !== "boolean") throw new Error("Некорректное действие");
     return { id: raw.id, maintenance: raw.maintenance };
   })
@@ -743,12 +997,20 @@ async function personOf(email: string): Promise<VpnPerson> {
   const userId = await userByEmail(email);
   const sql = await getSql();
   const users = await sql<{ email: string }>`select email from "user" where id = ${userId}`;
-  const pass = await sql<{ until_at: string | null; blocked_at: string | null; plan_id: string; auto_renew: boolean; until_ms: string | number }>`
+  const pass = await sql<{
+    until_at: string | null;
+    blocked_at: string | null;
+    plan_id: string;
+    auto_renew: boolean;
+    until_ms: string | number;
+  }>`
     select until_at::text as until_at, blocked_at::text as blocked_at, plan_id, auto_renew,
            floor(extract(epoch from until_at) * 1000)::bigint as until_ms
     from vpn_passes where user_id = ${userId}
   `;
-  const devices = await sql<{ n: number }>`select count(*)::int as n from vpn_devices where user_id = ${userId} and revoked_at is null`;
+  const devices = await sql<{
+    n: number;
+  }>`select count(*)::int as n from vpn_devices where user_id = ${userId} and revoked_at is null`;
   const auditRows = await sql<{ kind: string; note: string; at: string }>`
     select kind, note, created_at::text as at from vpn_audit where user_id = ${userId} order by created_at desc limit 8
   `;
@@ -768,7 +1030,9 @@ async function personOf(email: string): Promise<VpnPerson> {
 
 export const findVpnUser = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input))
+  .validator((input: unknown) =>
+    emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input),
+  )
   .handler(async ({ context, data }): Promise<VpnPerson> => {
     await assertAdmin(context.userId);
     return personOf(data);
@@ -777,7 +1041,8 @@ export const findVpnUser = createServerFn({ method: "POST" })
 export const grantVpnDays = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { email?: unknown; days?: unknown }) : {};
+    const raw =
+      input && typeof input === "object" ? (input as { email?: unknown; days?: unknown }) : {};
     return { email: emailOf(raw.email), days: daysOf(raw.days) };
   })
   .handler(async ({ context, data }): Promise<VpnDesk> => {
@@ -790,7 +1055,9 @@ export const grantVpnDays = createServerFn({ method: "POST" })
 
 export const grantVpnTrial = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input))
+  .validator((input: unknown) =>
+    emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input),
+  )
   .handler(async ({ context, data }): Promise<VpnDesk> => {
     await assertAdmin(context.userId);
     const userId = await userByEmail(data);
@@ -802,7 +1069,8 @@ export const grantVpnTrial = createServerFn({ method: "POST" })
 export const setVpnBlocked = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { email?: unknown; blocked?: unknown }) : {};
+    const raw =
+      input && typeof input === "object" ? (input as { email?: unknown; blocked?: unknown }) : {};
     if (typeof raw.blocked !== "boolean") throw new Error("Некорректное действие");
     return { email: emailOf(raw.email), blocked: raw.blocked };
   })
@@ -817,7 +1085,9 @@ export const setVpnBlocked = createServerFn({ method: "POST" })
 
 export const revokeVpnKeys = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input))
+  .validator((input: unknown) =>
+    emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input),
+  )
   .handler(async ({ context, data }) => {
     await assertAdmin(context.userId);
     const userId = await userByEmail(data);
@@ -830,7 +1100,9 @@ export const revokeVpnKeys = createServerFn({ method: "POST" })
 
 export const resetVpnQuota = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input))
+  .validator((input: unknown) =>
+    emailOf(input && typeof input === "object" ? (input as { email?: unknown }).email : input),
+  )
   .handler(async ({ context, data }) => {
     await assertAdmin(context.userId);
     const userId = await userByEmail(data);
@@ -868,37 +1140,43 @@ export const setVpnAutoRenew = createServerFn({ method: "POST" })
     await assertActive(context.userId);
     const sql = await getSql();
     const rows = await sql<{ user_id: string }>`
-      update vpn_passes set auto_renew = ${data}, updated_at = now() where user_id = ${context.userId} returning user_id
+      update vpn_passes set auto_renew = ${data}, updated_at = now() where user_id = ${context.userId} and (plan_id <> 'trial' or ${data} = false) returning user_id
     `;
-    if (!rows.length) throw new Error("Сначала оформите подписку");
+    if (!rows.length) throw new Error("Пробный тариф нельзя продлевать автоматически");
     return readShowcase(context.userId);
   });
 
 export const addVpnDevice = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown) => nodeName(input && typeof input === "object" ? (input as { name?: unknown }).name : input))
+  .validator((input: unknown) =>
+    nodeName(input && typeof input === "object" ? (input as { name?: unknown }).name : input),
+  )
   .handler(async ({ context, data }): Promise<VpnShowcase> => {
     await assertActive(context.userId);
-    const sql = await getSql();
-    const pass = await sql<{ ok: number }>`
-      select 1 as ok from vpn_passes where user_id = ${context.userId} and blocked_at is null and until_at > now()
-    `;
-    if (!pass.length) throw new Error("Нужна действующая подписка");
-    const count = await sql<{ n: number }>`select count(*)::int as n from vpn_devices where user_id = ${context.userId} and revoked_at is null`;
-    const passPlan = await sql<{ plan_id: string }>`select plan_id from vpn_passes where user_id = ${context.userId}`;
-    const cap = await planCap(passPlan[0]?.plan_id || "base");
-    if (Number(count[0]?.n ?? 0) >= cap) throw new Error(`Уже ${cap} устройств. Отзовите одно, чтобы добавить новое.`);
-    await sql`
-      insert into vpn_devices (id, user_id, name, token)
-      values (${crypto.randomUUID()}, ${context.userId}, ${data}, ${newToken()})
-    `;
+    await withTransaction(async (sql) => {
+      const pass = await sql<{
+        plan_id: string;
+      }>`select plan_id from vpn_passes where user_id=${context.userId} and blocked_at is null and until_at>now() for update`;
+      if (!pass.length) throw new Error("Нужна действующая подписка");
+      const plans = await sql<{
+        device_cap: number;
+      }>`select device_cap from vpn_plans where id=${pass[0].plan_id}`;
+      const cap = Number(plans[0]?.device_cap || 3);
+      const count = await sql<{
+        n: number;
+      }>`select count(*)::int n from vpn_devices where user_id=${context.userId} and revoked_at is null`;
+      if (Number(count[0]?.n || 0) >= cap)
+        throw new Error(`Уже ${cap} устройств. Отзовите одно, чтобы добавить новое.`);
+      await sql`insert into vpn_devices(id,user_id,name,token) values(${crypto.randomUUID()},${context.userId},${data},${newToken()})`;
+    });
     return readShowcase(context.userId);
   });
 
 export const revokeVpnDevice = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    if (typeof input !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(input)) throw new Error("Устройство не найдено");
+    if (typeof input !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(input))
+      throw new Error("Устройство не найдено");
     return input;
   })
   .handler(async ({ context, data }): Promise<VpnShowcase> => {
@@ -912,7 +1190,8 @@ export const revokeVpnDevice = createServerFn({ method: "POST" })
 export const reissueVpnDevice = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    if (typeof input !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(input)) throw new Error("Устройство не найдено");
+    if (typeof input !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(input))
+      throw new Error("Устройство не найдено");
     return input;
   })
   .handler(async ({ context, data }): Promise<VpnShowcase> => {
@@ -931,8 +1210,8 @@ export const reissueVpnDevice = createServerFn({ method: "POST" })
 
 export async function renewDueVpn(): Promise<number> {
   const sql = await getSql();
-  const rows = await sql<{ user_id: string }>`
-    select user_id from vpn_passes
+  const rows = await sql<{ user_id: string; plan_id: string }>`
+    select user_id,plan_id from vpn_passes
     where auto_renew = true and blocked_at is null
       and until_at <= now() + interval '1 day' and until_at > now() - interval '1 day'
   `;
@@ -940,17 +1219,31 @@ export async function renewDueVpn(): Promise<number> {
   let done = 0;
   for (const row of rows) {
     try {
-      await purchaseVpn(row.user_id, `auto-${row.user_id.slice(0, 20)}-${day}`);
+      const plans = await availablePlans();
+      const current = plans.find((p) => p.id === row.plan_id && p.enabled && p.id !== "trial");
+      if (row.plan_id === "trial") continue;
+      const chosen = current?.id || "base";
+      await purchaseVpn(row.user_id, `auto-${row.user_id}-${day}`, chosen);
+      if (!current) await audit(null, row.user_id, "renew-base-fallback", row.plan_id);
+      const plan = plans.find((p) => p.id === chosen)!;
+      const { pushVpnRenewal } = await import("@/lib/social/push.server");
+      await pushVpnRenewal(row.user_id, day, true, plan.days, plan.price);
       done += 1;
-    } catch {
-      /* a short balance is not charged */
+    } catch (error) {
+      if (error instanceof Error && /^Нужно /.test(error.message)) {
+        const { pushVpnRenewal } = await import("@/lib/social/push.server");
+        await pushVpnRenewal(row.user_id, day, false, 0, 0);
+      } else {
+        await audit(null, row.user_id, "renew-error", "purchase_failed");
+      }
     }
   }
   return done;
 }
 
 export async function handleVpnAgent(request: Request): Promise<Response> {
-  const deny = (status: number, message: string) => Response.json({ message }, { status, headers: { "cache-control": "no-store" } });
+  const deny = (status: number, message: string) =>
+    Response.json({ message }, { status, headers: { "cache-control": "no-store" } });
   if (!process.env.VPN_AGENT_TOKEN?.trim()) return deny(503, "Агент не настроен");
   if (!(await agentTokenOk(request.headers.get("authorization")))) return deny(401, "Нет доступа");
   let body: Record<string, unknown> = {};
@@ -962,7 +1255,15 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
   const nodeId = typeof body.nodeId === "string" ? body.nodeId.trim() : "";
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(nodeId)) return deny(404, "Сервер не найден");
   const sql = await getSql();
-  const nodes = await sql<{ id: string; name: string; protocol: string; uri: string; agent_enrolled: boolean; shared_cut: boolean; reach: string }>`
+  const nodes = await sql<{
+    id: string;
+    name: string;
+    protocol: string;
+    uri: string;
+    agent_enrolled: boolean;
+    shared_cut: boolean;
+    reach: string;
+  }>`
     select id, name, protocol, uri, agent_enrolled, shared_cut, reach from vpn_nodes where id = ${nodeId} limit 1
   `;
   const node = nodes[0];
@@ -976,39 +1277,59 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
   }
   if (body.op === "pull") {
     const protocol = protocolOf(node.uri, node.protocol);
-    const quota = await trafficBytes();
-    const people = await sql<{ user_id: string; plan_id: string }>`
-      select user_id, plan_id from vpn_passes where blocked_at is null and until_at > now()
-    `;
-    const users: { userId: string; deviceId: string; protocol: string; secret: string; email: string }[] = [];
+    const people = await sql<{ user_id: string; plan_id: string; used: string | null }>`
+      select p.user_id,p.plan_id,u.used from vpn_passes p left join (
+        select user_id,sum(greatest(upload_bytes-baseline_upload,0)+greatest(download_bytes-baseline_download,0))::text used
+        from vpn_counters group by user_id
+      ) u on u.user_id=p.user_id where p.blocked_at is null and p.until_at>now() order by p.user_id`;
+    const devices = await sql<{
+      id: string;
+      user_id: string;
+    }>`select d.id,d.user_id from vpn_devices d join vpn_passes p on p.user_id=d.user_id where d.revoked_at is null and p.blocked_at is null and p.until_at>now() order by d.created_at,d.id`;
+    const plans = await sql<{
+      id: string;
+      traffic_bytes: string;
+      device_cap: number;
+    }>`select id,traffic_bytes,device_cap from vpn_plans`;
+    const legacy = await trafficBytes();
+    const slots: KeySlot[] = [],
+      over: string[] = [];
+    const devicesByUser = new Map<string, string[]>();
+    for (const device of devices) {
+      const list = devicesByUser.get(device.user_id) || [];
+      list.push(device.id);
+      devicesByUser.set(device.user_id, list);
+    }
     for (const person of people) {
-      const state = accessOf({
-        found: true,
-        untilMs: Date.now() + 60_000,
-        now: Date.now(),
-        blocked: false,
-        used: usedBytes(await readUsage(person.user_id)),
-        quota,
-      });
-      if (state !== "ok") {
-        await sql`
-          insert into vpn_sync (id, node_id, user_id, action, status, detail)
-          select ${crypto.randomUUID()}, ${nodeId}, ${person.user_id}, 'revoke', 'pending', ${state}
-          where not exists (
-            select 1 from vpn_sync
-            where node_id = ${nodeId} and user_id = ${person.user_id} and created_at > now() - interval '6 hours'
-          )
-        `;
+      const plan = plans.find((p) => p.id === person.plan_id);
+      if (
+        person.used !== null &&
+        Number(person.used) >= quotaForPlan(person.plan_id, plan?.traffic_bytes, legacy)
+      ) {
+        over.push(person.user_id);
         continue;
       }
-      const devices = await sql<{ id: string }>`
-        select id from vpn_devices where user_id = ${person.user_id} and revoked_at is null order by created_at asc
-      `;
-      for (const slot of openSlots(devices.map((item) => item.id), await planCap(person.plan_id || "base"))) {
-        const secret = await ensureKey(person.user_id, nodeId, slot, protocol);
-        users.push({ userId: person.user_id, deviceId: slot, protocol, secret, email: keyEmail(person.user_id, slot) });
-      }
+      for (const deviceId of openSlots(
+        devicesByUser.get(person.user_id) || [],
+        Number(plan?.device_cap || 3),
+      ))
+        slots.push({ userId: person.user_id, nodeId, deviceId, protocol });
     }
+    if (over.length)
+      await sql.query(
+        `insert into vpn_sync(id,node_id,user_id,action,status,detail)
+      select md5(random()::text||u),$1,u,'revoke','pending','quota' from unnest($2::text[]) u
+      where not exists(select 1 from vpn_sync s where s.node_id=$1 and s.user_id=u and s.created_at>now()-interval '6 hours')`,
+        [nodeId, over],
+      );
+    const secrets = await ensureKeys(slots);
+    const users = slots.map((slot) => ({
+      userId: slot.userId,
+      deviceId: slot.deviceId,
+      protocol,
+      secret: secrets.get(slotId(slot))!,
+      email: keyEmail(slot.userId, slot.deviceId),
+    }));
     const shared = sharedCredential(node.uri);
     const install = clientsToInstall({
       secrets: users.map((item) => item.secret),
@@ -1016,16 +1337,22 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
       shared: shared && shared.protocol === protocol ? shared.secret : null,
     });
     await sql`update vpn_nodes set last_check_at = now(), client_count = ${users.length} where id = ${nodeId}`;
-    return Response.json({
-      enforced: Boolean(node.agent_enrolled) && Boolean(node.shared_cut),
-      replaceManaged: true,
-      dropShared: !install.sharedKept,
-      shared: install.sharedKept ? shared?.secret ?? null : null,
-      users,
-    }, quiet);
+    return Response.json(
+      {
+        enforced: Boolean(node.agent_enrolled) && Boolean(node.shared_cut),
+        replaceManaged: true,
+        dropShared: !install.sharedKept,
+        shared: install.sharedKept ? (shared?.secret ?? null) : null,
+        users,
+      },
+      quiet,
+    );
   }
   if (body.op === "applied") {
-    const mark = afterAgent({ wasEnrolled: Boolean(node.agent_enrolled), event: body.ok === true ? "applied" : "apply-failed" });
+    const mark = afterAgent({
+      wasEnrolled: Boolean(node.agent_enrolled),
+      event: body.ok === true ? "applied" : "apply-failed",
+    });
     const error = typeof body.error === "string" ? body.error.trim().slice(0, 160) : "";
     const count = Number(body.clients);
     const status = syncState({ applyError: error, retryApplied: body.ok === true });
@@ -1047,65 +1374,95 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
   }
   if (body.op === "report") {
     const reported = body.reach === "up" || body.reach === "down" ? body.reach : "unknown";
-    const mark = afterAgent({ wasEnrolled: Boolean(node.agent_enrolled), event: reported === "down" ? "down" : reported === "up" ? "up" : "seen" });
+    const mark = afterAgent({
+      wasEnrolled: Boolean(node.agent_enrolled),
+      event: reported === "down" ? "down" : reported === "up" ? "up" : "seen",
+    });
     const note = typeof body.load === "string" ? body.load.trim().slice(0, 80) : "";
     const error = typeof body.error === "string" ? body.error.trim().slice(0, 160) : "";
     const ping = Number(body.pingMs);
     const pingMs = Number.isFinite(ping) && ping >= 0 && ping <= 60000 ? Math.floor(ping) : null;
-    await sql`
-      update vpn_nodes
-      set reach = ${mark.reach},
-          load_note = ${note},
-          last_error = ${error},
-          last_check_at = now(),
-          ping_ms = ${pingMs}
-      where id = ${nodeId}
-    `;
+    await withTransaction(async (tx) => {
+      const previous = await tx<{
+        reach: string;
+      }>`select reach from vpn_nodes where id=${nodeId} for update`;
+      await tx`update vpn_nodes set reach=${mark.reach},load_note=${note},last_error=${error},last_check_at=now(),ping_ms=${pingMs} where id=${nodeId}`;
+      if (previous[0]?.reach !== mark.reach)
+        await tx`insert into vpn_node_events(id,node_id,reach) values(${crypto.randomUUID()},${nodeId},${mark.reach})`;
+    });
     if (reported === "down" && node.reach !== "down") {
       void import("@/lib/social/push.server")
         .then((mod) => mod.pushVpnNodeDown(nodeId, node.name))
         .catch(() => undefined);
     }
-    let saved = false;
-    if (Array.isArray(body.users)) {
-      saved = true;
-      for (const item of body.users) {
-        if (!item || typeof item !== "object") continue;
-        const row = item as { userId?: unknown; upload?: unknown; download?: unknown };
-        if (typeof row.userId !== "string" || row.userId.length > 80) continue;
-        const upload = Number(row.upload);
-        const download = Number(row.download);
-        if (!Number.isFinite(upload) || !Number.isFinite(download) || upload < 0 || download < 0) continue;
-        const prev = await sql<{ upload_bytes: string | number; download_bytes: string | number; baseline_upload: string | number; baseline_download: string | number }>`
-          select upload_bytes, download_bytes, baseline_upload, baseline_download
-          from vpn_counters where user_id = ${row.userId} and node_id = ${nodeId}
-        `;
-        const known = Boolean(prev[0]);
-        const baseUp = nextBaseline(known ? Number(prev[0]?.upload_bytes) : null, known ? Number(prev[0]?.baseline_upload) : null, upload);
-        const baseDown = nextBaseline(known ? Number(prev[0]?.download_bytes) : null, known ? Number(prev[0]?.baseline_download) : null, download);
-        const deltaUp = counterDelta(known ? Number(prev[0]?.upload_bytes) : null, upload);
-        const deltaDown = counterDelta(known ? Number(prev[0]?.download_bytes) : null, download);
-        await sql`
-          insert into vpn_counters (user_id, node_id, upload_bytes, download_bytes, baseline_upload, baseline_download, reported_at)
-          values (${row.userId}, ${nodeId}, ${Math.floor(upload)}, ${Math.floor(download)}, ${baseUp}, ${baseDown}, now())
-          on conflict (user_id, node_id) do update
-            set upload_bytes = excluded.upload_bytes,
-                download_bytes = excluded.download_bytes,
-                baseline_upload = excluded.baseline_upload,
-                baseline_download = excluded.baseline_download,
-                reported_at = now()
-        `;
-        if (known && (deltaUp > 0 || deltaDown > 0)) {
-          await sql`
-            insert into vpn_usage_days (user_id, node_id, day, upload_bytes, download_bytes)
-            values (${row.userId}, ${nodeId}, current_date, ${deltaUp}, ${deltaDown})
-            on conflict (user_id, node_id, day) do update
-              set upload_bytes = vpn_usage_days.upload_bytes + excluded.upload_bytes,
-                  download_bytes = vpn_usage_days.download_bytes + excluded.download_bytes
-          `;
+    const saved = Array.isArray(body.users);
+    if (saved)
+      await withTransaction(async (tx) => {
+        // Serialise reports for one node so repeated/concurrent snapshots do not double count.
+        await tx`select id from vpn_nodes where id=${nodeId} for update`;
+        const clean = new Map<string, { userId: string; upload: number; download: number }>();
+        for (const item of body.users as unknown[]) {
+          if (!item || typeof item !== "object") continue;
+          const r = item as { userId?: unknown; upload?: unknown; download?: unknown };
+          const up = Number(r.upload),
+            down = Number(r.download);
+          if (
+            typeof r.userId !== "string" ||
+            !r.userId ||
+            r.userId.length > 80 ||
+            !Number.isSafeInteger(up) ||
+            !Number.isSafeInteger(down) ||
+            up < 0 ||
+            down < 0
+          )
+            continue;
+          clean.set(r.userId, { userId: r.userId, upload: up, download: down });
         }
-      }
-    }
+        if (!clean.size) return;
+        const previous = await tx.query<{
+          user_id: string;
+          upload_bytes: string;
+          download_bytes: string;
+          baseline_upload: string;
+          baseline_download: string;
+        }>(`select * from vpn_counters where node_id=$1 and user_id=any($2::text[])`, [
+          nodeId,
+          [...clean.keys()],
+        ]);
+        const byUser = new Map(previous.map((v) => [v.user_id, v]));
+        const rows = [...clean.values()].map((r) => {
+          const p = byUser.get(r.userId);
+          return {
+            ...r,
+            baseUp: nextBaseline(
+              p ? Number(p.upload_bytes) : null,
+              p ? Number(p.baseline_upload) : null,
+              r.upload,
+            ),
+            baseDown: nextBaseline(
+              p ? Number(p.download_bytes) : null,
+              p ? Number(p.baseline_download) : null,
+              r.download,
+            ),
+            deltaUp: p ? counterDelta(Number(p.upload_bytes), r.upload) : 0,
+            deltaDown: p ? counterDelta(Number(p.download_bytes), r.download) : 0,
+          };
+        });
+        await tx.query(
+          `insert into vpn_counters(user_id,node_id,upload_bytes,download_bytes,baseline_upload,baseline_download,reported_at)
+        select "userId",$2,upload,download,"baseUp","baseDown",now() from jsonb_to_recordset($1::jsonb)
+        as r("userId" text,upload bigint,download bigint,"baseUp" bigint,"baseDown" bigint)
+        on conflict(user_id,node_id) do update set upload_bytes=excluded.upload_bytes,download_bytes=excluded.download_bytes,baseline_upload=excluded.baseline_upload,baseline_download=excluded.baseline_download,reported_at=now()`,
+          [JSON.stringify(rows), nodeId],
+        );
+        await tx.query(
+          `insert into vpn_usage_days(user_id,node_id,day,upload_bytes,download_bytes)
+        select "userId",$2,current_date,"deltaUp","deltaDown" from jsonb_to_recordset($1::jsonb)
+        as r("userId" text,"deltaUp" bigint,"deltaDown" bigint) where "deltaUp">0 or "deltaDown">0
+        on conflict(user_id,node_id,day) do update set upload_bytes=vpn_usage_days.upload_bytes+excluded.upload_bytes,download_bytes=vpn_usage_days.download_bytes+excluded.download_bytes`,
+          [JSON.stringify(rows), nodeId],
+        );
+      });
     return Response.json({ saved }, quiet);
   }
   if (body.op === "ack") {
@@ -1124,17 +1481,22 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
 export const setVpnSharedCut = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { id?: unknown; cut?: unknown }) : {};
-    if (typeof raw.id !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(raw.id)) throw new Error("Сервер не найден");
+    const raw =
+      input && typeof input === "object" ? (input as { id?: unknown; cut?: unknown }) : {};
+    if (typeof raw.id !== "string" || !/^[A-Za-z0-9_-]{8,80}$/.test(raw.id))
+      throw new Error("Сервер не найден");
     if (typeof raw.cut !== "boolean") throw new Error("Некорректное действие");
     return { id: raw.id, cut: raw.cut };
   })
   .handler(async ({ context, data }): Promise<VpnDesk> => {
     await assertAdmin(context.userId);
     const sql = await getSql();
-    const rows = await sql<{ agent_enrolled: boolean }>`select agent_enrolled from vpn_nodes where id = ${data.id}`;
+    const rows = await sql<{
+      agent_enrolled: boolean;
+    }>`select agent_enrolled from vpn_nodes where id = ${data.id}`;
     if (!rows.length) throw new Error("Сервер не найден");
-    if (data.cut && !rows[0]?.agent_enrolled) throw new Error("Сначала агент должен записать личные ключи");
+    if (data.cut && !rows[0]?.agent_enrolled)
+      throw new Error("Сначала агент должен записать личные ключи");
     await sql`update vpn_nodes set shared_cut = ${data.cut} where id = ${data.id}`;
     await audit(context.userId, null, data.cut ? "cut-shared" : "keep-shared", data.id);
     return readDesk();
@@ -1143,27 +1505,98 @@ export const setVpnSharedCut = createServerFn({ method: "POST" })
 export const saveVpnPlan = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((input: unknown) => {
-    const raw = input && typeof input === "object" ? (input as { id?: unknown; enabled?: unknown; price?: unknown; days?: unknown; deviceCap?: unknown }) : {};
+    const raw =
+      input && typeof input === "object"
+        ? (input as {
+            id?: unknown;
+            enabled?: unknown;
+            price?: unknown;
+            days?: unknown;
+            deviceCap?: unknown;
+            trafficGb?: unknown;
+          })
+        : {};
     const id = typeof raw.id === "string" ? raw.id : "";
-    if (id !== "trial" && id !== "plus" && id !== "family") throw new Error("Базовый тариф остаётся 2000 вублей и 30 дней");
+    if (!["base", "trial", "plus", "family"].includes(id)) throw new Error("Тариф не найден");
     if (typeof raw.enabled !== "boolean") throw new Error("Некорректное действие");
     const price = Number(raw.price);
     const days = Number(raw.days);
     const deviceCap = Number(raw.deviceCap);
-    if (!Number.isInteger(price) || price < 0 || price > 1_000_000) throw new Error("Цена некорректна");
+    if (!Number.isInteger(price) || price < 0 || price > 1_000_000)
+      throw new Error("Цена некорректна");
     if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error("Срок некорректен");
-    if (!Number.isInteger(deviceCap) || deviceCap < 1 || deviceCap > 20) throw new Error("Лимит устройств некорректен");
-    return { id, enabled: raw.enabled, price, days, deviceCap };
+    if (!Number.isInteger(deviceCap) || deviceCap < 1 || deviceCap > 20)
+      throw new Error("Лимит устройств некорректен");
+    return {
+      id,
+      enabled: raw.enabled,
+      price,
+      days,
+      deviceCap,
+      trafficGb: raw.trafficGb === undefined ? undefined : gbOf(raw.trafficGb),
+    };
   })
   .handler(async ({ context, data }): Promise<VpnDesk> => {
     await assertAdmin(context.userId);
     const sql = await getSql();
     await sql`
       update vpn_plans
-      set enabled = ${data.enabled}, price = ${data.price}, days = ${data.days}, device_cap = ${data.deviceCap}
+      set enabled = ${data.enabled}, price = ${data.price}, days = ${data.days}, device_cap = ${data.deviceCap}, traffic_bytes = coalesce(${data.trafficGb === undefined ? null : data.trafficGb * GIB}::bigint,traffic_bytes)
       where id = ${data.id}
     `;
+    if (data.id === "base" && data.trafficGb !== undefined)
+      await sql`update vpn_plan set traffic_bytes=${data.trafficGb * GIB} where id=1`;
     await audit(context.userId, null, "plan", data.id);
     return readDesk();
   });
 
+export async function claimTrialFor(userId: string, hash: string): Promise<VpnShowcase> {
+  if (!(await verified(userId))) throw new Error("Сначала подтвердите почту в профиле");
+  const plans = await availablePlans();
+  const trial = plans.find((p) => p.id === "trial" && p.enabled);
+  if (!trial) throw new Error("Пробный период сейчас недоступен");
+  await withTransaction(async (tx) => {
+    await tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [`vpn-trial:${hash}`]);
+    await tx`select id from "user" where id=${userId} for update`;
+    const done = await tx`
+      with eligible as (
+        select id from "user" where id=${userId} and "emailVerified"=true
+          and not exists(select 1 from vpn_passes where user_id=${userId})
+          and not exists(select 1 from vpn_trials where user_id=${userId})
+          and (select count(*) from vpn_trials where ip_hash=${hash} and claimed_at>now()-interval '7 days')<3
+          and exists(select 1 from vpn_plans where id='trial' and enabled=true)
+      ), claimed as (
+        insert into vpn_trials(user_id,ip_hash) select id,${hash} from eligible on conflict do nothing returning user_id
+      ), pass as (
+        insert into vpn_passes(user_id,token,until_at,plan_id,quota_reset_at)
+        select user_id,${newToken()},now()+${trial.days}*interval '1 day','trial',now() from claimed returning user_id
+      ) insert into vpn_audit(id,actor_id,user_id,kind,note)
+        select ${crypto.randomUUID()},user_id,user_id,'trial-claim',${String(trial.days)} from pass returning id`;
+    if (!done.length) throw new Error("Пробный период уже использован или достигнут лимит выдачи");
+  });
+  return readShowcase(userId);
+}
+export const claimVpnTrial = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    await assertActive(context.userId);
+    const { getRequest } = await import("@tanstack/react-start/server");
+    return claimTrialFor(context.userId, await ipHash(getRequest()));
+  });
+export async function cleanupVpnHistory() {
+  const sql = await getSql();
+  await sql`delete from vpn_node_events where at<now()-interval '30 days'`;
+  await sql`delete from vpn_miss where at<now()-interval '1 day'`;
+  await sql`delete from vpn_pulls where at<now()-interval '2 days'`;
+}
+
+export const saveVpnThreshold = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((v: unknown) => gbOf(v))
+  .handler(async ({ context, data }) => {
+    await assertAdmin(context.userId);
+    const sql = await getSql();
+    await sql`update vpn_settings set suspicious_gb=${data} where id=1`;
+    await audit(context.userId, null, "threshold", String(data));
+    return readDesk();
+  });

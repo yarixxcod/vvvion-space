@@ -1317,7 +1317,7 @@ export async function handleChat(request: Request): Promise<Response> {
                           if (direct) {
                             const changes = local?.changes() ?? [];
                             const missing = changes.filter(item => item.url && !direct.text.includes(item.url));
-                            if (missing.length) direct.text += "\n\n" + missing.map(item => `• [${item.name.replace(/[\[\]\\*_`]/g, "\\$&")}](${item.url})`).join("\n");
+                            if (missing.length) direct.text += "\n\n" + missing.map(item => `• [${item.name.replace(/[[\]\\*_`]/g, "\\$&")}](${item.url})`).join("\n");
                             if (steps.some(step => step.tool === "generate_image" && step.status === "done") && !/\/api\/disk\/[A-Za-z0-9_-]{16,64}/.test(direct.text)) {
                               const made = changes.find(item => item.url?.startsWith("/api/disk/"));
                               if (made?.url) direct.text += `\n\n![картинка](${made.url})`;

@@ -487,8 +487,9 @@ export async function runSubscriptionReminders() {
   await remindVpnExpired();
   await remindVpnTraffic();
   await remindVpnDownNodes();
-  const { renewDueVpn } = await import("@/lib/social/vpn");
+  const { renewDueVpn, cleanupVpnHistory } = await import("@/lib/social/vpn");
   await renewDueVpn();
+  await cleanupVpnHistory();
 }
 
 async function remindExpired(product: "mega" | "premium") {
@@ -582,19 +583,21 @@ async function remindVpnTraffic() {
   const plan = await sql<{ traffic_bytes: string | number }>`select traffic_bytes from vpn_plan where id = 1`;
   const quota = Number(plan[0]?.traffic_bytes ?? 0);
   if (!(quota > 0)) return;
-  const rows = await sql<{ user_id: string; used: string | number; anchor: string }>`
-    select p.user_id,
+  const rows = await sql<{ user_id: string; used: string | number; anchor: string; quota:string|number }>`
+    select p.user_id, case when p.plan_id='base' or coalesce(pl.traffic_bytes,0)<=0 then ${quota}::bigint else pl.traffic_bytes end as quota,
            coalesce(sum(greatest(c.upload_bytes - c.baseline_upload, 0) + greatest(c.download_bytes - c.baseline_download, 0)), 0)::bigint as used,
            coalesce(to_char(p.quota_reset_at at time zone 'utc', 'YYYY-MM-DD'), 'open') as anchor
     from vpn_passes p
     join vpn_counters c on c.user_id = p.user_id
+    left join vpn_plans pl on pl.id=p.plan_id
     where p.blocked_at is null and p.until_at > now()
-    group by p.user_id, p.quota_reset_at
+    group by p.user_id, p.quota_reset_at, p.plan_id, pl.traffic_bytes
   `;
   for (const row of rows) {
     const used = Number(row.used);
     if (!Number.isFinite(used)) continue;
-    const level = used / quota >= 0.95 ? "95" : used / quota >= 0.8 ? "80" : "";
+    const actualQuota=Number(row.quota);
+    const level = actualQuota>0 && used / actualQuota >= 0.95 ? "95" : actualQuota>0 && used / actualQuota >= 0.8 ? "80" : "";
     if (!level) continue;
     if (!(await claimOnce(row.user_id, `vpn:traffic${level}`, row.anchor || "open"))) continue;
     await sendPush(row.user_id, "subs", {
@@ -620,4 +623,9 @@ export async function pushDiskLevel(userId: string) {
     body: level === "100" ? "Место закончилось. Освободите место или расширьте диск в магазине" : "Занято больше 80%. Освободите место или расширьте диск в магазине",
     url: "/c/disk",
   });
+}
+
+export async function pushVpnRenewal(userId:string,day:string,success:boolean,days:number,price:number){
+  if(!(await claimOnce(userId,"vpn:auto-renew",day))) return;
+  await sendPush(userId,"subs",{id:`vpn-renew:${day}`,title:"VPN",body:success?`VPN продлён на ${days} дней, списано ${price} вублей`:"Не хватило вублей для продления VPN, пополните баланс",url:"/c/services"});
 }

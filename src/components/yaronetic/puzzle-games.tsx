@@ -86,14 +86,14 @@ function Record({ name, score, lower = false }: { name: string; score: number; l
     try {
       const n = Number(localStorage.getItem(`vvvion.game.${name}.best`));
       if (Number.isFinite(n) && n >= 0) setBest(n);
-    } catch {}
+    } catch { /* Browser storage may be unavailable. */ }
   }, [name]);
   useEffect(() => {
     if (score > 0 && (!best || (lower ? score < best : score > best))) {
       setBest(score);
       try {
         localStorage.setItem(`vvvion.game.${name}.best`, String(score));
-      } catch {}
+      } catch { /* Browser storage may be unavailable. */ }
     }
   }, [score, best, lower, name]);
   return (

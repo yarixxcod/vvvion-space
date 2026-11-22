@@ -297,16 +297,18 @@ export async function runAgentLoop(options: {
       }
     }
     const filesMissing = Boolean(options.filesRequested) && !(options.hasFiles?.() ?? true);
-    if (!calls.length && lastMemoryResult && /^\\s*\\{/.test(parts.text)) {
+    // The receipt is assigned by an awaited tool callback; expose that mutation to TypeScript.
+    const memoryReceipt = lastMemoryResult as { name: string; data: Record<string, unknown> } | null;
+    if (!calls.length && memoryReceipt && /^\\s*\\{/.test(parts.text)) {
       try {
         const reply = JSON.parse(parts.text.trim()) as Record<string, unknown>;
         if (reply && typeof reply === "object" && ("ok" in reply || "entries" in reply || "old_text" in reply)) {
-          if (lastMemoryResult.name === "memory_save" && lastMemoryResult.data.saved === true)
+          if (memoryReceipt.name === "memory_save" && memoryReceipt.data.saved === true)
             parts.text = "Запомнил. Факт добавлен в VVVion Memory.";
-          else if (lastMemoryResult.name === "memory_forget" && typeof lastMemoryResult.data.forgotten === "number")
+          else if (memoryReceipt.name === "memory_forget" && typeof memoryReceipt.data.forgotten === "number")
             parts.text = "Удалил выбранный факт из VVVion Memory.";
-          else if (lastMemoryResult.name === "memory_list") {
-            const entries = lastMemoryResult.data.entries;
+          else if (memoryReceipt.name === "memory_list") {
+            const entries = memoryReceipt.data.entries;
             parts.text = Array.isArray(entries) && entries.length
               ? "Вот что я помню о тебе:\\n" + entries.filter((v): v is string => typeof v === "string").map(v => "• " + v).join("\\n")
               : "Пока в VVVion Memory нет сохранённых фактов.";

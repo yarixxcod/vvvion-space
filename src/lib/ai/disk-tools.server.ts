@@ -24,6 +24,7 @@ export function diskWriteIntent(text: string) {
 
 export function flatFileName(value: unknown): string {
   const raw = typeof value === "string" ? value.trim().replace(/\\/g, "/") : "";
+  // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted input.
   if (!raw || raw.includes("..") || raw.startsWith("/") || /[\u0000-\u001f]/.test(raw))
     throw new Error("Некорректный путь файла");
   const parts = raw.split("/").filter(Boolean);

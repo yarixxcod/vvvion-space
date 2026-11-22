@@ -39,6 +39,8 @@ export function ScreenClip({ id }: { id: string }) {
     };
   }, [id]);
 
+  const frame = useClipFrame(typeof video === "object" ? video.thumb : "", typeof video === "object" ? video.embedUrl : "", typeof video === "object" ? video.provider : "");
+
   if (video === "wait") {
     return <div className="mt-1.5 aspect-video w-full animate-pulse rounded-2xl bg-black/20" />;
   }
@@ -46,7 +48,6 @@ export function ScreenClip({ id }: { id: string }) {
     return <p className="mt-1.5 text-xs opacity-70">Ролик уже убрали</p>;
   }
 
-  const frame = useClipFrame(video.thumb, video.embedUrl, video.provider);
   return (
     <>
       <button type="button" className="relative mt-1.5 block w-full overflow-hidden rounded-2xl bg-black text-left" onClick={() => setOpen(true)}>

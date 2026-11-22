@@ -35,8 +35,8 @@ function sameSecret(a: string, b: string) {
 }
 
 function oneLine(text: string, max = 120) {
-  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
   const clean = text
+    // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted input.
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -46,7 +46,7 @@ function oneLine(text: string, max = 120) {
 
 function clip(text: string) {
   const clean = text
-    // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
+    // eslint-disable-next-line no-control-regex -- Intentionally reject or strip control bytes from untrusted input.
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")

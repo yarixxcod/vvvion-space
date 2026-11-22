@@ -214,3 +214,14 @@ export function newHySecret(bytes: Uint8Array): string {
   for (const byte of bytes) text += String.fromCharCode(byte);
   return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
+
+/** Base keeps the quota actually advertised before plans were introduced. */
+export function quotaForPlan(planId: string, selected: unknown, legacy: unknown): number {
+  const fallback = Number(legacy);
+  const old = Number.isSafeInteger(fallback) && fallback > 0 ? fallback : 100 * 1024 ** 3;
+  const value = Number(selected);
+  return planId === "base" || !Number.isSafeInteger(value) || value <= 0 ? old : value;
+}
+export function canSwitchPlan(current: string, next: string, until: number, now = Date.now()): boolean {
+  return current === next || !Number.isFinite(until) || until - now <= 3 * DAY;
+}
