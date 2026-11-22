@@ -10,8 +10,11 @@ const run = (source) =>
   );
 test("shared YouTube links normalize without tracking or playlist expansion", () => {
   run(`import assert from 'node:assert/strict'; import {normalizeGrabUrl,youtubeFormat} from './src/lib/social/grab-options.ts';
-    for (const raw of ['Посмотри https://youtu.be/dQw4w9WgXcQ?si=tracking','https://m.youtube.com/shorts/dQw4w9WgXcQ?feature=share','https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=playlist&t=30','https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ']) assert.equal(normalizeGrabUrl(raw),'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    for (const raw of ['Посмотри https://youtu.be/dQw4w9WgXcQ?si=tracking','https://m.youtube.com/shorts/dQw4w9WgXcQ?feature=share','https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=playlist&t=30','https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ','http://youtu.be/dQw4w9WgXcQ','youtu.be/dQw4w9WgXcQ','https://music.youtube.com/watch?v=dQw4w9WgXcQ','https://www.youtube.com/attribution_link?a=1&u=%2Fwatch%3Fv%3DdQw4w9WgXcQ%26feature%3Dshare','https://www.youtube.com/redirect?q=https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ','https://youtu.be/'+String.fromCharCode(0x200b)+'dQw4w9WgXcQ']) assert.equal(normalizeGrabUrl(raw),'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     for (const raw of ['https://youtu.be/short','https://youtube.com/@channel','https://youtube.com/playlist?list=a','https://youtube.com.evil.test/watch?v=dQw4w9WgXcQ','https://u:p@youtube.com/watch?v=dQw4w9WgXcQ']) assert.throws(()=>normalizeGrabUrl(raw));
+    assert.match(normalizeGrabUrl('Вот ролик https://vm.tiktok.com/Zabc/'), /tiktok\\.com\\/Zabc/);
+    assert.match(normalizeGrabUrl('https://www.instagram.com/reel/AbC123/?igsh=1'), /instagram\\.com\\/reel\\/AbC123/);
+    assert.match(normalizeGrabUrl('смотри https://ig.me/s/AbCdEf'), /ig\\.me\\/s\\/AbCdEf/);
     assert.equal(youtubeFormat('audio'),'ba[ext=m4a]/ba');
     assert.ok(youtubeFormat('small').includes('height<=360')); assert.ok(!youtubeFormat('video').includes('bv'));`);
 });

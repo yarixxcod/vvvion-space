@@ -14,9 +14,24 @@ type Send = (
   secret: string,
 ) => Promise<ChatAttempt>;
 
+function briefTools(tools: unknown): string {
+  if (!Array.isArray(tools)) return "";
+  return tools
+    .map((tool) => {
+      const fn = tool && typeof tool === "object" ? (tool as { function?: { name?: unknown; description?: unknown; parameters?: { properties?: Record<string, unknown> } } }).function : undefined;
+      const name = typeof fn?.name === "string" ? fn.name : "";
+      const description = typeof fn?.description === "string" ? fn.description : "";
+      const names = fn?.parameters?.properties ? Object.keys(fn.parameters.properties).join(",") : "";
+      return name ? `${name}: ${description} (${names})` : "";
+    })
+    .filter(Boolean)
+    .join("; ")
+    .slice(0, 4000);
+}
+
 export function plainToolPayload(payload: Record<string, unknown>): Record<string, unknown> {
   const { tools, tool_choice: _choice, ...rest } = payload;
-  const instruction = `Инструменты работают через JSON. Верни только один JSON-объект без пояснений: {"tool":"имя","arguments":{...}} для действия, либо {"answer":"ответ пользователю"} для завершения. Не изображай выполненные действия. Сначала вызов, затем дождись результата. Исправляй аргументы по сообщению error. Доступные схемы: ${JSON.stringify(tools)}`;
+  const instruction = `Инструменты работают через JSON. Верни только один JSON-объект без пояснений: {"tool":"имя","arguments":{...}} для действия, либо {"answer":"ответ пользователю"} для завершения. Не изображай выполненные действия. Сначала вызов, затем дождись результата. Исправляй аргументы по сообщению error. Схемы: ${briefTools(tools)}. Пример: {"tool":"save_files","arguments":{"folder":"Кофейня","files":[{"path":"index.html","text":"<!doctype html>..."}]}}. Пример: {"tool":"web_search","arguments":{"query":"цена iPhone 17 Москва 2026"}}`;
   const messages = (Array.isArray(payload.messages) ? payload.messages : []).map(
     (message: Record<string, unknown>) => {
       const { tool_calls, tool_call_id: _id, ...row } = message;
@@ -30,10 +45,15 @@ export function plainToolPayload(payload: Record<string, unknown>): Record<strin
       return row;
     },
   );
-  return {
-    ...rest,
-    messages: tools ? [{ role: "system", content: instruction }, ...messages] : messages,
-  };
+  if (!tools) return { ...rest, messages };
+  const first = messages[0] as { role?: unknown; content?: unknown } | undefined;
+  if (first?.role === "system" && typeof first.content === "string") {
+    return {
+      ...rest,
+      messages: [{ ...first, content: `${first.content}\n\n${instruction}`.slice(0, 24_000) }, ...messages.slice(1)],
+    };
+  }
+  return { ...rest, messages: [{ role: "system", content: instruction }, ...messages] };
 }
 
 /** Inspect before exposing a provider response; never splice two providers after visible output. */

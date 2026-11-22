@@ -21,6 +21,17 @@ export async function loadAccess(userId: string): Promise<Access> {
 export async function assertActive(userId: string): Promise<Access> {
   const access = await loadAccess(userId);
   if (access.banned) throw new Error("Аккаунт заблокирован");
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ until: string | null }>`
+      select suspended_until::text as until from account_limits
+      where user_id = ${userId} and suspended_until > now()
+      limit 1
+    `;
+    if (rows[0]) throw new Error("Аккаунт временно ограничен");
+  } catch (err) {
+    if (err instanceof Error && err.message === "Аккаунт временно ограничен") throw err;
+  }
   return access;
 }
 

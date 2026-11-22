@@ -3,6 +3,7 @@ import { peelQuestionLike } from "@/lib/ai/question-like";
 import { readDraft, writeDraft } from "@/lib/ai/drafts";
 import { memoryForChat, moveNewChatMemory } from "@/lib/ai/memory";
 import { diskAccessEnabled } from "@/lib/ai/disk-access";
+import { readAgentPrefs } from "@/lib/ai/agent-prefs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -59,6 +60,8 @@ const PREVIOUS_PROMPT =
   "Ты vvvion.space — точный и спокойный ассистент. Отвечай на языке пользователя, по существу. Код и таблицы оформляй в Markdown. Не выдумывай факты и источники.";
 const SHORT_PROMPT =
   "Ты vvvion.space — точный и спокойный ассистент. Отвечай на языке пользователя. Длина соразмерна вопросу: коротко, если вопрос короткий; развёрнуто — только когда просят объяснить, сравнить, написать код, таблицу или план. Без вступлений, повторов и лишних списков. Код и таблицы оформляй в Markdown. Не выдумывай факты и источники.";
+const LENGTH_PROMPT =
+  "Ты vvvion.space — точный и спокойный ассистент. Отвечай на языке пользователя. Длина соразмерна вопросу: коротко, если вопрос короткий; развёрнуто — только когда просят объяснить, сравнить, написать код, таблицу или план. Без вступлений, повторов и лишних списков. Код и таблицы оформляй в Markdown. Формулы пиши в TeX: короткие в $...$, отдельные строкой в $$...$$. Рецепты и инструкции пиши списком Markdown, без тегов Sequence и Step. Не выдумывай факты и источники.";
 
 function readTheme(): ThemeMode {
   try {
@@ -378,7 +381,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
               !builtin.systemPrompt ||
               builtin.systemPrompt === LEGACY_PROMPT ||
               builtin.systemPrompt === PREVIOUS_PROMPT ||
-              builtin.systemPrompt === SHORT_PROMPT
+              builtin.systemPrompt === SHORT_PROMPT ||
+              builtin.systemPrompt === LENGTH_PROMPT
                 ? fresh.systemPrompt
                 : builtin.systemPrompt,
             maxTokens:
@@ -854,6 +858,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       let imageUrl: string | undefined;
       let sources: ChatMessage["sources"];
       let search: ChatMessage["search"];
+      let steps: NonNullable<ChatMessage["steps"]> = [];
       let raf = 0;
       let lastSave = 0;
       let slow = 0;
@@ -877,6 +882,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
                 imageUrl,
                 sources,
                 search,
+                steps: steps.length ? steps : undefined,
               };
           }
           if (item.id === userMsg.id) return { ...item, praised: peeled.like || undefined };
@@ -946,7 +952,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             reasoning: reasoningRef.current,
             track: userIdRef.current ? { chatId, messageId: asstId } : undefined,
             mcp: wantImage ? undefined : enabledMcpUrls(),
-            diskAccess: !wantImage && diskAccessEnabled(),
+            diskAccess: !wantImage && (diskAccessEnabled() || readAgentPrefs().files),
+            agent: wantImage ? undefined : readAgentPrefs(),
             memory: wantImage ? undefined : memory,
             memoryInput: wantImage ? undefined : {text:trimmed,attachments:pending.length>0},
             stickerReplies: (()=>{try{return localStorage.getItem("vvvion.stickers.replies")!=="0";}catch{return true;}})(),
@@ -983,6 +990,11 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
               sources = next.slice(0, 6);
               schedule();
             },
+            onStep(step) {
+              const at = steps.findIndex((item) => item.id === step.id);
+              steps = at >= 0 ? steps.map((item, index) => (index === at ? step : item)) : [...steps, step];
+              schedule();
+            },
           },
         );
       } catch (err) {
@@ -990,7 +1002,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
           if (stopRef.current) stopped = true;
           else if (abandonRef.current) left = true;
           else stopped = true;
-        } else if (userIdRef.current && isNetworkDrop(err)) {
+        } else if (userIdRef.current && !wantImage && isNetworkDrop(err)) {
           detached = true;
         } else {
           error = err instanceof Error ? err.message : "Не удалось получить ответ";

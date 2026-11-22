@@ -99,7 +99,7 @@ await pg.exec(`create table "user"(id text primary key);insert into "user" value
  create table catalog_models(name text primary key,base_url text,api_key text,system_prompt text);insert into catalog_models values('model-a','https://api.x.ai/v1','qa-model-key','Catalog prompt'),('model-b','https://api.x.ai/v1','qa-model-key','Catalog prompt');
  create table catalog_providers(model_name text,base_url text,api_key text,model_id text,slot int);
  create table chat_attempts(id text primary key,user_id text,guest_id text,model text,kind text,mode text,ok boolean,note text,total_tokens int,created_at timestamptz default now());`);
-const migration = readFileSync("migrations/0056_vvvion_memory.sql", "utf8");
+const migration = readFileSync("migrations/0058_vvvion_memory.sql", "utf8");
 await pg.exec(migration);
 const service = await import("./service.server.ts");
 const api = await import("./api.ts");
@@ -473,7 +473,7 @@ test("migration is repeatable and schema rollback preserves existing tables", as
   );
   await scratch.exec(migration);
   await scratch.exec(migration);
-  await scratch.exec(readFileSync("migrations/down/0056_vvvion_memory.sql", "utf8"));
+  await scratch.exec(readFileSync("migrations/down/0058_vvvion_memory.sql", "utf8"));
   assert.equal((await scratch.query('select * from "user"')).rows.length, 1);
   assert.equal(
     (

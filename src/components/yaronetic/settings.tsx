@@ -1,6 +1,7 @@
 import { MemoryPanel } from "@/components/yaronetic/memory-panel";
 import { ServiceStatus } from "@/components/yaronetic/service-status";
 import { diskAccessEnabled, setDiskAccess } from "@/lib/ai/disk-access";
+import { readAgentPrefs, writeAgentPrefs, type AgentPrefs } from "@/lib/ai/agent-prefs";
 import { useEffect, useState, type ReactNode } from "react";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -196,6 +197,7 @@ export function SettingsDialog({
             </div>
             <MemoryPanel chatId={chatId} />
             <DiskAiAccess />
+            <AgentAccess />
             <ServiceStatus />
             <AppTools />
             <SoundChoices />
@@ -431,13 +433,53 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function DiskAiAccess() {
   const [enabled, setEnabled] = useState(false);
-  useEffect(() => setEnabled(diskAccessEnabled()), []);
+  useEffect(() => {
+    const sync = () => setEnabled(diskAccessEnabled());
+    sync();
+    window.addEventListener("vv-agent", sync);
+    return () => window.removeEventListener("vv-agent", sync);
+  }, []);
   return <section className="mt-4 rounded-2xl border border-line p-3">
     <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-medium">
       Мой диск в ИИ-чате
-      <input type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setDiskAccess(event.target.checked); }} className="size-5 accent-[var(--accent)]" />
+      <input type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setDiskAccess(event.target.checked); const next = readAgentPrefs(); writeAgentPrefs({ ...next, files: event.target.checked }); window.dispatchEvent(new Event("vv-agent")); }} className="size-5 accent-[var(--accent)]" />
     </label>
-    <p className="mt-1 text-xs text-muted">Разрешить выбранной ИИ-модели по вашему запросу искать личные файлы и музыку, читать тексты и изображения, создавать папки и текстовые файлы на Диске и Мегадиске, сохранять правки новыми версиями. Содержимое передаётся активному провайдеру выбранной модели, а при его ошибке — резервному из её настроек. Запись — по просьбе в чате; существующие файлы сохраняются.</p>
+    <p className="mt-1 text-xs text-muted">Разрешить выбранной ИИ-модели по вашему запросу искать личные файлы и музыку, читать тексты и изображения, создавать папки и текстовые файлы на Диске и Мегадиске, сохранять правки новыми версиями. Содержимое передаётся активному провайдеру выбранной модели, а при его ошибке — резервному из её настроек. Существующие файлы не удаляются и не перезаписываются.</p>
+  </section>;
+}
+
+function AgentAccess() {
+  const tx = useTx();
+  const [prefs, setPrefs] = useState<AgentPrefs | null>(null);
+  useEffect(() => {
+    const sync = () => setPrefs(readAgentPrefs());
+    sync();
+    window.addEventListener("vv-agent", sync);
+    return () => window.removeEventListener("vv-agent", sync);
+  }, []);
+  if (!prefs) return null;
+  const save = (next: AgentPrefs) => {
+    setPrefs(next);
+    writeAgentPrefs(next);
+    if (next.files !== diskAccessEnabled()) setDiskAccess(next.files);
+    window.dispatchEvent(new Event("vv-agent"));
+  };
+  const row = (label: string, hint: string, checked: boolean, onChange: (value: boolean) => void) => (
+    <label className="mt-3 flex min-h-11 cursor-pointer items-start justify-between gap-3 text-sm">
+      <span><span className="font-medium">{label}</span><span className="mt-0.5 block text-xs text-muted">{hint}</span></span>
+      <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} className="mt-0.5 size-5 accent-[var(--accent)]" />
+    </label>
+  );
+  return <section className="mt-4 rounded-2xl border border-line p-3">
+    <p className="text-sm font-medium">{tx({ ru: "ИИ-агент", en: "AI agent", kk: "ЖИ агент" })}</p>
+    <p className="mt-1 text-xs text-muted">{tx({ ru: "Модель сама ищет, рисует и, если включён диск, сохраняет проект. Ничего не удаляет.", en: "The model can search, draw, and save a project when Disk is on. It never deletes.", kk: "Модель өзі іздейді, салады және диск қосулы болса жобаны сақтайды. Ештеңені өшірмейді." })}</p>
+    <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-medium">
+      {tx({ ru: "Делать самой", en: "Act on its own", kk: "Өзі істесін" })}
+      <input type="checkbox" checked={prefs.autonomy === "auto"} onChange={event => save({ ...prefs, autonomy: event.target.checked ? "auto" : "ask" })} className="size-5 accent-[var(--accent)]" />
+    </label>
+    {row(tx({ ru: "Поиск в интернете", en: "Web search", kk: "Интернеттен іздеу" }), tx({ ru: "Модель сама решает, когда искать и открывать страницы.", en: "The model decides when to search and open pages.", kk: "Модель қашан іздеп, бет ашатынын өзі шешеді." }), prefs.web, value => save({ ...prefs, web: value }))}
+    {row(tx({ ru: "Рисовать картинки", en: "Draw images", kk: "Сурет салу" }), tx({ ru: "До двух картинок за ответ, только в вашем аккаунте.", en: "Up to two pictures per reply, only in your account.", kk: "Бір жауапта екі суретке дейін, тек аккаунтыңызда." }), prefs.image, value => save({ ...prefs, image: value }))}
+    {row(tx({ ru: "Сохранять на диск", en: "Save to Disk", kk: "Дискке сақтау" }), tx({ ru: "То же согласие, что «Мой диск в ИИ-чате».", en: "Same consent as “My Disk in AI chat”.", kk: "«ЖИ чаттағы менің дискім» деген келісім." }), prefs.files, value => save({ ...prefs, files: value }))}
   </section>;
 }
 

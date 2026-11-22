@@ -58,7 +58,7 @@ export function isBlockedHost(hostname: string): boolean {
   return false;
 }
 
-function pinnedFetch(current: URL, init: RequestInit, ip: string): Promise<Response> {
+function pinnedFetch(current: URL, init: RequestInit, ip: string, timeoutMs: number): Promise<Response> {
   return new Promise((resolve, reject) => {
     const headers = new Headers(init.headers);
     headers.set("host", current.host);
@@ -89,7 +89,7 @@ function pinnedFetch(current: URL, init: RequestInit, ip: string): Promise<Respo
     const fail = (error: Error) => reject(error);
     init.signal?.addEventListener("abort", () => req.destroy(new Error("aborted")), { once: true });
     req.on("error", fail);
-    req.setTimeout(60_000, () => req.destroy(new Error("timeout")));
+    req.setTimeout(timeoutMs, () => req.destroy(new Error("timeout")));
     const body = init.body;
     if (typeof body === "string" || body instanceof Uint8Array) req.end(body);
     else req.end();
@@ -113,9 +113,10 @@ export async function lookupPublic(host: string, resolve: LookupFn = DEFAULT_LOO
 export async function publicFetch(
   raw: string,
   init: RequestInit = {},
-  opts?: { hops?: number; allowHosts?: readonly string[] },
+  opts?: { hops?: number; allowHosts?: readonly string[]; timeoutMs?: number },
 ): Promise<Response> {
   const hops = opts?.hops ?? 3;
+  const timeoutMs = opts?.timeoutMs && opts.timeoutMs > 0 ? opts.timeoutMs : 60_000;
   let current = new URL(raw);
   for (let hop = 0; hop <= hops; hop += 1) {
     if (current.protocol !== "https:") throw new Error("Этот адрес недоступен");
@@ -123,7 +124,7 @@ export async function publicFetch(
     if (opts?.allowHosts && !hostInList(current.hostname, opts.allowHosts)) throw new Error("Этот адрес недоступен");
     const addresses = await lookupPublic(current.hostname);
     const pinned = addresses[0] || "";
-    const res = await pinnedFetch(current, init, pinned);
+    const res = await pinnedFetch(current, init, pinned, timeoutMs);
     if (res.status < 300 || res.status >= 400 || hop === hops) return res;
     const next = res.headers.get("location");
     await res.body?.cancel().catch(() => undefined);

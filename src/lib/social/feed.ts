@@ -116,10 +116,10 @@ export const listPosts = createServerFn({ method: "GET" })
       left join (
         select parent_id, count(*) as replies
         from posts
-        where parent_id is not null
+        where parent_id is not null and hidden_at is null
         group by parent_id
       ) r on r.parent_id = p.id
-      where p.parent_id is null
+      where p.parent_id is null and p.hidden_at is null
       order by p.created_at desc
       limit ${LIMIT}
     `;
@@ -154,7 +154,7 @@ export const readPostCard = createServerFn({ method: "POST" })
       select p.body, coalesce(u.name, 'Участник') as author
       from posts p
       left join "user" u on u.id = p.user_id
-      where p.id = ${data}
+      where p.id = ${data} and p.hidden_at is null
       limit 1
     `;
     const row = rows[0];
@@ -184,7 +184,7 @@ export const createPost = createServerFn({ method: "POST" })
     let parentAuthor = "";
     if (data.parentId) {
       const parent = await sql<{ id: string; user_id: string }>`
-        select id, user_id from posts where id = ${data.parentId} and parent_id is null
+        select id, user_id from posts where id = ${data.parentId} and parent_id is null and hidden_at is null
       `;
       if (!parent.length) throw new Error("Запись не найдена");
       parentAuthor = parent[0]?.user_id ?? "";
@@ -197,6 +197,16 @@ export const createPost = createServerFn({ method: "POST" })
     `;
     if (Number(recent[0]?.n ?? 0) >= 12) {
       throw new Error("Слишком много записей подряд. Подождите немного.");
+    }
+    try {
+      const limited = await sql<{ user_id: string }>`
+        select user_id from account_limits
+        where user_id = ${context.userId} and posts_until > now()
+        limit 1
+      `;
+      if (limited[0]) throw new Error("Публикации временно ограничены");
+    } catch (err) {
+      if (err instanceof Error && err.message === "Публикации временно ограничены") throw err;
     }
     const id = crypto.randomUUID();
     await sql`
@@ -302,7 +312,7 @@ export const listThread = createServerFn({ method: "POST" })
       left join (
         select post_id, true as liked from post_likes where user_id = ${context.userId}
       ) m on m.post_id = p.id
-      where p.id = ${data} or p.parent_id = ${data}
+      where (p.id = ${data} or p.parent_id = ${data}) and p.hidden_at is null
       order by p.created_at asc
       limit 60
     `;
@@ -333,7 +343,7 @@ export const sharePost = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<{ token: string }> => {
     await assertActive(context.userId);
     const sql = await getSql();
-    const post = await sql<{ id: string }>`select id from posts where id = ${data} limit 1`;
+    const post = await sql<{ id: string }>`select id from posts where id = ${data} and hidden_at is null limit 1`;
     if (!post.length) throw new Error("Запись не найдена");
     const existing = await sql<{ token: string }>`select token from post_shares where post_id = ${data} limit 1`;
     if (existing[0]?.token) return { token: existing[0].token };
@@ -382,7 +392,7 @@ export const readSharedPost = createServerFn({ method: "GET" })
       from post_shares s
       join posts p on p.id = s.post_id
       left join "user" u on u.id = p.user_id
-      where s.token = ${data}
+      where s.token = ${data} and p.hidden_at is null
       limit 1
     `;
     const row = rows[0];

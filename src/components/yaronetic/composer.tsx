@@ -6,7 +6,7 @@ import { Smile, ArrowUp, Brain, Globe, ImageIcon, MessageCircleQuestion, Papercl
 import { toast } from "sonner";
 import { MicButton } from "@/components/yaronetic/mic-button";
 import { HoldHint } from "@/components/yaronetic/hold-hint";
-import { CHAT_FILE_COUNT, CHAT_FILE_MAX, readChatFile } from "@/lib/ai/attach";
+import { CHAT_FILE_COUNT, CHAT_FILE_MAX, pasteAsFile, readChatFile } from "@/lib/ai/attach";
 import { uploadChatFile } from "@/lib/social/circle-upload";
 import { UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
 import type { ChatFile } from "@/lib/ai/types";
@@ -110,6 +110,43 @@ export function Composer({
 
   const empty = !value.trim() && files.length === 0;
 
+  async function takeFiles(list: File[]) {
+    const next = [...files];
+    let added = 0;
+    for (const file of list) {
+      if (next.length >= CHAT_FILE_COUNT) {
+        toast(ui(lang, "tooManyFiles"));
+        break;
+      }
+      if (file.size > CHAT_FILE_MAX) {
+        toast.error(ui(lang, "fileTooBig"));
+        continue;
+      }
+      try {
+        const read = await readChatFile(file);
+        if (read.kind === "file") {
+          const ctrl = new AbortController();
+          uploadAbort.current = ctrl;
+          setUpload({ name: file.name, ratio: 0, loaded: 0, total: file.size, speed: 0 });
+          const saved = await uploadChatFile(file, (tick) => setUpload({ name: file.name, ...tick }), ctrl.signal);
+          read.id = saved.id;
+          read.url = `/api/circle-file/${saved.id}`;
+        }
+        next.push(read);
+        added += 1;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : ui(lang, "fileRejected");
+        if (message === "Загрузка отменена") toast("Загрузка отменена");
+        else toast.error(message);
+      } finally {
+        uploadAbort.current = null;
+        setUpload(null);
+      }
+    }
+    if (added) onFiles(next.slice(0, CHAT_FILE_COUNT));
+    return added;
+  }
+
   return (
     <form
       className="rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent"
@@ -180,6 +217,17 @@ export function Composer({
           placeholder={placeholder}
           className="max-h-[min(200px,30dvh)] min-h-11 w-full flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-base shadow-none outline-none ring-0 placeholder:text-faint focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60"
           onChange={(event) => onChange(event.target.value)}
+          onPaste={(event) => {
+            const data = event.clipboardData;
+            if (!data || data.files.length > 0) return;
+            const text = data.getData("text/plain");
+            if (!pasteAsFile(text)) return;
+            event.preventDefault();
+            const file = new File([text], "Вставленный текст.txt", { type: "text/plain" });
+            void takeFiles([file]).then((added) => {
+              if (added) toast("Большой текст приложен файлом");
+            });
+          }}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing || event.keyCode === 229) return;
             if (event.key === "Escape" && more) {
@@ -344,39 +392,7 @@ export function Composer({
         onChange={(event) => {
           const list = event.target.files;
           if (!list?.length) return;
-          void (async () => {
-            const next = [...files];
-            for (const file of [...list]) {
-              if (next.length >= CHAT_FILE_COUNT) {
-                toast(ui(lang, "tooManyFiles"));
-                break;
-              }
-              if (file.size > CHAT_FILE_MAX) {
-                toast.error(ui(lang, "fileTooBig"));
-                continue;
-              }
-              try {
-                const read = await readChatFile(file);
-                if (read.kind === "file") {
-                  const ctrl = new AbortController();
-                  uploadAbort.current = ctrl;
-                  setUpload({ name: file.name, ratio: 0, loaded: 0, total: file.size, speed: 0 });
-                  const saved = await uploadChatFile(file, (tick) => setUpload({ name: file.name, ...tick }), ctrl.signal);
-                  read.id = saved.id;
-                  read.url = `/api/circle-file/${saved.id}`;
-                }
-                next.push(read);
-              } catch (err) {
-                const message = err instanceof Error ? err.message : ui(lang, "fileRejected");
-                if (message === "Загрузка отменена") toast("Загрузка отменена");
-                else toast.error(message);
-              } finally {
-                uploadAbort.current = null;
-                setUpload(null);
-              }
-            }
-            onFiles(next.slice(0, CHAT_FILE_COUNT));
-          })();
+          void takeFiles([...list]);
           event.target.value = "";
         }}
       />

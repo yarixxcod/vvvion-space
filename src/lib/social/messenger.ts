@@ -757,7 +757,7 @@ export const sendFromPlace = createServerFn({ method: "POST" })
       body = screenMark(data.id);
     } else if (data.source === "post") {
       if (!markId.test(data.id)) throw new Error("Запись не найдена");
-      const rows = await sql<{ id: string }>`select id from posts where id = ${data.id} limit 1`;
+      const rows = await sql<{ id: string }>`select id from posts where id = ${data.id} and hidden_at is null limit 1`;
       if (!rows[0]) throw new Error("Запись не найдена");
       body = postMark(data.id);
     } else if (data.source === "mega") {

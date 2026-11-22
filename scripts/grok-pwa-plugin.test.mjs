@@ -480,6 +480,7 @@ test("filters non-document paths", () => {
   assert.equal(isDocumentPath("/"), true);
   assert.equal(isDocumentPath("/app"), true);
   assert.equal(isDocumentPath("/api/thing"), false);
+  assert.equal(isDocumentPath("/v1/models"), false);
   assert.equal(isDocumentPath("/__grok/install/styles.css"), false);
   assert.equal(isDocumentPath("/logo.png"), false);
 });

@@ -8,16 +8,30 @@ import type { ChatPart } from "@/lib/ai/types";
 
 const MAX_READ = 256_000;
 const TEXT =
-  /^(text\/|application\/(json|xml|javascript|csv))|\.(txt|md|csv|json|xml|log|ts|js|py|yaml|yml)$/i;
+  /^(text\/|application\/(json|xml|javascript|csv|yaml|x-yaml|toml))|\.(txt|md|markdown|mdx|csv|tsv|json|jsonc|xml|yaml|yml|toml|ini|log|ts|tsx|js|jsx|mjs|cjs|py|css|scss|less|html|htm|svg|sql|sh|php|java|kt|go|rs|c|h|cpp|hpp|cs|swift|lua|vue|svelte|rb|gitignore)$/i;
+const EXT =
+  /\.(html|htm|css|scss|less|js|mjs|cjs|jsx|ts|tsx|json|jsonc|md|mdx|txt|csv|tsv|svg|xml|yaml|yml|toml|ini|sh|sql|py|rb|php|java|kt|go|rs|c|h|cpp|hpp|cs|swift|lua|vue|svelte|gradle|properties|bat|ps1|gitignore|license)$/i;
 type FileRow = { id: string; name: string; mime: string; bytes: number; storage: "disk" | "mega" };
 
 /** A real save request. «Напиши стих» is not one — otherwise the answer is replaced by a disk error. */
 export function diskWriteIntent(text: string) {
   const value = text || "";
   if (/(сохран|запиш|записать|\bsave\b|\bwrite\b)/i.test(value)) return true;
-  const verb = /(созда|сдела|добав|напиш|написать|помести|полож|редакт|измени|дополн|update|append|edit|\bcreate\b)/i.test(value);
-  const target = /(файл|папк|диск|мега|html|сайт|страниц|документ|каталог|\bfile\b|\bfolder\b|\bdisk\b|\.(?:md|txt|json|html|csv)\b)/i.test(value);
+  const verb = /(созда|сдела|добав|напиш|написать|помести|полож|редакт|измени|дополн|собер|сверста|оформи|подготов|сгенерир|update|append|edit|\bcreate\b|\bbuild\b|сақта|жина|құра|әзірле|дайында)/i.test(value);
+  const target = /(файл|папк|диск|мега|html|сайт|страниц|документ|каталог|проект|лендинг|отч[её]т|landing|\bfile\b|\bfolder\b|\bdisk\b|\bproject\b|\.(?:md|txt|json|html|csv)\b)/i.test(value);
   return verb && target;
+}
+
+export function flatFileName(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim().replace(/\\/g, "/") : "";
+  // eslint-disable-next-line no-control-regex -- Intentionally reject control bytes in untrusted file names.
+  if (!raw || raw.includes("..") || raw.startsWith("/") || /[\u0000-\u001f]/.test(raw))
+    throw new Error("Некорректный путь файла");
+  const parts = raw.split("/").filter(Boolean);
+  if (!parts.length || parts.length > 4) throw new Error("Некорректный путь файла");
+  const flat = parts.join("__");
+  if (flat.length > 75) throw new Error("Укажите имя до 75 символов без слешей и управляющих знаков");
+  return flat;
 }
 
 export async function prepareDiskTools(
@@ -25,6 +39,7 @@ export async function prepareDiskTools(
   requestText: string,
   onImage: (part: ChatPart) => void,
   signal?: AbortSignal,
+  mode?: { autonomy?: "auto" | "ask" },
 ) {
   await assertActive(userId);
   let mutations = 0;
@@ -37,7 +52,7 @@ export async function prepareDiskTools(
   >();
   const writable = () => {
     signal?.throwIfAborted();
-    if (!diskWriteIntent(requestText))
+    if (mode?.autonomy !== "auto" && !diskWriteIntent(requestText))
       throw new Error("Для записи нужна прямая просьба пользователя в текущем сообщении");
     if (mutations >= 8)
       throw new Error(
@@ -76,18 +91,18 @@ export async function prepareDiskTools(
     ),
     tool(
       "read_my_file",
-      "Прочитать свой файл по id из my_files. Текст по 4000 знаков; если next_offset не null, вызови снова с offset=next_offset. Для правки дочитай все части. Картинки передаются для анализа, аудио — только теги, бинарные документы не разбираются.",
+      "Прочитать свой файл по id из my_files. Текст по 12000 знаков; если next_offset не null, вызови снова с offset=next_offset. Для правки дочитай все части. Картинки передаются для анализа, аудио — только теги, бинарные документы не разбираются.",
       {
         id: { type: "string" },
         storage: { type: "string", enum: ["disk", "mega"] },
         offset: { type: "integer", minimum: 0 },
-        max_chars: { type: "integer", minimum: 1, maximum: 12000 },
+        max_chars: { type: "integer", minimum: 1, maximum: 24000 },
       },
       ["id", "storage"],
     ),
     tool(
       "save_my_text",
-      "Создать текстовый файл (txt, md, csv, json, py, js, ts, css, html, yaml, yml, xml) по просьбе пользователя. Укажи storage: disk или mega. folder_id бери из my_folders/create_my_folder; без него корень. Не перезаписывает оригиналы.",
+      "Создать текстовый файл по просьбе пользователя или в режиме автономии. Укажи storage: disk или mega. folder_id бери из my_folders/create_my_folder; без него корень. Не перезаписывает оригиналы.",
       {
         name: { type: "string" },
         text: { type: "string" },
@@ -95,6 +110,24 @@ export async function prepareDiskTools(
         folder_id: { type: "string" },
       },
       ["name", "text"],
+    ),
+    tool(
+      "save_files",
+      "Сохранить несколько текстовых файлов одним вызовом в папку проекта. path относительный, без .. . На Диске вложенность сплющивается: a/b.css становится a__b.css. Не перезаписывает оригиналы.",
+      {
+        folder: { type: "string" },
+        storage: { type: "string", enum: ["disk", "mega"] },
+        files: {
+          type: "array",
+          maxItems: 12,
+          items: {
+            type: "object",
+            properties: { path: { type: "string" }, text: { type: "string" } },
+            required: ["path", "text"],
+          },
+        },
+      },
+      ["files"],
     ),
     tool(
       "my_folders",
@@ -144,7 +177,7 @@ export async function prepareDiskTools(
           signal,
         );
         if (folder.id) recentFolder = { id: folder.id, storage: folder.storage };
-        return JSON.stringify(folder);
+        return JSON.stringify({ ...folder, note: "Папка создана. Сразу вызови save_files со всеми файлами проекта. Не останавливайся и не пиши код вместо вызова." });
       }
       if (name === "my_files") {
         const query = typeof args.query === "string" ? args.query.slice(0, 80) : "";
@@ -253,16 +286,16 @@ export async function prepareDiskTools(
         const text = new TextDecoder().decode(bytes.subarray(0, MAX_READ));
         const version = createHash("sha256").update(bytes).digest("hex");
         const offset = args.offset === undefined ? 0 : Number(args.offset);
-        const limit = args.max_chars === undefined ? 4000 : Number(args.max_chars);
+        const limit = args.max_chars === undefined ? 12000 : Number(args.max_chars);
         if (
           !Number.isInteger(offset) ||
           offset < 0 ||
           offset > text.length ||
           !Number.isInteger(limit) ||
           limit < 1 ||
-          limit > 12000
+          limit > 24000
         )
-          throw new Error("offset — позиция в тексте, max_chars — от 1 до 12000");
+          throw new Error("offset — позиция в тексте, max_chars — от 1 до 24000");
         const end = Math.min(text.length, offset + limit);
         const before = readVersions.get(`${storage}:${id}`);
         const previousEnd = before?.version === version ? before.readEnd : 0;
@@ -326,12 +359,12 @@ export async function prepareDiskTools(
         const text = typeof args.text === "string" ? args.text : "";
         const length = Buffer.byteLength(text);
         if (
-          !/\.(txt|md|csv|json|py|js|ts|css|html|yaml|yml|xml)$/i.test(filename) ||
+          !EXT.test(filename) ||
           length > 100_000 ||
           (storage === "mega" && length === 0)
         )
           throw new Error(
-            "Нужен текстовый файл до 100 КБ: txt, md, csv, json, py, js, ts, css, html, yaml, yml или xml. На Мегадиске добавьте содержимое.",
+            "Нужен текстовый файл до 100 КБ с разрешённым расширением. На Мегадиске добавьте содержимое.",
           );
         if (/\.json$/i.test(filename)) {
           try {
@@ -350,6 +383,46 @@ export async function prepareDiskTools(
           ...(previousId ? { previousId, originalPreserved: true } : {}),
         });
       }
+      if (name === "save_files") {
+        writable();
+        const storage = storageOf(args.storage, "disk");
+        const list = Array.isArray(args.files) ? args.files.slice(0, 12) : [];
+        if (!list.length) throw new Error("Передайте files");
+        let folder = recentFolder && recentFolder.storage === storage ? recentFolder.id : null;
+        let folderInfo: { id: string; name: string; created?: boolean } | undefined;
+        if (typeof args.folder === "string" && args.folder.trim()) {
+          writable();
+          const folderName = agentName(args.folder);
+          const created = await createAgentFolder(userId, storage, folderName, null, signal);
+          folder = created.id;
+          recentFolder = { id: created.id, storage };
+          folderInfo = { id: created.id, name: created.name, created: created.created };
+          mutations += 1;
+        }
+        let batch = 0;
+        const files: Array<Record<string, unknown>> = [];
+        for (const item of list) {
+          const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+          const asked = typeof row.path === "string" ? row.path : typeof row.name === "string" ? row.name : "";
+          try {
+            writable();
+            const filename = agentName(flatFileName(asked));
+            const text = typeof row.text === "string" ? row.text : "";
+            const length = Buffer.byteLength(text);
+            if (!EXT.test(filename) || length > 100_000) throw new Error("Файл слишком большой или расширение не разрешено");
+            if (/\.json$/i.test(filename)) JSON.parse(text);
+            batch += length;
+            if (writtenBytes + batch > 400_000) throw new Error("Предел записи за запрос — 400 КБ");
+            const saved = await saveAgentText(userId, storage, filename, text, folder, signal);
+            mutations += 1;
+            writtenBytes += length;
+            files.push({ path: asked, ...saved });
+          } catch (error) {
+            files.push({ path: asked, error: error instanceof Error ? error.message : "Не сохранилось" });
+          }
+        }
+        return JSON.stringify({ folder: folderInfo, files, note: "Частичный успех виден по error у файла. На Диске путь a/b.css сохранён как a__b.css." });
+      }
       throw new Error("Неизвестный инструмент");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Диск недоступен";
@@ -365,18 +438,28 @@ export async function prepareDiskTools(
     writeRequested: diskWriteIntent(requestText),
     filesRequested:
       diskWriteIntent(requestText) &&
-      /(файл|сайт|html|страниц|код|документ|\bfile\b|\bpage\b|\bsite\b|\.(?:md|txt|html|json|csv)\b)/i.test(requestText),
-    changes: () =>
-      [...completed.values()].map(
-        (value) =>
-          JSON.parse(value) as {
-            id: string;
-            name: string;
-            url?: string;
-            saved?: boolean;
-            created?: boolean;
-          },
-      ),
+      /(файл|сайт|html|страниц|код|документ|лендинг|проект|landing|\bfile\b|\bpage\b|\bsite\b|\.(?:md|txt|html|json|csv)\b)/i.test(requestText),
+    changes: () => {
+      const out: Array<{ id: string; name: string; url?: string; saved?: boolean; created?: boolean }> = [];
+      for (const value of completed.values()) {
+        const row = JSON.parse(value) as {
+          id?: string;
+          name?: string;
+          url?: string;
+          saved?: boolean;
+          created?: boolean;
+          files?: Array<{ id?: string; name?: string; url?: string; saved?: boolean; error?: string }>;
+          folder?: { id?: string; name?: string; created?: boolean };
+        };
+        if (Array.isArray(row.files)) {
+          if (row.folder?.id && row.folder.name) out.push({ id: row.folder.id, name: row.folder.name, created: row.folder.created });
+          for (const file of row.files) {
+            if (file.saved && file.id && file.name) out.push({ id: file.id, name: file.name, url: file.url, saved: true });
+          }
+        } else if (row.id && row.name) out.push({ id: row.id, name: row.name, url: row.url, saved: row.saved, created: row.created });
+      }
+      return out;
+    },
     async invoke(name: string, input: unknown): Promise<string> {
       if (!tools.some((item) => item.function.name === name))
         return JSON.stringify({ error: "Неизвестный инструмент" });
@@ -384,7 +467,7 @@ export async function prepareDiskTools(
         input && typeof input === "object" && !Array.isArray(input)
           ? (input as Record<string, unknown>)
           : {};
-      const mutation = ["save_my_text", "create_my_folder", "write_my_file"].includes(name);
+      const mutation = ["save_my_text", "save_files", "create_my_folder", "write_my_file"].includes(name);
       const key = `${name}:${JSON.stringify(
         Object.keys(args)
           .sort()
@@ -393,7 +476,7 @@ export async function prepareDiskTools(
       if (mutation && completed.has(key)) return completed.get(key)!;
       const result = await execute(name, args);
       if (mutation && !JSON.parse(result).error) {
-        mutations++;
+        if (name !== "save_files") mutations += 1;
         completed.set(key, result);
       }
       return result;

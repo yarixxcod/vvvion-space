@@ -130,6 +130,8 @@ export function isDocumentPath(pathname) {
   return (
     !path.startsWith("/__grok/") &&
     !path.startsWith("/api/") &&
+    !path.startsWith("/v1/") &&
+    path !== "/v1" &&
     !path.startsWith("/@") &&
     !path.startsWith("/node_modules") &&
     !/\.[a-z0-9]+$/i.test(path)

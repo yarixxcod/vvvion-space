@@ -528,17 +528,16 @@ export async function runGrab(userId: string, raw: string, onProgress?: (tick: G
     const { grabWithYtDlp } = await import("@/lib/social/ytdlp.server");
     const via = await grabWithYtDlp(link, (tick) => onProgress?.(tick), mode, signal);
     let files = via.files;
-    if (!files?.length && via.note && /подтверждение входа|требует входа/.test(via.note)) clipFail(502, via.note);
-    if (!files?.length && via.note && /не отдал|не отвечает/.test(via.note)) clipFail(503, via.note);
     if (!files?.length) {
       signal?.throwIfAborted();
-      if (mode !== "video") clipFail(502, "Этот формат сейчас недоступен. Попробуйте обычное видео.");
+      if (mode !== "video") clipFail(502, via.note || "Этот формат сейчас недоступен. Попробуйте обычное видео.");
+      if (via.ran && clipHost(link) === "youtube") clipFail(502, via.note || "По этой ссылке ролик не открылся");
       try {
         onProgress?.({ phase: "fetch", pct: 30, loaded: 0, total: 0 });
         files = await Promise.all((await resolve(link)).map(async (item) => ({ ...(await takeBytes(item.url, item.referer)), title: item.title })));
       } catch (error) {
-        if (error instanceof Error && error.message) throw error;
         if (via.note) clipFail(/не отвечает|не отдал/.test(via.note) ? 503 : 502, via.note);
+        if (error instanceof Error && error.message) throw error;
         throw error;
       }
     }

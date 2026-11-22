@@ -4,7 +4,7 @@ import { getSql } from "@/lib/db";
 import { playbackType } from "@/lib/music/tags";
 import { bytesResponse } from "@/lib/http/byte-range";
 import { assertActive } from "@/lib/social/access";
-import { DISK_ID, diskPath } from "@/lib/social/disk-path";
+import { DISK_ID, chatShareToken, diskPath, shareReferencesDisk } from "@/lib/social/disk-path";
 import { isPremium, PREMIUM_DISK } from "@/lib/social/premium";
 
 export const DISK_BASE = 100 * 1024 * 1024;
@@ -115,7 +115,7 @@ async function putFile(
   const extra = (await isPremium(userId)) ? PREMIUM_DISK : 0;
   const rows = await sql<{ id: string }>`
     with room as (
-      select ( ${DISK_BASE} + ${extra} + bonus_bytes
+      select ( ${DISK_BASE}::bigint + ${extra}::bigint + bonus_bytes
                - coalesce((select sum(bytes) from disk_files where user_id = ${userId}), 0)
              ) as free
       from disk_accounts
@@ -205,13 +205,30 @@ export const readDiskFile = createServerOnlyFn(async (request: Request, id: stri
   `;
   const ownerId = meta[0]?.user_id;
   if (!ownerId) return json(404, { message: "Файл не найден" });
-  const share = new URL(request.url).searchParams.get("s") || "";
+  const page = new URL(request.url);
+  const share = page.searchParams.get("s") || "";
   let allowed = false;
   if (share && DISK_ID.test(share)) {
     const open = await sql<{ ok: number }>`
       select 1 as ok from disk_shares where token = ${share} and user_id = ${ownerId} limit 1
     `;
     allowed = Boolean(open[0]);
+  }
+  const chat = chatShareToken(request.url, request.headers.get("referer"));
+  if (!allowed && chat) {
+    const shared = await sql<{ user_id: string; messages: unknown }>`
+      select user_id, messages from shared_chats where id = ${chat} limit 1
+    `;
+    const row = shared[0];
+    let messages: unknown = row?.messages;
+    if (typeof messages === "string") {
+      try {
+        messages = JSON.parse(messages) as unknown;
+      } catch {
+        messages = null;
+      }
+    }
+    if (row && row.user_id === ownerId && shareReferencesDisk(messages, id)) allowed = true;
   }
   if (!allowed) {
     const { auth } = await import("@/lib/auth/server");
@@ -255,7 +272,7 @@ async function replaceAudio(userId: string, form: FormData): Promise<Response> {
   const rows = await sql<{ id: string }>`
     with room as (
       select (
-        ${DISK_BASE} + ${extra} + a.bonus_bytes
+        ${DISK_BASE}::bigint + ${extra}::bigint + a.bonus_bytes
         - coalesce((select sum(bytes) from disk_files where user_id = ${userId}), 0)
         + f.bytes
       ) as free

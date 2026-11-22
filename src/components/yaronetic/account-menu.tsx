@@ -37,6 +37,7 @@ import { getTelegramLink, startTelegramLink, stopTelegramLink, type TelegramLink
 import { getAchievements, type AchievementItem } from "@/lib/social/achievements";
 import { PushSettingsCard } from "@/components/yaronetic/push-settings";
 import { GiftCollectionCard } from "@/components/yaronetic/gift-desk";
+import { SupportCenter } from "@/components/yaronetic/support-center";
 
 function authText(error: { message?: string; code?: string } | null | undefined, fallback: string) {
   const blob = `${error?.code ?? ""} ${error?.message ?? ""}`;
@@ -88,6 +89,7 @@ export function AccountPanelHost() {
   const [previous, setPrevious] = useState<AccountPanel | null>(null);
   const [sound, setSound] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
+  const [support, setSupport] = useState(false);
   const [light, setLight] = useState(false);
   const release = useReleaseFlag();
   useEffect(() => {
@@ -112,10 +114,11 @@ export function AccountPanelHost() {
     <button type="button" className="press mt-2 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm" onClick={() => { const next = !light; setLight(next); window.dispatchEvent(new CustomEvent("vv-theme-request", { detail: next ? "light" : "dark" })); }}>{light ? "Включить тёмную тему" : "Включить светлую тему"}</button>
     <button type="button" aria-pressed={sound} className="press mt-2 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm" onClick={() => { const next = !soundsEnabled(); setSoundsEnabled(next); if (next) playSound("notice", true); }}>{sound ? "Звук включён" : "Звук выключен"}</button>
     <button type="button" className="press mt-2 flex min-h-12 w-full items-center justify-between rounded-xl border border-line px-3 text-left text-sm" onClick={() => go("about")}>О проекте и обновления {release ? <span className="rounded-full bg-accent px-2 py-1 text-xs text-accent-fg">Новое</span> : null}</button>
+    <button type="button" className="press mt-2 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm" onClick={() => setSupport(true)}>Поддержка</button>
     <ServiceStatus />
     {hasGateSessionMarker() ? null : <button type="button" disabled={signingOut} className="press mt-3 min-h-12 w-full rounded-xl border border-line px-3 text-left text-sm text-danger disabled:opacity-40" onClick={() => { setSigningOut(true); void signOut().catch(() => { setSigningOut(false); toast.error("Не удалось выйти"); }); }}>{signingOut ? "Выходим…" : "Выйти из аккаунта"}</button>}
   </section></div>;
-  return createPortal(<div className="relative z-[220]">{content}</div>, document.body);
+  return createPortal(<div className="relative z-[220]">{content}{support ? <SupportCenter onClose={() => setSupport(false)} /> : null}</div>, document.body);
 }
 
 function ProfileSheet({

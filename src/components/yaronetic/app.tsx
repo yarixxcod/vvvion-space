@@ -595,6 +595,7 @@ export function App({
                     field?.scrollIntoView({ block: "nearest" });
                   }, 30);
                 }}
+                onContinue={() => void studio.send("продолжай")}
               />
             </Suspense>
           )}
@@ -850,6 +851,7 @@ function MobileModel({ studio, fieldId = "model-mobile", plain = false }: { stud
         options={(studio.imageModels.length ? studio.imageModels : [{ name: "grok-imagine-image", displayName: "Grok Imagine" }]).map((model) => ({
           value: model.name,
           label: model.displayName && model.displayName !== model.name ? model.displayName : model.name,
+          icon: "icon" in model && typeof model.icon === "string" ? model.icon : "",
         }))}
         onChange={(value) => studio.updateProvider(studio.activeProvider.id, { imageModel: value })}
       />

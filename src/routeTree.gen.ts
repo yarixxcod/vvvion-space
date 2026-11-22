@@ -40,6 +40,9 @@ import { Route as MessagesIdRouteImport } from './routes/messages/$id'
 import { Route as PTokenRouteImport } from './routes/p/$token'
 import { Route as RCodeRouteImport } from './routes/r/$code'
 import { Route as STokenRouteImport } from './routes/s/$token'
+import { Route as V1MessagesRouteImport } from './routes/v1/messages'
+import { Route as V1ModelsRouteImport } from './routes/v1/models'
+import { Route as V1ResponsesRouteImport } from './routes/v1/responses'
 import { Route as ApiAppWidgetsRouteImport } from './routes/api/app/widgets'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAvatarUserIdRouteImport } from './routes/api/avatar/$userId'
@@ -62,6 +65,10 @@ import { Route as ApiVubliPackagesRouteImport } from './routes/api/vubli/package
 import { Route as ApiVubliQuoteRouteImport } from './routes/api/vubli/quote'
 import { Route as ApiVubliTopupRouteImport } from './routes/api/vubli/topup'
 import { Route as ApiVubliTopupsRouteImport } from './routes/api/vubli/topups'
+import { Route as V1ChatCompletionsRouteImport } from './routes/v1/chat/completions'
+import { Route as V1ImagesGenerationsRouteImport } from './routes/v1/images/generations'
+import { Route as V1MessagesCount_tokensRouteImport } from './routes/v1/messages/count_tokens'
+import { Route as V1ResponsesIdRouteImport } from './routes/v1/responses/$id'
 import { Route as ApiBooksSharedTokenRouteImport } from './routes/api/books/shared/$token'
 import { Route as ApiDTokenIdRouteImport } from './routes/api/d/$token/$id'
 import { Route as ApiPostShareTokenIdRouteImport } from './routes/api/post-share/$token/$id'
@@ -224,6 +231,21 @@ const STokenRoute = STokenRouteImport.update({
   path: '/s/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const V1MessagesRoute = V1MessagesRouteImport.update({
+  id: '/v1/messages',
+  path: '/v1/messages',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const V1ModelsRoute = V1ModelsRouteImport.update({
+  id: '/v1/models',
+  path: '/v1/models',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const V1ResponsesRoute = V1ResponsesRouteImport.update({
+  id: '/v1/responses',
+  path: '/v1/responses',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAppWidgetsRoute = ApiAppWidgetsRouteImport.update({
   id: '/api/app/widgets',
   path: '/api/app/widgets',
@@ -335,6 +357,26 @@ const ApiVubliTopupsRoute = ApiVubliTopupsRouteImport.update({
   path: '/api/vubli/topups',
   getParentRoute: () => rootRouteImport,
 } as any)
+const V1ChatCompletionsRoute = V1ChatCompletionsRouteImport.update({
+  id: '/v1/chat/completions',
+  path: '/v1/chat/completions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const V1ImagesGenerationsRoute = V1ImagesGenerationsRouteImport.update({
+  id: '/v1/images/generations',
+  path: '/v1/images/generations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const V1MessagesCount_tokensRoute = V1MessagesCount_tokensRouteImport.update({
+  id: '/count_tokens',
+  path: '/count_tokens',
+  getParentRoute: () => V1MessagesRoute,
+} as any)
+const V1ResponsesIdRoute = V1ResponsesIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => V1ResponsesRoute,
+} as any)
 const ApiBooksSharedTokenRoute = ApiBooksSharedTokenRouteImport.update({
   id: '/shared/$token',
   path: '/shared/$token',
@@ -399,6 +441,9 @@ export interface FileRoutesByFullPath {
   '/p/$token': typeof PTokenRoute
   '/r/$code': typeof RCodeRoute
   '/s/$token': typeof STokenRoute
+  '/v1/messages': typeof V1MessagesRouteWithChildren
+  '/v1/models': typeof V1ModelsRoute
+  '/v1/responses': typeof V1ResponsesRouteWithChildren
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
@@ -421,6 +466,10 @@ export interface FileRoutesByFullPath {
   '/api/vubli/quote': typeof ApiVubliQuoteRoute
   '/api/vubli/topup': typeof ApiVubliTopupRouteWithChildren
   '/api/vubli/topups': typeof ApiVubliTopupsRoute
+  '/v1/chat/completions': typeof V1ChatCompletionsRoute
+  '/v1/images/generations': typeof V1ImagesGenerationsRoute
+  '/v1/messages/count_tokens': typeof V1MessagesCount_tokensRoute
+  '/v1/responses/$id': typeof V1ResponsesIdRoute
   '/api/books/shared/$token': typeof ApiBooksSharedTokenRoute
   '/api/d/$token/$id': typeof ApiDTokenIdRoute
   '/api/post-share/$token/$id': typeof ApiPostShareTokenIdRoute
@@ -460,6 +509,9 @@ export interface FileRoutesByTo {
   '/p/$token': typeof PTokenRoute
   '/r/$code': typeof RCodeRoute
   '/s/$token': typeof STokenRoute
+  '/v1/messages': typeof V1MessagesRouteWithChildren
+  '/v1/models': typeof V1ModelsRoute
+  '/v1/responses': typeof V1ResponsesRouteWithChildren
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
@@ -482,6 +534,10 @@ export interface FileRoutesByTo {
   '/api/vubli/quote': typeof ApiVubliQuoteRoute
   '/api/vubli/topup': typeof ApiVubliTopupRouteWithChildren
   '/api/vubli/topups': typeof ApiVubliTopupsRoute
+  '/v1/chat/completions': typeof V1ChatCompletionsRoute
+  '/v1/images/generations': typeof V1ImagesGenerationsRoute
+  '/v1/messages/count_tokens': typeof V1MessagesCount_tokensRoute
+  '/v1/responses/$id': typeof V1ResponsesIdRoute
   '/api/books/shared/$token': typeof ApiBooksSharedTokenRoute
   '/api/d/$token/$id': typeof ApiDTokenIdRoute
   '/api/post-share/$token/$id': typeof ApiPostShareTokenIdRoute
@@ -522,6 +578,9 @@ export interface FileRoutesById {
   '/p/$token': typeof PTokenRoute
   '/r/$code': typeof RCodeRoute
   '/s/$token': typeof STokenRoute
+  '/v1/messages': typeof V1MessagesRouteWithChildren
+  '/v1/models': typeof V1ModelsRoute
+  '/v1/responses': typeof V1ResponsesRouteWithChildren
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
@@ -544,6 +603,10 @@ export interface FileRoutesById {
   '/api/vubli/quote': typeof ApiVubliQuoteRoute
   '/api/vubli/topup': typeof ApiVubliTopupRouteWithChildren
   '/api/vubli/topups': typeof ApiVubliTopupsRoute
+  '/v1/chat/completions': typeof V1ChatCompletionsRoute
+  '/v1/images/generations': typeof V1ImagesGenerationsRoute
+  '/v1/messages/count_tokens': typeof V1MessagesCount_tokensRoute
+  '/v1/responses/$id': typeof V1ResponsesIdRoute
   '/api/books/shared/$token': typeof ApiBooksSharedTokenRoute
   '/api/d/$token/$id': typeof ApiDTokenIdRoute
   '/api/post-share/$token/$id': typeof ApiPostShareTokenIdRoute
@@ -585,6 +648,9 @@ export interface FileRouteTypes {
     | '/p/$token'
     | '/r/$code'
     | '/s/$token'
+    | '/v1/messages'
+    | '/v1/models'
+    | '/v1/responses'
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
@@ -607,6 +673,10 @@ export interface FileRouteTypes {
     | '/api/vubli/quote'
     | '/api/vubli/topup'
     | '/api/vubli/topups'
+    | '/v1/chat/completions'
+    | '/v1/images/generations'
+    | '/v1/messages/count_tokens'
+    | '/v1/responses/$id'
     | '/api/books/shared/$token'
     | '/api/d/$token/$id'
     | '/api/post-share/$token/$id'
@@ -646,6 +716,9 @@ export interface FileRouteTypes {
     | '/p/$token'
     | '/r/$code'
     | '/s/$token'
+    | '/v1/messages'
+    | '/v1/models'
+    | '/v1/responses'
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
@@ -668,6 +741,10 @@ export interface FileRouteTypes {
     | '/api/vubli/quote'
     | '/api/vubli/topup'
     | '/api/vubli/topups'
+    | '/v1/chat/completions'
+    | '/v1/images/generations'
+    | '/v1/messages/count_tokens'
+    | '/v1/responses/$id'
     | '/api/books/shared/$token'
     | '/api/d/$token/$id'
     | '/api/post-share/$token/$id'
@@ -707,6 +784,9 @@ export interface FileRouteTypes {
     | '/p/$token'
     | '/r/$code'
     | '/s/$token'
+    | '/v1/messages'
+    | '/v1/models'
+    | '/v1/responses'
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
@@ -729,6 +809,10 @@ export interface FileRouteTypes {
     | '/api/vubli/quote'
     | '/api/vubli/topup'
     | '/api/vubli/topups'
+    | '/v1/chat/completions'
+    | '/v1/images/generations'
+    | '/v1/messages/count_tokens'
+    | '/v1/responses/$id'
     | '/api/books/shared/$token'
     | '/api/d/$token/$id'
     | '/api/post-share/$token/$id'
@@ -769,6 +853,9 @@ export interface RootRouteChildren {
   PTokenRoute: typeof PTokenRoute
   RCodeRoute: typeof RCodeRoute
   STokenRoute: typeof STokenRoute
+  V1MessagesRoute: typeof V1MessagesRouteWithChildren
+  V1ModelsRoute: typeof V1ModelsRoute
+  V1ResponsesRoute: typeof V1ResponsesRouteWithChildren
   ApiAppWidgetsRoute: typeof ApiAppWidgetsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAvatarUserIdRoute: typeof ApiAvatarUserIdRoute
@@ -786,6 +873,8 @@ export interface RootRouteChildren {
   ApiVubliQuoteRoute: typeof ApiVubliQuoteRoute
   ApiVubliTopupRoute: typeof ApiVubliTopupRouteWithChildren
   ApiVubliTopupsRoute: typeof ApiVubliTopupsRoute
+  V1ChatCompletionsRoute: typeof V1ChatCompletionsRoute
+  V1ImagesGenerationsRoute: typeof V1ImagesGenerationsRoute
   ApiDTokenIdRoute: typeof ApiDTokenIdRoute
   ApiPostShareTokenIdRoute: typeof ApiPostShareTokenIdRoute
   ApiWebhooksCryptopaySecretRoute: typeof ApiWebhooksCryptopaySecretRoute
@@ -1010,6 +1099,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof STokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/v1/messages': {
+      id: '/v1/messages'
+      path: '/v1/messages'
+      fullPath: '/v1/messages'
+      preLoaderRoute: typeof V1MessagesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/v1/models': {
+      id: '/v1/models'
+      path: '/v1/models'
+      fullPath: '/v1/models'
+      preLoaderRoute: typeof V1ModelsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/v1/responses': {
+      id: '/v1/responses'
+      path: '/v1/responses'
+      fullPath: '/v1/responses'
+      preLoaderRoute: typeof V1ResponsesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/app/widgets': {
       id: '/api/app/widgets'
       path: '/api/app/widgets'
@@ -1164,6 +1274,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVubliTopupsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/v1/chat/completions': {
+      id: '/v1/chat/completions'
+      path: '/v1/chat/completions'
+      fullPath: '/v1/chat/completions'
+      preLoaderRoute: typeof V1ChatCompletionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/v1/images/generations': {
+      id: '/v1/images/generations'
+      path: '/v1/images/generations'
+      fullPath: '/v1/images/generations'
+      preLoaderRoute: typeof V1ImagesGenerationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/v1/messages/count_tokens': {
+      id: '/v1/messages/count_tokens'
+      path: '/count_tokens'
+      fullPath: '/v1/messages/count_tokens'
+      preLoaderRoute: typeof V1MessagesCount_tokensRouteImport
+      parentRoute: typeof V1MessagesRoute
+    }
+    '/v1/responses/$id': {
+      id: '/v1/responses/$id'
+      path: '/$id'
+      fullPath: '/v1/responses/$id'
+      preLoaderRoute: typeof V1ResponsesIdRouteImport
+      parentRoute: typeof V1ResponsesRoute
+    }
     '/api/books/shared/$token': {
       id: '/api/books/shared/$token'
       path: '/shared/$token'
@@ -1259,6 +1397,30 @@ const ApiMegaRouteChildren: ApiMegaRouteChildren = {
 const ApiMegaRouteWithChildren =
   ApiMegaRoute._addFileChildren(ApiMegaRouteChildren)
 
+interface V1MessagesRouteChildren {
+  V1MessagesCount_tokensRoute: typeof V1MessagesCount_tokensRoute
+}
+
+const V1MessagesRouteChildren: V1MessagesRouteChildren = {
+  V1MessagesCount_tokensRoute: V1MessagesCount_tokensRoute,
+}
+
+const V1MessagesRouteWithChildren = V1MessagesRoute._addFileChildren(
+  V1MessagesRouteChildren,
+)
+
+interface V1ResponsesRouteChildren {
+  V1ResponsesIdRoute: typeof V1ResponsesIdRoute
+}
+
+const V1ResponsesRouteChildren: V1ResponsesRouteChildren = {
+  V1ResponsesIdRoute: V1ResponsesIdRoute,
+}
+
+const V1ResponsesRouteWithChildren = V1ResponsesRoute._addFileChildren(
+  V1ResponsesRouteChildren,
+)
+
 interface ApiVubliTopupIdRouteChildren {
   ApiVubliTopupIdCancelRoute: typeof ApiVubliTopupIdCancelRoute
 }
@@ -1315,6 +1477,9 @@ const rootRouteChildren: RootRouteChildren = {
   PTokenRoute: PTokenRoute,
   RCodeRoute: RCodeRoute,
   STokenRoute: STokenRoute,
+  V1MessagesRoute: V1MessagesRouteWithChildren,
+  V1ModelsRoute: V1ModelsRoute,
+  V1ResponsesRoute: V1ResponsesRouteWithChildren,
   ApiAppWidgetsRoute: ApiAppWidgetsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAvatarUserIdRoute: ApiAvatarUserIdRoute,
@@ -1332,6 +1497,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiVubliQuoteRoute: ApiVubliQuoteRoute,
   ApiVubliTopupRoute: ApiVubliTopupRouteWithChildren,
   ApiVubliTopupsRoute: ApiVubliTopupsRoute,
+  V1ChatCompletionsRoute: V1ChatCompletionsRoute,
+  V1ImagesGenerationsRoute: V1ImagesGenerationsRoute,
   ApiDTokenIdRoute: ApiDTokenIdRoute,
   ApiPostShareTokenIdRoute: ApiPostShareTokenIdRoute,
   ApiWebhooksCryptopaySecretRoute: ApiWebhooksCryptopaySecretRoute,

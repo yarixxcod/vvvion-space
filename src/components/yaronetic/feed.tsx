@@ -22,6 +22,7 @@ import { loadError } from "@/lib/load-error";
 import { useCircleNest } from "@/lib/circle-history";
 import { useEdgeBack } from "@/lib/gestures/use-edge-back";
 import { HoldSheet } from "@/components/yaronetic/hold-sheet";
+import { ReportDialog } from "@/components/yaronetic/report-dialog";
 import { useLongPress } from "@/lib/gestures/use-long-press";
 
 const MAX_FILES = 4;
@@ -592,6 +593,7 @@ function PostRow({
   onDelete?: () => void;
 }) {
   const [menu, setMenu] = useState(false);
+  const [report, setReport] = useState(false);
   const hold = useLongPress(() => setMenu(true));
   return (
     <article
@@ -654,8 +656,14 @@ function PostRow({
               Удалить
             </button>
           ) : null}
+          {!post.mine ? (
+            <button type="button" className="press flex min-h-12 w-full items-center rounded-2xl px-3 text-left text-base" onClick={() => { setMenu(false); setReport(true); }}>
+              Пожаловаться
+            </button>
+          ) : null}
         </HoldSheet>
       ) : null}
+      {report ? <ReportDialog targetType="post" targetId={post.id} onClose={() => setReport(false)} /> : null}
     </article>
   );
 }

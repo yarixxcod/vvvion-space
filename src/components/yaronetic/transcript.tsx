@@ -6,9 +6,9 @@ import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowDown, Check, ChevronDown, Copy, Download, Heart, Info, MoreHorizontal, RefreshCw, Square, Trash2, Volume2, X } from "lucide-react";
+import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, Download, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, Trash2, Volume2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
-import { isDiskPath } from "@/lib/social/disk-path";
+import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { copyText, Markdown } from "@/components/yaronetic/markdown";
 import { looksLikeAscii } from "@/lib/ascii";
@@ -28,16 +28,7 @@ function clock(ts: number) {
 }
 
 function pictureSrc(url?: string) {
-  if (!url) return "";
-  if (isDiskPath(url)) return url;
-  if (url.startsWith("data:image/") && url.length < 2_800_000) return url;
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol === "https:") return parsed.toString();
-  } catch {
-    return "";
-  }
-  return "";
+  return loadableImageUrl(url);
 }
 
 function saveBlob(blob: Blob, name: string) {
@@ -91,6 +82,7 @@ export function Transcript({
   assistantName = "",
   onQuote,
   onLike,
+  onContinue,
 }: {
   onLike?: (id:string)=>void;
   messages: ChatMessage[];
@@ -107,6 +99,7 @@ export function Transcript({
   reasoningOn?: boolean;
   assistantName?: string;
   onQuote?: (text: string) => void;
+  onContinue?: () => void;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -266,6 +259,7 @@ export function Transcript({
                       askNote={messages[index + 1]?.role === "user" ? messages[index + 1].content : undefined}
                       onDelete={readonly || pending || !onDelete ? undefined : () => onDelete(message.id)}
                       onQuote={onQuote}
+                      onContinue={!readonly && !pending && message.id === lastAssistantId && onContinue && /продолжай/i.test(message.content) ? onContinue : undefined}
                     />
                   )}
                                   {visual.stickers.length?<div className={message.role==="user"?"flex gap-2":"mt-2 flex gap-2"}>{visual.stickers.map((code,i)=><StickerImage key={`${code}-${i}`} code={code} className="size-36 max-w-full"/>)}</div>:null}
@@ -485,6 +479,64 @@ function UserBubble({
   );
 }
 
+function stepWord(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "шаг";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "шага";
+  return "шагов";
+}
+
+function StepMark({ tool, status }: { tool: string; status: string }) {
+  const tone = status === "error" ? "text-danger" : status === "running" ? "text-accent" : "text-muted";
+  const cls = `size-3.5 ${tone}${status === "running" ? " animate-spin" : ""}`;
+  if (status === "running") return <Loader2 className={cls} />;
+  if (status === "error") return <AlertCircle className="size-3.5 text-danger" />;
+  if (tool === "web_search") return <Search className={cls} />;
+  if (tool === "fetch_url") return <Globe className={cls} />;
+  if (tool === "generate_image") return <ImageIcon className={cls} />;
+  if (tool === "save_files" || tool === "save_my_text" || tool === "write_my_file") return <FileText className={cls} />;
+  if (tool === "create_my_folder" || tool === "my_folders") return <FolderPlus className={cls} />;
+  if (tool === "read_my_file" || tool === "my_files") return <FileSearch className={cls} />;
+  return <Check className={cls} />;
+}
+
+function AgentTrace({ steps, pending }: { steps: NonNullable<ChatMessage["steps"]>; pending: boolean }) {
+  const work = steps.filter((step) => step.tool !== "plan");
+  const [open, setOpen] = useState(true);
+  if (!work.length && !pending) return null;
+  const rows = work.length ? steps : steps.filter((step) => step.tool === "plan").slice(-1);
+  const failed = work.some((step) => step.status === "error");
+  const title = pending ? "Работаю" : failed ? "Остановилось" : "Сделано";
+  const count = work.length || rows.length;
+  return (
+    <div className="mb-3 overflow-hidden rounded-2xl border border-line bg-elev">
+      <button type="button" className="flex min-h-10 w-full items-center gap-2 px-3 text-left" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+        <span className={`size-1.5 rounded-full ${pending ? "animate-pulse bg-accent" : failed ? "bg-danger" : "bg-accent"}`} />
+        <span className="text-sm font-medium">{title}</span>
+        <span className="text-xs text-faint">{count} {stepWord(count)}</span>
+        <ChevronDown className={`ml-auto size-3.5 text-faint transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <ol className="border-t border-line px-3 py-2">
+          {rows.map((step, index) => (
+            <li key={step.id} className="relative flex gap-3 pb-3 last:pb-0">
+              {index < rows.length - 1 ? <span className="absolute top-6 left-[11px] h-[calc(100%-12px)] w-px bg-line" /> : null}
+              <span className={`relative z-10 mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border bg-bg ${step.status === "running" ? "border-accent" : step.status === "error" ? "border-danger" : "border-line"}`}>
+                <StepMark tool={step.tool} status={step.status} />
+              </span>
+              <span className="min-w-0 pt-0.5">
+                <span className={`block text-sm ${step.status === "running" ? "text-fg" : "text-muted"}`}>{step.label}</span>
+                {step.detail ? <span className="mt-0.5 block truncate text-xs text-faint">{step.detail}</span> : null}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
 function AssistantBubble({
   message,
   pending,
@@ -502,6 +554,7 @@ function AssistantBubble({
   askNote,
   onDelete,
   onQuote,
+  onContinue,
 }: {
   message: ChatMessage;
   pending: boolean;
@@ -519,6 +572,7 @@ function AssistantBubble({
   askNote?: string;
   onDelete?: () => void;
   onQuote?: (text: string) => void;
+  onContinue?: () => void;
 }) {
   const tokens = usageLine(message.usage);
   const waiting = pending && !message.content && !message.error && !message.imageUrl;
@@ -603,13 +657,15 @@ function AssistantBubble({
           </span>
         </div>
         {usageOpen && tokens ? <p className="mb-1 text-xs text-faint tabular-nums">{tokens}</p> : null}
-        {pending && !message.web ? (
+        {pending && !message.web && !message.image && !message.steps?.length ? (
           <p className="mt-0.5 text-xs text-muted">
             <LiveLine />
           </p>
         ) : null}
-        {message.reasoning || (waiting && reasoningOn && !message.web) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
+        {message.steps?.length ? <AgentTrace steps={message.steps} pending={pending} /> : null}
+        {message.reasoning || (waiting && reasoningOn && !message.web && !message.image) ? <Thought text={message.reasoning || ""} live={waiting} /> : null}
         {continuing ? <p className="mb-2 text-sm text-muted">Ответ дописывается сам. Экран можно выключить.</p> : null}
+        {pending && message.image && !src ? <ImagePlate /> : null}
         {src ? <ChatPicture url={src} alt={message.content || "Сгенерированная картинка"} /> : null}
         {message.web || message.sources?.length ? <SearchEvidence sources={message.sources} summary={message.search} pending={pending} failed={Boolean(message.error || message.stopped)} /> : null}
         {message.content ? (
@@ -621,6 +677,7 @@ function AssistantBubble({
           <p className="mt-2 rounded-2xl border border-line bg-subtle px-3 py-2 text-sm text-danger">{message.error}</p>
         ) : null}
         {message.error && canRegenerate ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onRegenerate}>Повторить ответ</button> : null}
+        {onContinue ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onContinue}>Продолжить</button> : null}
         {message.stopped ? <p className="mt-2 text-sm text-faint">Остановлено</p> : null}
         {done ? (
           <div className={full ? "msg-actions msg-actions-last mt-1 flex gap-1" : "msg-actions mt-1 flex gap-1"}>
@@ -692,6 +749,17 @@ function AssistantBubble({
   );
 }
 
+function ImagePlate() {
+  return (
+    <div className="relative mt-2 flex h-32 w-full max-w-64 flex-col justify-end overflow-hidden rounded-2xl border border-line bg-elev p-3" role="status" aria-label="Генерация изображения">
+      <div className="pointer-events-none absolute inset-0 animate-pulse bg-gradient-to-br from-accent/15 via-transparent to-accent/25" />
+      <div className="relative mb-3 flex items-center gap-2 text-xs text-muted"><span className="size-2 animate-pulse rounded-full bg-accent" /> Создаю изображение…</div>
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-line"><div className="h-full w-1/3 animate-[image-scan_2.8s_ease-in-out_infinite] rounded-full bg-accent" style={{ animationName: "image-scan" }} /></div>
+      <style>{`@keyframes image-scan { 0% { transform: translateX(-110%); } 100% { transform: translateX(310%); } }`}</style>
+    </div>
+  );
+}
+
 function ChatPicture({ url, alt }: { url: string; alt: string }) {
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -721,7 +789,7 @@ function ChatPicture({ url, alt }: { url: string; alt: string }) {
         <img
           src={url}
           alt={alt}
-          className="max-h-[28rem] w-full rounded-2xl border border-line object-contain"
+          className="image-reveal max-h-[28rem] w-full rounded-2xl border border-line object-contain"
           onError={() => setFailed(true)}
         />
       </button>

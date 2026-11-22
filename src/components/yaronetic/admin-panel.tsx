@@ -10,6 +10,8 @@ import { WhisperCard } from "@/components/yaronetic/whisper-card";
 import { AppReleaseCard } from "@/components/yaronetic/app-release-admin";
 import { TelegramAdmin } from "@/components/yaronetic/telegram-admin";
 import { PriceAdmin } from "@/components/yaronetic/price-admin";
+import { ApiAdmin } from "@/components/yaronetic/api-admin";
+import { ModerationDesk } from "@/components/yaronetic/moderation-desk";
 import { getUsagePolicy, saveUsagePolicy, type UsagePolicy } from "@/lib/social/limits";
 import {
   clearAttempts,
@@ -46,11 +48,12 @@ const TABS = [
   ["models", "Модели"],
   ["images", "Картинки"],
   ["voice", "Голос"],
-  ["journal", "Журнал"],
+  ["desk", "Поддержка"],
   ["stats", "Статистика"],
   ["servers", "Серверы"],
   ["release", "Обновление"],
   ["prices", "Цены"],
+  ["api", "API"],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
@@ -67,6 +70,8 @@ type ModelDraft = {
 };
 
 type ImageDraft = {
+  icon: string;
+  requestConfig: string;
   name: string;
   previousName: string;
   displayName: string;
@@ -124,6 +129,8 @@ function blankModel(): ModelDraft {
 
 function fromImage(model: AdminImageModel): ImageDraft {
   return {
+    icon: model.icon,
+    requestConfig: model.requestConfig,
     name: model.name,
     previousName: model.name,
     displayName: model.displayName,
@@ -136,6 +143,8 @@ function fromImage(model: AdminImageModel): ImageDraft {
 
 function blankImage(): ImageDraft {
   return {
+    icon: "",
+    requestConfig: "",
     name: "",
     previousName: "",
     displayName: "",
@@ -149,7 +158,18 @@ function blankImage(): ImageDraft {
 type TtsDraft = ImageDraft & { voice: string };
 
 function fromTts(model: AdminTtsModel): TtsDraft {
-  return { ...fromImage(model), voice: model.voice || "alloy" };
+  return {
+    icon: "",
+    requestConfig: "",
+    name: model.name,
+    previousName: model.name,
+    displayName: model.displayName,
+    baseUrl: model.baseUrl,
+    apiKey: "",
+    clearKey: false,
+    hasKey: model.hasKey,
+    voice: model.voice || "alloy",
+  };
 }
 
 function blankTts(): TtsDraft {
@@ -250,10 +270,11 @@ export function AdminPanel() {
       {tab === "models" ? <Models models={models} policy={policy} onModels={setModels} onPolicy={setPolicy} /> : null}
       {tab === "images" ? <Images models={images} onChange={setImages} /> : null}
       {tab === "voice" ? <Voices models={voices} onChange={setVoices} /> : null}
-      {tab === "journal" ? <Journal /> : null}
+      {tab === "desk" ? <ModerationDesk journal={<Journal />} /> : null}
       {tab === "stats" ? <Stats /> : null}
       {tab === "release" ? <AppReleaseCard /> : null}
       {tab === "prices" ? <PriceAdmin /> : null}
+      {tab === "api" ? <ApiAdmin /> : null}
       {tab === "servers" ? (
         <div className="mt-4">
           <WhisperCard />
@@ -550,8 +571,9 @@ function ModelForm({
         </label>
       </div>
       <label className="mt-2 block text-xs text-faint">
-        Системный промпт
-        <textarea className="field mt-1 min-h-20 resize-y" value={draft.prompt} maxLength={4000} onChange={(event) => onChange({ prompt: event.target.value })} />
+        Стиль и особенности модели
+        <textarea className="field mt-1 min-h-20 resize-y" value={draft.prompt} maxLength={8000} onChange={(event) => onChange({ prompt: event.target.value })} />
+        <span className="mt-1 block">Агентные правила добавляются автоматически и этим полем не отменяются.</span>
       </label>
       <div className="mt-3 space-y-2">
         {draft.providers.map((provider, index) => (
@@ -688,6 +710,8 @@ function ImageForm({
           baseUrl: draft.baseUrl.trim(),
           apiKey: draft.apiKey.trim(),
           clearKey: draft.clearKey,
+          icon: draft.icon,
+          requestConfig: draft.requestConfig,
         },
       });
       onSaved(rows);
@@ -705,6 +729,18 @@ function ImageForm({
       <label className="mt-3 block text-xs text-faint">
         Название в списке
         <input className="field mt-1" value={draft.displayName} maxLength={48} placeholder="Flux" onChange={(event) => onChange({ displayName: event.target.value })} />
+      </label>
+      <div className="mt-3 flex items-center gap-3">
+        {draft.icon ? <img src={draft.icon} alt="" className="size-12 rounded-xl object-cover" /> : <span className="grid size-12 place-items-center rounded-xl border border-line text-xs text-faint">Нет иконки</span>}
+        <label className="cursor-pointer rounded-xl border border-line px-3 py-2 text-sm">Загрузить иконку
+          <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void readIcon(file).then((icon) => onChange({ icon })).catch((error: unknown) => toast.error(messageOf(error, "Ошибка иконки"))); event.target.value = ""; }} />
+        </label>
+        {draft.icon ? <button type="button" className="text-xs text-muted" onClick={() => onChange({ icon: "" })}>Убрать</button> : null}
+      </div>
+      <label className="mt-2 block text-xs text-faint">
+        Дополнительные параметры генерации (JSON, необязательно)
+        <textarea className="field mt-1 min-h-36 font-mono text-xs" spellCheck={false} value={draft.requestConfig} onChange={(event) => onChange({ requestConfig: event.target.value })} placeholder={'{"width":1024,"height":1024,"steps":4,"seed":0,"path":"/images/generations"}'} />
+        <span className="mt-1 block text-xs text-muted">Можно оставить пустым. Промпт берётся из чата, ID модели — из поля ниже. Поддерживаются path, width, height, steps, seed, n, size, response_format, extra. Для DeepAI укажи width и height, для OpenAI обычно ничего не нужно.</span>
       </label>
       <label className="mt-2 block text-xs text-faint">
         Модель

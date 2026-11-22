@@ -81,15 +81,34 @@ if [[ -s emulator-evidence/update-tap.txt ]]; then
 fi
 # Focus a real web input; exercise native IME resizing without sending a message.
 adb shell settings put secure show_ime_with_hard_keyboard 1
-python3 - <<'PYINPUT' > emulator-evidence/input-tap.txt
+# A dismissed native window may leave WebView's accessibility subtree stale briefly.
+# Focus navigation activates no button and sends no text or model request.
+adb shell input keyevent KEYCODE_TAB
+INPUT_READY=false
+for attempt in {1..20}; do
+  recover_system_overlay
+  adb shell uiautomator dump /sdcard/window.xml >/dev/null 2>&1 || true
+  adb pull /sdcard/window.xml emulator-evidence/portrait.xml >/dev/null 2>&1 || true
+  if python3 - <<'PYINPUT' > emulator-evidence/input-tap.txt
 import re, xml.etree.ElementTree as ET
 nodes = ET.parse('emulator-evidence/portrait.xml').getroot().iter('node')
-field = next((n for n in nodes if n.get('class') == 'android.widget.EditText' and n.get('enabled') == 'true'), None)
+field = next((n for n in nodes if n.get('package') == 'space.vvvion.app' and n.get('class') == 'android.widget.EditText' and n.get('enabled') == 'true'), None)
 if field is None:
-    raise SystemExit('No enabled input in the rendered chat screen')
+    raise SystemExit(1)
 x1,y1,x2,y2 = map(int,re.findall(r'\d+',field.get('bounds')))
 print((x1+x2)//2,(y1+y2)//2)
 PYINPUT
+  then
+    INPUT_READY=true
+    break
+  fi
+  sleep 2
+done
+if [[ "$INPUT_READY" != true ]]; then
+  echo 'No enabled input in the rendered chat screen after accessibility readiness wait'
+  exit 1
+fi
+adb exec-out screencap -p > emulator-evidence/portrait.png
 read -r INPUT_X INPUT_Y < emulator-evidence/input-tap.txt
 adb shell input tap "$INPUT_X" "$INPUT_Y"
 for attempt in {1..20}; do
