@@ -5,7 +5,7 @@ import { runAgentLoop, toolCallsFromMessage } from "@/lib/ai/agent-loop";
 import { createWebTools } from "@/lib/ai/agent-web";
 import { modelProfile } from "@/lib/ai/model-profile";
 import type { SearchSummary } from "@/lib/ai/search-types";
-import { isAboutUser, memoryNote, runMemoryTool } from "@/lib/ai/memory";
+import { isAboutUser, memoryNote } from "@/lib/ai/memory";
 import { prepareDiskTools } from "@/lib/ai/disk-tools.server";
 import { mcpUrlsOf, prepareMcp } from "@/lib/ai/mcp.server";
 import { isBlockedHost, publicFetch } from "@/lib/security/net-guard";
@@ -1215,18 +1215,25 @@ export async function handleChat(request: Request): Promise<Response> {
                     if (typeof item === "string" && item.trim() && memoryEntries.length < 40) memoryEntries.push(item.trim());
                   }
                 }
-                let publishMemory: (entries: string[]) => void = () => {};
+                let publishMemory: (entries: string[], revision?: number) => void = () => {};
                 const memoryTool = memoryOn ? {
                   tools: [
-                    { type: "function" as const, function: { name: "memory_list", description: "Что VVVion уже помнит об этом человеке. Вызови на вопрос «что ты знаешь обо мне», не ищи это в файлах.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
-                    { type: "function" as const, function: { name: "memory_save", description: "Запомнить устойчивый факт: имя, город, язык, профессия, постоянное предпочтение. Не для паролей, ключей и разовых задач.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false } } },
-                    { type: "function" as const, function: { name: "memory_forget", description: "Забыть записи памяти, в которых есть эта фраза.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false } } },
+                    { type: "function" as const, function: { name: "memory_list", description: "Актуальная память об этом человеке. Вызови на вопрос «что ты знаешь обо мне». Отвечай своими словами и не показывай JSON.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
+                    { type: "function" as const, function: { name: "memory_save", description: "Запомнить устойчивый факт: имя, возраст, город, язык, профессия, постоянное предпочтение. Не для паролей, ключей и разовых задач. Не говори, что запомнил, пока в результате нет saved:true. JSON не показывай.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false } } },
+                    { type: "function" as const, function: { name: "memory_forget", description: "Забыть записи памяти, в которых есть эта фраза. Удаление подтверждено только если ok:true. JSON не показывай.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false } } },
                   ],
                   invoke: async (name: string, args: unknown) => {
-                    const next = runMemoryTool(memoryEntries, name, args);
-                    memoryEntries = next.entries;
-                    if (next.changed) publishMemory(next.entries);
-                    return next.text;
+                    try {
+                      const { applyAgentMemory } = await import("@/lib/ai/memory-store.server");
+                      const result = await applyAgentMemory(actorUser || "", name, args, memoryEntries);
+                      if (result.ok && result.entries && name !== "memory_list") {
+                        memoryEntries = result.entries;
+                        if (result.changed) publishMemory(result.entries, result.revision);
+                      } else if (result.entries) memoryEntries = result.entries;
+                      return result.text;
+                    } catch {
+                      return JSON.stringify({ ok: false, saved: false, error: "MEMORY_WRITE_FAILED" });
+                    }
                   },
                 } : null;
                 const packs = [remote, local, web, imageTool, memoryTool].filter(Boolean) as Array<{ tools: Array<{ function: { name: string } }>; invoke: (name: string, args: unknown) => Promise<string> }>;
@@ -1257,7 +1264,7 @@ export async function handleChat(request: Request): Promise<Response> {
                           if (gone) return;
                           try { controller.enqueue(sse(event, data)); } catch { gone = true; }
                         };
-                        publishMemory = (entries) => push("memory", { entries });
+                        publishMemory = (entries: string[], revision?: number) => push("memory", { entries, revision });
                         const ping = setInterval(() => push("ping", {}), 10_000);
                         const shut = () => {
                           clearInterval(ping);

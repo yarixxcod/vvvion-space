@@ -2,36 +2,78 @@ import { useEffect, useState } from "react";
 import { BrainCircuit, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { readMemory, writeMemory, type MemoryState } from "@/lib/ai/memory";
+import { cleanUserText } from "@/lib/ai/memory-doc";
+import { readMemory, type MemoryState } from "@/lib/ai/memory";
+import { memoryPhaseLabel, pullOwner, saveOwner, type SyncPhase } from "@/lib/ai/memory-remote";
+
+const EMPTY: MemoryState = { enabled: false, entries: [], disabledChats: [] };
 
 export function MemoryPanel({ chatId }: { chatId?: string | null }) {
   const user = useCurrentUser();
-  const [state, setState] = useState<MemoryState>(() => readMemory(null));
+  const owner = user?.id || null;
+  const [tracked, setTracked] = useState(owner);
+  const [state, setState] = useState<MemoryState>(() => (owner ? readMemory(owner) : EMPTY));
+  const [phase, setPhase] = useState<SyncPhase>(owner ? "loading" : "idle");
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const [problem, setProblem] = useState("");
   const [text, setText] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
-  const owner = user?.id || null;
+  const [confirmClear, setConfirmClear] = useState(false);
+  if (tracked !== owner) {
+    setTracked(owner);
+    setState(owner ? readMemory(owner) : EMPTY);
+    setPhase(owner ? "loading" : "idle");
+    setSyncedAt(null);
+    setProblem("");
+    setText("");
+    setEditing(null);
+    setConfirmClear(false);
+  }
   useEffect(() => {
-    const pull = () => setState(readMemory(owner));
-    pull();
-    window.addEventListener("vv-memory-change", pull);
-    window.addEventListener("storage", pull);
+    if (!owner) return;
+    let cancel = false;
+    const apply = (result: { state: MemoryState; phase: SyncPhase; syncedAt: string | null; message?: string }) => {
+      if (cancel) return;
+      setState(result.state);
+      setPhase(result.phase);
+      setSyncedAt(result.syncedAt);
+      setProblem(result.message || "");
+    };
+    const refresh = () => {
+      setPhase((current) => (current === "saving" ? current : "loading"));
+      void pullOwner(owner).then(apply);
+    };
+    refresh();
+    const onChange = () => {
+      if (!cancel) setState(readMemory(owner));
+    };
+    const onOnline = () => {
+      void pullOwner(owner).then(apply);
+    };
+    window.addEventListener("vv-memory-change", onChange);
+    window.addEventListener("online", onOnline);
     return () => {
-      window.removeEventListener("vv-memory-change", pull);
-      window.removeEventListener("storage", pull);
+      cancel = true;
+      window.removeEventListener("vv-memory-change", onChange);
+      window.removeEventListener("online", onOnline);
     };
   }, [owner]);
   function save(next: MemoryState) {
-    if (!owner) return false;
-    try {
-      writeMemory(owner, next);
-      setState(next);
-      return true;
-    } catch {
-      toast.error("Память не сохранилась: хранилище браузера недоступно");
-      return false;
-    }
+    if (!owner) return;
+    setState(next);
+    setPhase("saving");
+    setProblem("");
+    void saveOwner(owner, next).then((result) => {
+      setState(result.state);
+      setPhase(result.phase);
+      setSyncedAt(result.syncedAt);
+      setProblem(result.message || "");
+      if (!result.ok) toast.error(result.message || "Не удалось сохранить, попробуйте ещё раз");
+    });
   }
   const chat = chatId || "new";
+  const status = memoryPhaseLabel(phase, syncedAt);
+  const showEntries = phase !== "loading" || state.entries.length > 0;
   return (
     <section className="mt-4 overflow-hidden rounded-2xl border border-accent/35 bg-gradient-to-br from-accent/10 via-transparent to-transparent p-3" aria-label="VVVion Memory">
       <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-subtle p-3">
@@ -43,8 +85,31 @@ export function MemoryPanel({ chatId }: { chatId?: string | null }) {
       <p className="mt-1 text-xs leading-relaxed text-muted">
         Только устойчивые факты: имя, город, язык, профессия и то, как вам удобно получать ответы.
         Они попадают сами из разговора, и модель может дописать или забыть. Пароли и ключи не
-        сохраняются. Записи можно поправить. Хранятся в этом браузере и пока не синхронизируются.
+        сохраняются. Записи можно поправить. Записи хранятся в вашем аккаунте и доступны на всех устройствах.
       </p>
+      {owner && status ? (
+        <p className="mt-2 text-xs text-muted" aria-live="polite">
+          {status}
+          {problem && phase !== "loading" && phase !== "saving" ? ` — ${problem}` : ""}
+        </p>
+      ) : null}
+      {owner && (phase === "error" || phase === "pending") ? (
+        <button
+          type="button"
+          className="press mt-2 min-h-10 rounded-lg border border-line px-3 text-xs"
+          onClick={() => {
+            setPhase("loading");
+            void pullOwner(owner).then((result) => {
+              setState(result.state);
+              setPhase(result.phase);
+              setSyncedAt(result.syncedAt);
+              setProblem(result.message || "");
+            });
+          }}
+        >
+          Повторить синхронизацию
+        </button>
+      ) : null}
       {!owner ? (
         <p className="mt-3 text-sm text-muted">Войдите, чтобы настроить личную память.</p>
       ) : (
@@ -74,66 +139,69 @@ export function MemoryPanel({ chatId }: { chatId?: string | null }) {
               className="size-5 accent-[var(--accent)]"
             />
           </label>
-          <ul className="mt-2 space-y-2">
-            {state.entries.map((entry) => (
-              <li key={entry.id} className="rounded-xl border border-line bg-bg p-3">
-                <p className="whitespace-pre-wrap break-words text-sm">{entry.text}</p>
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    className="press min-h-10 rounded-lg border border-line px-3 text-xs"
-                    onClick={() => {
-                      setEditing(entry.id);
-                      setText(entry.text);
-                    }}
-                  >
-                    Изменить
-                  </button>
-                  <button
-                    type="button"
-                    className="press min-h-10 rounded-lg px-3 text-xs text-danger"
-                    onClick={() => {
-                      const saved = save({
-                        ...state,
-                        entries: state.entries.filter((item) => item.id !== entry.id),
-                      });
-                      if (saved && editing === entry.id) {
-                        setEditing(null);
-                        setText("");
-                      }
-                    }}
-                  >
-                    Удалить
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {showEntries ? (
+            <ul className="mt-2 space-y-2">
+              {state.entries.map((entry) => (
+                <li key={entry.id} className="rounded-xl border border-line bg-bg p-3">
+                  <p className="whitespace-pre-wrap break-words text-sm">{entry.text}</p>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="press min-h-10 rounded-lg border border-line px-3 text-xs"
+                      onClick={() => {
+                        setEditing(entry.id);
+                        setText(entry.text);
+                      }}
+                    >
+                      Изменить
+                    </button>
+                    <button
+                      type="button"
+                      className="press min-h-10 rounded-lg px-3 text-xs text-danger"
+                      onClick={() => {
+                        save({ ...state, entries: state.entries.filter((item) => item.id !== entry.id) });
+                        if (editing === entry.id) {
+                          setEditing(null);
+                          setText("");
+                        }
+                      }}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-muted">Память обновляется</p>
+          )}
           <form
             className="mt-3"
             onSubmit={(e) => {
               e.preventDefault();
-              const value = text.trim();
-              if (!value) return;
-              if (!editing && state.entries.length >= 40) {
+              const value = cleanUserText(text);
+              if (!value) {
+                if (text.trim()) toast.error("Пароли и ключи не сохраняются");
+                return;
+              }
+              const existing = state.entries.find((entry) => entry.text.toLowerCase() === value.toLowerCase());
+              if (!editing && !existing && state.entries.length >= 40) {
                 toast.error("Можно сохранить до 40 записей");
                 return;
               }
               const entry = {
-                id: editing || crypto.randomUUID(),
+                id: editing || existing?.id || crypto.randomUUID(),
                 text: value,
                 updatedAt: Date.now(),
               };
-              const saved = save({
+              save({
                 ...state,
-                entries: editing
-                  ? state.entries.map((item) => (item.id === editing ? entry : item))
+                entries: state.entries.some((item) => item.id === entry.id)
+                  ? state.entries.map((item) => (item.id === entry.id ? entry : item))
                   : [...state.entries, entry],
               });
-              if (saved) {
-                setText("");
-                setEditing(null);
-              }
+              setText("");
+              setEditing(null);
             }}
           >
             <label className="text-xs text-muted">
@@ -146,7 +214,7 @@ export function MemoryPanel({ chatId }: { chatId?: string | null }) {
                 onChange={(e) => setText(e.target.value)}
               />
             </label>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="submit"
                 disabled={!text.trim()}
@@ -165,6 +233,31 @@ export function MemoryPanel({ chatId }: { chatId?: string | null }) {
                 >
                   Отмена
                 </button>
+              ) : null}
+              {state.entries.length ? (
+                confirmClear ? (
+                  <>
+                    <button
+                      type="button"
+                      className="press min-h-11 rounded-xl px-3 text-sm text-danger"
+                      onClick={() => {
+                        save({ ...state, entries: [] });
+                        setConfirmClear(false);
+                        setEditing(null);
+                        setText("");
+                      }}
+                    >
+                      Да, очистить
+                    </button>
+                    <button type="button" className="press min-h-11 px-3 text-sm" onClick={() => setConfirmClear(false)}>
+                      Отмена
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="press min-h-11 px-3 text-sm text-danger" onClick={() => setConfirmClear(true)}>
+                    Очистить всё
+                  </button>
+                )
               ) : null}
             </div>
           </form>

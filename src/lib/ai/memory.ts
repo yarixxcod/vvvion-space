@@ -64,7 +64,9 @@ export function memoryForChat(owner: string | null, chatId: string | null): stri
   return state.entries.map((entry) => entry.text);
 }
 
-/** A stored preference, not a question, a secret, or a one-off task. */
+export function isMemorySecret(text: string): boolean {
+  return SECRET.test(text);
+}
 export function memoryFact(text: string): string | null {
   const clean = text.replace(/\s+/g, " ").trim().slice(0, 500);
   if (clean.length < 3) return null;
@@ -85,12 +87,6 @@ export function factsFromUserText(text: string): string[] {
   for (const match of src.matchAll(/(?:^|[.!?]\s+)(?:запомни|не забудь)[:,\s]+([^.\n?]{3,180})/gi)) take(match[1]);
   const name = /(?:^|\.\s+)меня зовут\s+([\p{L}][\p{L}-]{1,40})/iu.exec(src);
   if (name) take(`Имя: ${name[1]}`);
-  const age = /(?:^|[.!?]\\s+)(?:мне|мой возраст)\\s+(\\d{1,3})(?:\\s+(?:год|года|лет))?(?=$|[.!?,\\s])/iu.exec(src);
-  if (age && Number(age[1]) >= 1 && Number(age[1]) <= 120) take(`Возраст: ${Number(age[1])} лет (со слов пользователя)`);
-  const pets = /(?:^|[.!?]\\s+)(?:у меня|у нас)\\s+(\\d{1,2})\\s+(кош(?:ки|ек|ка)|собак(?:и|а)?|собаки|кота|котов|кошек)/iu.exec(src);
-  if (pets) take(`Домашние животные: ${Number(pets[1])} ${pets[2]}`);
-  const morePets = /(?:^|[.!?]\\s+)(?:и\\s+)?(\\d{1,2})\\s+(собаки|собак|кошки|кошек|кота|котов)(?=$|[.!?,\\s])/iu.exec(src);
-  if (morePets && !pets) take(`Домашние животные: ${Number(morePets[1])} ${morePets[2]}`);
   const city = /(?:^|\.\s+)я живу в\s+([^,.]{2,60})/i.exec(src);
   if (city) take(`Город: ${city[1].trim()}`);
   const from = /(?:^|\.\s+)я из\s+([^,.]{2,40})/i.exec(src);
@@ -99,6 +95,13 @@ export function factsFromUserText(text: string): string[] {
   if (job) take(`Работа: ${job[1].trim()}`);
   const style = /(?:^|\.\s+)(?:отвечай|пиши)\s+(по-русски|по-казахски|по-английски|на русском|на казахском|на английском|кратко|коротко|подробно)/i.exec(src);
   if (style) take(`Предпочтение: ${style[0].replace(/^\.\s+/, "").trim()}`);
+  const age = /(?:^|\.\s+)мне\s+(\d{1,3})(?!\d)/iu.exec(src);
+  if (age) {
+    const years = Number(age[1]);
+    if (years >= 1 && years <= 120) take(`Возраст: ${years}`);
+  }
+  const pets = /(?:^|\.\s+)у меня\s+((?:одна|две|два|три|четыре|пять|шесть|семь|восемь|девять|десять|\d{1,2})\s+(?:кошка|кошки|кошек|кот|кота|котов|коты|собака|собаки|собак|пёс|пса|псов|пес)(?:\s+и\s+(?:одна|две|два|три|четыре|пять|шесть|семь|восемь|девять|десять|\d{1,2})\s+(?:кошка|кошки|кошек|кот|кота|котов|коты|собака|собаки|собак|пёс|пса|псов|пес))*)/iu.exec(src);
+  if (pets) take(`Личное: ${pets[1].trim()}`);
   return found.slice(0, 4);
 }
 

@@ -1,7 +1,8 @@
 import {stickerMeaning} from "@/lib/stickers";
 import { peelQuestionLike } from "@/lib/ai/question-like";
 import { readDraft, writeDraft } from "@/lib/ai/drafts";
-import { factsFromUserText, forgetNeedle, memoryActive, memoryForChat, moveNewChatMemory, readMemory, replaceMemoryTexts, upsertMemoryFacts, writeMemory } from "@/lib/ai/memory";
+import { factsFromUserText, forgetNeedle, isAboutUser, memoryActive, memoryForChat, moveNewChatMemory, readMemory, upsertMemoryFacts, writeMemory } from "@/lib/ai/memory";
+import { flushOwner, noteConfirmed } from "@/lib/ai/memory-remote";
 import { diskAccessEnabled } from "@/lib/ai/disk-access";
 import { readAgentPrefs } from "@/lib/ai/agent-prefs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -822,17 +823,22 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       const draftOrigin = pendingDraftChat;
       const memoryOn = !wantImage && memoryActive(userIdRef.current, draftOrigin);
       if (memoryOn && userIdRef.current) {
+        const owner = userIdRef.current;
         const needle = forgetNeedle(trimmed);
+        const facts = needle ? [] : factsFromUserText(trimmed);
         try {
           if (needle) {
-            const state = readMemory(userIdRef.current);
-            writeMemory(userIdRef.current, {
-              ...state,
-              entries: state.entries.filter((entry) => !entry.text.toLowerCase().includes(needle.toLowerCase())),
+            const current = readMemory(owner);
+            writeMemory(owner, {
+              ...current,
+              entries: current.entries.filter((entry) => !entry.text.toLowerCase().includes(needle.toLowerCase())),
             });
-          } else {
-            const facts = factsFromUserText(trimmed);
-            if (facts.length) writeMemory(userIdRef.current, upsertMemoryFacts(readMemory(userIdRef.current), facts));
+          } else if (facts.length) {
+            writeMemory(owner, upsertMemoryFacts(readMemory(owner), facts));
+          }
+          const job = flushOwner(owner);
+          if (needle || facts.length || isAboutUser(trimmed)) {
+            await Promise.race([job, new Promise((resolve) => setTimeout(resolve, 2500))]);
           }
         } catch {
           /* хранилище переполнено — ответ всё равно уходит */
@@ -861,6 +867,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       liveRef.current = { chatId, asstId, base: chatBase, messages: nextMessages };
       await persistChat(chatBase, true);
       if (!draftOrigin) moveNewChatMemory(userIdRef.current, chatId);
+      if (userIdRef.current) void flushOwner(userIdRef.current);
       writeDraft(userIdRef.current, draftOrigin, "");
       setDraftState("");
       streamingStarted = true;
@@ -1013,11 +1020,11 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
               steps = at >= 0 ? steps.map((item, index) => (index === at ? step : item)) : [...steps, step];
               schedule();
             },
-            onMemory(entries) {
+            onMemory(entries, revision) {
               const owner = userIdRef.current;
               if (!owner) return;
               try {
-                writeMemory(owner, replaceMemoryTexts(readMemory(owner), entries));
+                noteConfirmed(owner, entries, revision);
               } catch {
                 /* запись памяти не должна обрывать ответ */
               }
