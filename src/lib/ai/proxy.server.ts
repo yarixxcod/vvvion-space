@@ -1176,7 +1176,7 @@ export async function handleChat(request: Request): Promise<Response> {
         const wantDisk = Boolean(actorUser && agent.files) && !aboutUser;
         const wantWebTools = agent.web && !aboutUser;
         const wantImageTool = Boolean(actorUser && agent.image) && !aboutUser;
-		if (mcpUrls.length || wantDisk || wantWebTools || wantImageTool) {
+		if (mcpUrls.length || wantDisk || wantWebTools || wantImageTool || memoryOn) {
 			try {
 				const pendingImages: ChatPart[] = [];
                 const userText = contentToText([...messages].reverse().find(item => item.role === "user")?.content);
