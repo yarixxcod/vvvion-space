@@ -69,6 +69,7 @@ test("usernames resolve consistently across gifts, friends and transfers; self g
       "@tanstack/react-start": { createServerFn: builder },
       "@tanstack/react-start/server": { setResponseStatus() {} },
       "@/lib/auth/middleware": { authMiddleware: {} },
+      "@/lib/storage/disk-blob": { decodeDiskBlob: async (_owner, data) => Buffer.from(data, "base64") },
       "@/lib/db": {
         getSql: async () => sql,
         withTransaction: (fn) => db.transaction((tx) => fn(makeSql(tx))),

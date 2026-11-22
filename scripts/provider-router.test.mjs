@@ -203,3 +203,11 @@ test('safe user-facing error text does not hide the native-tools capability sign
  const result=await createProviderRouter(targets,async(url,_h,payload)=>{used.push(url);return payload.tools?{failed:true,unsupportedTools:true,response:Response.json({message:'Эндпоинт не найден. Проверьте адрес.'},{status:404})}:ok('{"answer":"Готово"}');},new AbortController().signal).send({tools:[{type:'function',function:{name:'my_files'}}],messages:[]});
  assert.equal(result.plainTools,true);assert.deepEqual(used,['0','0']);
 });
+
+test("plain adapter retains nested schemas and protocol even with a full system prompt", async () => {
+  const used=[];
+  const router=createProviderRouter(targets,async(_u,_h,p)=>{used.push(p);if(p.tools)return {failed:true,response:Response.json({error:"unsupported tools"},{status:400})};return ok();},new AbortController().signal);
+  await router.send({messages:[{role:"system",content:"x".repeat(24000)}],tools:[{type:"function",function:{name:"edit_my_file",description:"Edit",parameters:{type:"object",properties:{edits:{type:"array",items:{type:"object",properties:{old_text:{type:"string"},new_text:{type:"string"}}}}},required:["edits"]}}}]});
+  const system=used.at(-1).messages[0].content;
+  assert.ok(system.length<=24000); assert.match(system,/old_text/);assert.match(system,/required/);assert.match(system,/Верни только один JSON/);
+});

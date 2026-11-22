@@ -1,3 +1,4 @@
+import { s3MemoryEnabled, transaction as s3Transaction } from "./s3-store.server";
 import { getSql, withTransaction } from "@/lib/db";
 import { assertActive } from "@/lib/social/access";
 import { memoryFeatureFor, memoryFlagEnabled } from "./flags.server";
@@ -21,6 +22,7 @@ export function requireMemory(owner: string) {
 }
 export async function workspace(owner: string, chatKey = ""): Promise<Workspace> {
   if (!memoryFeatureFor(owner)) return { ...OFF_WORKSPACE };
+  if (s3MemoryEnabled()) return s3Transaction(owner, async (session) => ({ available: true, prefs: await store.prefs(session, owner), entries: await store.listFacts(session, owner), chatDisabled: await store.chatDisabled(session, owner, chatKey) }), false);
   const sql = await getSql();
   const [p, entries, disabled] = await Promise.all([
     store.prefs(sql, owner),
@@ -31,10 +33,11 @@ export async function workspace(owner: string, chatKey = ""): Promise<Workspace>
 }
 export async function mutate<T>(
   owner: string,
-  fn: (sql: Awaited<ReturnType<typeof getSql>>) => Promise<T>,
+  fn: (sql: store.MemorySql) => Promise<T>,
 ) {
   requireMemory(owner);
   await assertActive(owner);
+  if (s3MemoryEnabled()) return s3Transaction(owner, fn);
   return withTransaction(async (sql) => {
     await sql.query("set local statement_timeout='1500ms'");
     return fn(sql);
@@ -47,6 +50,7 @@ function safeError(error: unknown) {
 }
 async function failure(owner: string, operation: string, started: number) {
   try {
+    if (s3MemoryEnabled()) { console.warn("[memory]", { operation, outcome: "error", ms: Date.now() - started }); return; }
     await store.event(await getSql(), owner, operation, "error", Date.now() - started);
   } catch {
     /* No facts, prompts, IDs or database errors are logged. */
@@ -152,6 +156,7 @@ export async function prepareMemoryTurn(
   try {
     const reading = (async () => {
       await assertActive(owner);
+      if (s3MemoryEnabled()) return s3Transaction(owner, session => store.retrieveFacts(session, owner, input.text, chatKey), false);
       return withTransaction(async (sql) => {
         await sql.query("set local statement_timeout='300ms'");
         return store.retrieveFacts(sql, owner, input.text, chatKey);
@@ -161,7 +166,7 @@ export async function prepareMemoryTurn(
     const result = await Promise.race([
       reading,
       new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), 450);
+        timer = setTimeout(() => resolve(null), s3MemoryEnabled() ? 2000 : 450);
       }),
     ]).finally(() => clearTimeout(timer));
     if (!result) {
@@ -183,7 +188,7 @@ export async function prepareMemoryTurn(
           }
         : undefined;
     // No cached plaintext or cross-account cache. Usage timestamps never create new facts.
-    if (rows.length)
+    if (rows.length && !s3MemoryEnabled())
       void (async () => {
         try {
           const sql = await getSql();
@@ -221,6 +226,7 @@ export async function memoryAdminStats() {
       aiCalls: 0,
       costUsd: 0,
     };
+  if (s3MemoryEnabled()) return { available: true, storage: "s3", users: 0, records: 0, average: 0, errors: 0, extractionMs: 0, aiCalls: 0, costUsd: 0, aggregatesAvailable: false };
   const sql = await getSql();
   const [r] = await sql.query<{
     users: number;

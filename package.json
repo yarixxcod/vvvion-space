@@ -24,6 +24,7 @@
     "prebuild:web": "node scripts/prepare-ytdlp.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1175.0",
     "@electric-sql/pglite": "^0.5.4",
     "@hookform/resolvers": "^5.7.0",
     "@radix-ui/react-accordion": "^1.2.12",

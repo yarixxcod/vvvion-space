@@ -9,7 +9,7 @@ const source = readFileSync("src/lib/ai/disk-tools.server.ts", "utf8")
   .replace(/import[\s\S]*?from ["'][^"']+["'];\n/g, "")
   .replace(
     "export async function prepareDiskTools",
-    "const { getSql, assertActive, readMegaDownload, peekMegaFile, storeMegaBytes, readTags, createHash, agentName, createAgentFolder, saveAgentText } = globalThis.__diskToolsTest;\nexport async function prepareDiskTools",
+    "const { decodeDiskBlob, getSql, assertActive, readMegaDownload, peekMegaFile, storeMegaBytes, readTags, createHash, agentName, createAgentFolder, saveAgentText } = globalThis.__diskToolsTest;\nexport async function prepareDiskTools",
   );
 async function pack(request = "Покажи файлы", mode) {
   globalThis.__diskToolsTest = deps;
@@ -23,6 +23,7 @@ async function pack(request = "Покажи файлы", mode) {
 }
 function reset() {
   deps = {
+    decodeDiskBlob: async (_owner, data) => Buffer.from(data, "base64"),
     createHash,
     agentName: (value) => {
       if (typeof value !== "string" || !value || /[/\\]/.test(value)) throw new Error("bad name");
@@ -316,4 +317,41 @@ test("save_files reports a rejected file and keeps the rest", async () => {
   }));
   assert.equal(result.files[0].saved, true);
   assert.ok(result.files[1].error);
+});
+
+test("precise edits require a complete read, reject ambiguous matches, and preserve original", async () => {
+  reset();
+  deps.rows = [{ name: "app.js", mime: "text/plain", bytes: 18, data: Buffer.from("const value = 123;").toString("base64") }];
+  const tools = await pack("Измени файл");
+  const read = JSON.parse(await tools.invoke("read_my_file", { storage: "disk", id: "abcdefghijklmnop" }));
+  deps.rows = [{folder_id:null}];
+  const saved = JSON.parse(await tools.invoke("edit_my_file", {storage:"disk", id:"abcdefghijklmnop",version:read.version,edits:[{old_text:"123",new_text:"456"}]}));
+  assert.equal(saved.originalPreserved,true);
+  assert.equal(new TextDecoder().decode(deps.saved[3]),"const value = 456;");
+  const bad = JSON.parse(await tools.invoke("edit_my_file", {storage:"disk",id:"abcdefghijklmnop",version:read.version,edits:[{old_text:"missing",new_text:"x"}]}));
+  assert.match(bad.error,/ровно один/);
+});
+test("autonomy respects a direct no-write instruction", async () => {
+  reset();
+  const tools=await pack("Покажи сайт, не сохраняй файлы",{autonomy:"auto"});
+  const result=JSON.parse(await tools.invoke("save_my_text",{name:"index.html",text:"<h1>Hello</h1>"}));
+  assert.match(result.error,/запретил/); assert.equal(deps.saved,undefined);
+});
+test("project byte budget counts each file once and partial retries skip successful files", async () => {
+  reset(); let saves=0; let fail=true;
+  const original=deps.saveAgentText;
+  deps.saveAgentText=async (...args)=>{saves++; if(args[2]==="b.txt" && fail){fail=false;throw new Error("temporary");}return original(...args);};
+  const tools=await pack("Сохрани проект");
+  const args={files:[{path:"a.txt",text:"a".repeat(90000)},{path:"b.txt",text:"b".repeat(90000)},{path:"c.txt",text:"c".repeat(90000)}]};
+  const first=JSON.parse(await tools.invoke("save_files",args)); assert.ok(first.files[1].error);
+  const second=JSON.parse(await tools.invoke("save_files",args));
+  assert.ok(second.files.every(f=>f.saved)); assert.equal(saves,4);
+});
+test("simultaneous identical mutations are serialized and written once", async () => {
+  reset();let saves=0;const original=deps.saveAgentText;
+  deps.saveAgentText=async (...args)=>{saves++;return original(...args);};
+  const tools=await pack("Сохрани файл");
+  const args={name:"note.md",text:"hello"};
+  await Promise.all([tools.invoke("save_my_text",args),tools.invoke("save_my_text",args)]);
+  assert.equal(saves,1);
 });

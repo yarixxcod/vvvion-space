@@ -1206,7 +1206,7 @@ export async function handleChat(request: Request): Promise<Response> {
         const enabledTools = [
           agent.web ? "web_search, fetch_url" : "",
           actorUser && agent.image ? "list_image_models, generate_image" : "",
-          actorUser && agent.files ? "my_files, read_my_file, save_files, create_my_folder, write_my_file" : "",
+          actorUser && agent.files ? "my_files, my_folders, read_my_file, save_files, create_my_folder, write_my_file, edit_my_file" : "",
           mcpUrlsOf(body.mcp).length ? "mcp" : "",
         ].filter(Boolean).join("; ") || "нет";
         const builtPrompt = buildSystemPrompt({

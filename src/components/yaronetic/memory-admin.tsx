@@ -32,6 +32,8 @@ export function MemoryAdmin() {
         <p className="mt-3 text-sm text-muted">
           Серверный feature flag выключен. Новая память не используется.
         </p>
+      ) : "aggregatesAvailable" in state && !state.aggregatesAvailable ? (
+        <p className="mt-3 text-sm text-muted">Память хранится зашифрованно в S3. Числовые агрегаты не собираются: админка не перечисляет и не читает личные объекты аккаунтов.</p>
       ) : (
         <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {[

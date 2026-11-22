@@ -1,3 +1,4 @@
+import { removeDiskBlob } from "@/lib/storage/disk-blob";
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
@@ -25,7 +26,11 @@ export const deleteDiskFile = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<DiskSnapshot> => {
     await assertActive(context.userId);
     const sql = await getSql();
-    await sql`delete from disk_files where id = ${data} and user_id = ${context.userId}`;
+    const removed = await sql<{ data: string }>`delete from disk_files where id = ${data} and user_id = ${context.userId} returning data`;
+    if (removed[0]) {
+      try { await removeDiskBlob(context.userId, removed[0].data); }
+      catch { console.warn("[disk] S3 cleanup pending"); }
+    }
     return readDisk(context.userId);
   });
 
