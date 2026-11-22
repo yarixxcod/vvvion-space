@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { BrainCircuit, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { readMemory, writeMemory, type MemoryState } from "@/lib/ai/memory";
@@ -32,8 +33,13 @@ export function MemoryPanel({ chatId }: { chatId?: string | null }) {
   }
   const chat = chatId || "new";
   return (
-    <section className="mt-4 rounded-2xl border border-line p-3" aria-label="Память ИИ">
-      <h3 className="font-medium">Что ИИ знает обо мне</h3>
+    <section className="mt-4 overflow-hidden rounded-2xl border border-accent/35 bg-gradient-to-br from-accent/10 via-transparent to-transparent p-3" aria-label="VVVion Memory">
+      <div className="flex items-center gap-3 rounded-xl border border-accent/20 bg-subtle p-3">
+        <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent/15 text-accent"><BrainCircuit size={27} strokeWidth={1.8} aria-hidden="true" /></div>
+        <div className="min-w-0 flex-1"><h3 className="font-semibold tracking-tight">VVVion Memory</h3><p className="text-xs text-muted">Персональная память ИИ · {state.entries.length} фактов</p></div>
+        <ShieldCheck className="shrink-0 text-muted" size={18} aria-label="Контроль памяти" />
+      </div>
+      <h4 className="mt-3 text-sm font-medium">Что ИИ знает обо мне</h4>
       <p className="mt-1 text-xs leading-relaxed text-muted">
         Только устойчивые факты: имя, город, язык, профессия и то, как вам удобно получать ответы.
         Они попадают сами из разговора, и модель может дописать или забыть. Пароли и ключи не
