@@ -184,6 +184,7 @@ export async function runAgentLoop(options: {
   const { wire, signal } = options;
   let repaired = 0;
   let lastToolError = "";
+  let lastMemoryResult: { name: string; data: Record<string, unknown> } | null = null;
   let releaseAnswer = false;
   const usage: AgentUsage = {};
   const note = (id: string, label: string, status: "running" | "done" | "error", tool = "plan", detail?: string) => {
@@ -296,6 +297,23 @@ export async function runAgentLoop(options: {
       }
     }
     const filesMissing = Boolean(options.filesRequested) && !(options.hasFiles?.() ?? true);
+    if (!calls.length && lastMemoryResult && /^\\s*\\{/.test(parts.text)) {
+      try {
+        const reply = JSON.parse(parts.text.trim()) as Record<string, unknown>;
+        if (reply && typeof reply === "object" && ("ok" in reply || "entries" in reply || "old_text" in reply)) {
+          if (lastMemoryResult.name === "memory_save" && reply.ok === true)
+            parts.text = "Запомнил. Факт добавлен в VVVion Memory.";
+          else if (lastMemoryResult.name === "memory_forget" && reply.ok === true)
+            parts.text = "Удалил выбранный факт из VVVion Memory.";
+          else if (lastMemoryResult.name === "memory_list") {
+            const entries = lastMemoryResult.data.entries;
+            parts.text = Array.isArray(entries) && entries.length
+              ? "Вот что я помню о тебе:\\n" + entries.filter((v): v is string => typeof v === "string").map(v => "• " + v).join("\\n")
+              : "Пока в VVVion Memory нет сохранённых фактов.";
+          }
+        }
+      } catch { /* normal prose is unchanged */ }
+    }
     if (!calls.length) {
       const needWrite = Boolean(options.writeRequested) && !options.hasChanges();
       const asking = parts.text.trim().endsWith("?") && parts.text.trim().length < 600;
@@ -358,6 +376,7 @@ export async function runAgentLoop(options: {
       let failed = false;
       try {
         const result = JSON.parse(text);
+        if (/^memory_(list|save|forget)$/.test(call.name) && result && typeof result === "object" && !result.error) lastMemoryResult = { name: call.name, data: result };
         if (typeof result.error === "string") {
           failed = true;
           lastToolError = result.error.slice(0, 300);
