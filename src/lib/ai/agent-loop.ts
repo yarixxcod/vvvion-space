@@ -88,7 +88,26 @@ export function embeddedToolCalls(text: string): Call[] {
     const call = callFromBlock(body);
     if (call && calls.length < 6) calls.push(call);
   };
-  for (const block of text.matchAll(/<tool_call>([\s\S]*?)<\/tool_call>/gi)) take(block[1] ?? "");
+  // Some providers emit DSML-style tool invocations as assistant text rather than tool_calls.
+  // Execute only explicitly named tools; the agent pack still checks that the name is registered.
+  for (const match of text.matchAll(/<\\s*\\|\\s*DSML\\s*\\|\\s*invoke\\s+name\\s*=\\s*["']([A-Za-z][A-Za-z0-9_.:-]{0,79})["']\\s*>/gi)) {
+    if (calls.length >= 6) break;
+    const name = match[1];
+    const rest = text.slice((match.index ?? 0) + match[0].length);
+    const end = /<\\s*\\/\\s*\\|\\s*DSML\\s*\\|\\s*invoke\\s*>/i.exec(rest);
+    if (!end) continue;
+    const body = rest.slice(0, end.index).trim();
+    const parsed = body ? plainAgentReply(body) : null;
+    const args = parsed?.call?.args || (body.startsWith("{") ? body : "{}");
+    if (args.length > 8000) continue;
+    try {
+      const decoded = JSON.parse(args);
+      if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) continue;
+      calls.push({ id: `dsml_${crypto.randomUUID()}`, name, args: JSON.stringify(decoded) });
+    } catch { /* malformed pseudo-call is not executed */ }
+  }
+  if (calls.length) return calls;
+  for (const block of text.matchAll(/<tool_call>([\\s\\S]*?)<\\/tool_call>/gi)) take(block[1] ?? "");
   if (calls.length) return calls;
   for (const fence of text.matchAll(/```(?:json|tool_call|tool)?\s*([\s\S]*?)```/gi)) take(fence[1] ?? "");
   if (calls.length) return calls;
