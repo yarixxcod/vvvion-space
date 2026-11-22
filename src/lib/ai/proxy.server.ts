@@ -1051,7 +1051,7 @@ export async function handleChat(request: Request): Promise<Response> {
 			if (owner) personaText = await ownedPersonaPrompt(owner.id, personaId);
 		}
 		const toolNote = typeof body.toolNote === "string" ? body.toolNote.trim().slice(0, 4000) : "";
-        const stickerNote = body.stickerReplies === true && stickersAllowed(messagesIn) ? STICKER_REPLY_GUIDE : "";
+        const stickerNote = body.stickerReplies === true && stickersAllowed(messagesIn) && !messagesIn.some((m) => m.role === "user" && typeof m.content === "string" && isAboutUser(m.content)) ? STICKER_REPLY_GUIDE : "";
 		if (!messages.some((item) => item.role === "user")) return json(400, { message: "Нет сообщения для отправки" });
 		let sources: Source[] = [];
         let searchSummary: SearchSummary | undefined;
