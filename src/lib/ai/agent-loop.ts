@@ -107,7 +107,7 @@ export function embeddedToolCalls(text: string): Call[] {
     } catch { /* malformed pseudo-call is not executed */ }
   }
   if (calls.length) return calls;
-  for (const block of text.matchAll(new RegExp(String.raw`<tool_call>([\\s\\S]*?)</tool_call>`, "gi"))) take(block[1] ?? "");
+  for (const block of text.matchAll(new RegExp(String.raw`<tool_call>([\s\S]*?)</tool_call>`, "gi"))) take(block[1] ?? "");
   if (calls.length) return calls;
   for (const fence of text.matchAll(/```(?:json|tool_call|tool)?\s*([\s\S]*?)```/gi)) take(fence[1] ?? "");
   if (calls.length) return calls;
