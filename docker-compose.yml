@@ -6,7 +6,7 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:${POSTGRES_MAJOR:-16}-alpine
     environment:
       POSTGRES_USER: vvvion
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vvvion}
@@ -36,6 +36,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 40s
     restart: unless-stopped
 
 volumes:

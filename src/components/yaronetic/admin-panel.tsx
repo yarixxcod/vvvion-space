@@ -10,6 +10,7 @@ import { AppReleaseCard } from "@/components/yaronetic/app-release-admin";
 import { TelegramAdmin } from "@/components/yaronetic/telegram-admin";
 import { PriceAdmin } from "@/components/yaronetic/price-admin";
 import { ApiAdmin } from "@/components/yaronetic/api-admin";
+import { BackupAdmin, BackupChip } from "@/components/yaronetic/backup-admin";
 import { ModerationDesk } from "@/components/yaronetic/moderation-desk";
 import { getUsagePolicy, saveUsagePolicy, type UsagePolicy } from "@/lib/social/limits";
 import {
@@ -52,6 +53,7 @@ const TABS = [
   ["release", "Обновление"],
   ["prices", "Цены"],
   ["api", "API"],
+  ["backup", "Бэкап"],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
@@ -249,6 +251,7 @@ export function AdminPanel() {
   return (
     <div className="h-full overflow-y-auto px-3 py-4 sm:px-4">
       <h3 className="font-serif text-2xl tracking-tight">Админ</h3>
+      <BackupChip />
       <p className="mt-1 text-sm text-muted">Модели, лимиты и участники. В чате видно название, запрос уходит с именем модели провайдера.</p>
       <div className="mt-3 flex gap-1 overflow-x-auto">
         {TABS.map(([id, label]) => (
@@ -272,6 +275,7 @@ export function AdminPanel() {
       {tab === "release" ? <AppReleaseCard /> : null}
       {tab === "prices" ? <PriceAdmin /> : null}
       {tab === "api" ? <ApiAdmin /> : null}
+      {tab === "backup" ? <BackupAdmin /> : null}
       {tab === "servers" ? (
         <div className="mt-4">
           <WhisperCard />

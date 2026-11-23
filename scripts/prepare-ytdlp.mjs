@@ -13,13 +13,25 @@ if (process.platform !== "linux" || process.arch !== "x64") {
 } else {
   const cached = await readFile(destination).catch(() => null);
   if (!cached || sha(cached) !== digest) {
-    const response = await fetch(
+    const urls = [
+      ...(process.env.YTDLP_MIRROR_URLS || "").split(",").map((item) => item.trim()).filter(Boolean),
       `https://github.com/yt-dlp/yt-dlp/releases/download/${version}/yt-dlp_linux`,
-      { signal: AbortSignal.timeout(90000) },
-    );
-    if (!response.ok) throw new Error(`yt-dlp download failed: HTTP ${response.status}`);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (sha(bytes) !== digest) throw new Error("yt-dlp checksum mismatch");
+    ];
+    let bytes = null;
+    let last = "yt-dlp download failed";
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(90000) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const next = Buffer.from(await response.arrayBuffer());
+        if (sha(next) !== digest) throw new Error("yt-dlp checksum mismatch");
+        bytes = next;
+        break;
+      } catch (error) {
+        last = error instanceof Error ? error.message : last;
+      }
+    }
+    if (!bytes) throw new Error(last);
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(`${destination}.part`, bytes);
     await rename(`${destination}.part`, destination);

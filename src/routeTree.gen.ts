@@ -21,6 +21,7 @@ import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiCircleFileRouteImport } from './routes/api/circle-file'
 import { Route as ApiDiskRouteImport } from './routes/api/disk'
 import { Route as ApiGrabRouteImport } from './routes/api/grab'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiMegaRouteImport } from './routes/api/mega'
 import { Route as ApiModelsRouteImport } from './routes/api/models'
 import { Route as ApiPingRouteImport } from './routes/api/ping'
@@ -46,6 +47,8 @@ import { Route as V1ResponsesRouteImport } from './routes/v1/responses'
 import { Route as ApiAppWidgetsRouteImport } from './routes/api/app/widgets'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAvatarUserIdRouteImport } from './routes/api/avatar/$userId'
+import { Route as ApiBackupManifestRouteImport } from './routes/api/backup/manifest'
+import { Route as ApiBackupReportRouteImport } from './routes/api/backup/report'
 import { Route as ApiBooksIdRouteImport } from './routes/api/books/$id'
 import { Route as ApiCircleFileIdRouteImport } from './routes/api/circle-file/$id'
 import { Route as ApiCronCryptopayReconcileRouteImport } from './routes/api/cron/cryptopay-reconcile'
@@ -134,6 +137,11 @@ const ApiDiskRoute = ApiDiskRouteImport.update({
 const ApiGrabRoute = ApiGrabRouteImport.update({
   id: '/api/grab',
   path: '/api/grab',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiMegaRoute = ApiMegaRouteImport.update({
@@ -259,6 +267,16 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 const ApiAvatarUserIdRoute = ApiAvatarUserIdRouteImport.update({
   id: '/api/avatar/$userId',
   path: '/api/avatar/$userId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBackupManifestRoute = ApiBackupManifestRouteImport.update({
+  id: '/api/backup/manifest',
+  path: '/api/backup/manifest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBackupReportRoute = ApiBackupReportRouteImport.update({
+  id: '/api/backup/report',
+  path: '/api/backup/report',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiBooksIdRoute = ApiBooksIdRouteImport.update({
@@ -422,6 +440,7 @@ export interface FileRoutesByFullPath {
   '/api/circle-file': typeof ApiCircleFileRouteWithChildren
   '/api/disk': typeof ApiDiskRouteWithChildren
   '/api/grab': typeof ApiGrabRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/mega': typeof ApiMegaRouteWithChildren
   '/api/models': typeof ApiModelsRoute
   '/api/ping': typeof ApiPingRoute
@@ -447,6 +466,8 @@ export interface FileRoutesByFullPath {
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
+  '/api/backup/manifest': typeof ApiBackupManifestRoute
+  '/api/backup/report': typeof ApiBackupReportRoute
   '/api/books/$id': typeof ApiBooksIdRoute
   '/api/circle-file/$id': typeof ApiCircleFileIdRoute
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
@@ -490,6 +511,7 @@ export interface FileRoutesByTo {
   '/api/circle-file': typeof ApiCircleFileRouteWithChildren
   '/api/disk': typeof ApiDiskRouteWithChildren
   '/api/grab': typeof ApiGrabRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/mega': typeof ApiMegaRouteWithChildren
   '/api/models': typeof ApiModelsRoute
   '/api/ping': typeof ApiPingRoute
@@ -515,6 +537,8 @@ export interface FileRoutesByTo {
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
+  '/api/backup/manifest': typeof ApiBackupManifestRoute
+  '/api/backup/report': typeof ApiBackupReportRoute
   '/api/books/$id': typeof ApiBooksIdRoute
   '/api/circle-file/$id': typeof ApiCircleFileIdRoute
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
@@ -559,6 +583,7 @@ export interface FileRoutesById {
   '/api/circle-file': typeof ApiCircleFileRouteWithChildren
   '/api/disk': typeof ApiDiskRouteWithChildren
   '/api/grab': typeof ApiGrabRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/mega': typeof ApiMegaRouteWithChildren
   '/api/models': typeof ApiModelsRoute
   '/api/ping': typeof ApiPingRoute
@@ -584,6 +609,8 @@ export interface FileRoutesById {
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
+  '/api/backup/manifest': typeof ApiBackupManifestRoute
+  '/api/backup/report': typeof ApiBackupReportRoute
   '/api/books/$id': typeof ApiBooksIdRoute
   '/api/circle-file/$id': typeof ApiCircleFileIdRoute
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
@@ -629,6 +656,7 @@ export interface FileRouteTypes {
     | '/api/circle-file'
     | '/api/disk'
     | '/api/grab'
+    | '/api/health'
     | '/api/mega'
     | '/api/models'
     | '/api/ping'
@@ -654,6 +682,8 @@ export interface FileRouteTypes {
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
+    | '/api/backup/manifest'
+    | '/api/backup/report'
     | '/api/books/$id'
     | '/api/circle-file/$id'
     | '/api/cron/cryptopay-reconcile'
@@ -697,6 +727,7 @@ export interface FileRouteTypes {
     | '/api/circle-file'
     | '/api/disk'
     | '/api/grab'
+    | '/api/health'
     | '/api/mega'
     | '/api/models'
     | '/api/ping'
@@ -722,6 +753,8 @@ export interface FileRouteTypes {
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
+    | '/api/backup/manifest'
+    | '/api/backup/report'
     | '/api/books/$id'
     | '/api/circle-file/$id'
     | '/api/cron/cryptopay-reconcile'
@@ -765,6 +798,7 @@ export interface FileRouteTypes {
     | '/api/circle-file'
     | '/api/disk'
     | '/api/grab'
+    | '/api/health'
     | '/api/mega'
     | '/api/models'
     | '/api/ping'
@@ -790,6 +824,8 @@ export interface FileRouteTypes {
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
+    | '/api/backup/manifest'
+    | '/api/backup/report'
     | '/api/books/$id'
     | '/api/circle-file/$id'
     | '/api/cron/cryptopay-reconcile'
@@ -834,6 +870,7 @@ export interface RootRouteChildren {
   ApiCircleFileRoute: typeof ApiCircleFileRouteWithChildren
   ApiDiskRoute: typeof ApiDiskRouteWithChildren
   ApiGrabRoute: typeof ApiGrabRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiMegaRoute: typeof ApiMegaRouteWithChildren
   ApiModelsRoute: typeof ApiModelsRoute
   ApiPingRoute: typeof ApiPingRoute
@@ -859,6 +896,8 @@ export interface RootRouteChildren {
   ApiAppWidgetsRoute: typeof ApiAppWidgetsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAvatarUserIdRoute: typeof ApiAvatarUserIdRoute
+  ApiBackupManifestRoute: typeof ApiBackupManifestRoute
+  ApiBackupReportRoute: typeof ApiBackupReportRoute
   ApiCronCryptopayReconcileRoute: typeof ApiCronCryptopayReconcileRoute
   ApiPostFileIdRoute: typeof ApiPostFileIdRoute
   ApiPushCronRoute: typeof ApiPushCronRoute
@@ -964,6 +1003,13 @@ declare module '@tanstack/react-router' {
       path: '/api/grab'
       fullPath: '/api/grab'
       preLoaderRoute: typeof ApiGrabRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/mega': {
@@ -1139,6 +1185,20 @@ declare module '@tanstack/react-router' {
       path: '/api/avatar/$userId'
       fullPath: '/api/avatar/$userId'
       preLoaderRoute: typeof ApiAvatarUserIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/backup/manifest': {
+      id: '/api/backup/manifest'
+      path: '/api/backup/manifest'
+      fullPath: '/api/backup/manifest'
+      preLoaderRoute: typeof ApiBackupManifestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/backup/report': {
+      id: '/api/backup/report'
+      path: '/api/backup/report'
+      fullPath: '/api/backup/report'
+      preLoaderRoute: typeof ApiBackupReportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/books/$id': {
@@ -1458,6 +1518,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCircleFileRoute: ApiCircleFileRouteWithChildren,
   ApiDiskRoute: ApiDiskRouteWithChildren,
   ApiGrabRoute: ApiGrabRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiMegaRoute: ApiMegaRouteWithChildren,
   ApiModelsRoute: ApiModelsRoute,
   ApiPingRoute: ApiPingRoute,
@@ -1483,6 +1544,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAppWidgetsRoute: ApiAppWidgetsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAvatarUserIdRoute: ApiAvatarUserIdRoute,
+  ApiBackupManifestRoute: ApiBackupManifestRoute,
+  ApiBackupReportRoute: ApiBackupReportRoute,
   ApiCronCryptopayReconcileRoute: ApiCronCryptopayReconcileRoute,
   ApiPostFileIdRoute: ApiPostFileIdRoute,
   ApiPushCronRoute: ApiPushCronRoute,

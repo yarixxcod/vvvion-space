@@ -127,6 +127,9 @@ export async function handlePushCron(request: Request) {
   }
   if (!allowPush("cron", 4, 60_000)) return json(429, { message: "Слишком много запросов" });
   await runSubscriptionReminders();
+  await import("@/lib/backup/jobs.server")
+    .then((mod) => mod.withDb((db) => mod.pruneBackup(db)))
+    .catch(() => undefined);
   await import("@/lib/social/tips.server")
     .then((mod) => mod.refreshTipsIfDue())
     .catch(() => undefined);

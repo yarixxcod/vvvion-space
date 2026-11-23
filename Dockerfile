@@ -1,24 +1,35 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
+ARG NPM_REGISTRY=
+ARG NODE_OPTIONS=
+ENV npm_config_fetch_retries=5
+ENV npm_config_fetch_retry_mintimeout=2000
+ENV npm_config_fetch_retry_maxtimeout=30000
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
+  && npm ci
 COPY . .
 ENV NITRO_PRESET=node-server
 RUN npm run build
 
 FROM node:22-bookworm-slim
 WORKDIR /app
+ARG NPM_REGISTRY=
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV NITRO_HOST=0.0.0.0
 ENV NITRO_PORT=8080
+ENV npm_config_fetch_retries=5
+ENV npm_config_fetch_retry_mintimeout=2000
+ENV npm_config_fetch_retry_maxtimeout=30000
 COPY --from=build /app/.output ./.output
 COPY --from=build /app/migrations ./migrations
 COPY --from=build /app/scripts/migrate.mjs ./scripts/migrate.mjs
 COPY --from=build /app/scripts/migration-plan.mjs ./scripts/migration-plan.mjs
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN if [ -n "$NPM_REGISTRY" ]; then npm config set registry "$NPM_REGISTRY"; fi \
+  && npm ci --omit=dev
 COPY --from=build /app/.bin/yt-dlp /usr/local/bin/yt-dlp
 RUN chmod 755 /usr/local/bin/yt-dlp \
   && apt-get update \
