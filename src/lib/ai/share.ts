@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import type { ChatFile, ChatMessage, Source } from "@/lib/ai/types";
 import { getSql } from "@/lib/db";
+import { cleanSearchSummary } from "@/lib/ai/search-types";
 import { asDiskPath, withChatShare } from "@/lib/social/disk-path";
 
 const TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
@@ -22,13 +23,16 @@ function newToken(): string {
   return btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function asPublicMessage(value: unknown): ChatMessage | null {
+export function asPublicMessage(value: unknown): ChatMessage | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<ChatMessage>;
   if (raw.role !== "user" && raw.role !== "assistant") return null;
   if (typeof raw.id !== "string" || !raw.id.trim()) return null;
   const content = typeof raw.content === "string" ? raw.content.slice(0, 200_000) : "";
-  const createdAt = typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt) ? raw.createdAt : Date.now();
+  const createdAt =
+    typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt)
+      ? raw.createdAt
+      : Date.now();
   const message: ChatMessage = {
     id: raw.id.slice(0, 80),
     role: raw.role,
@@ -36,22 +40,52 @@ function asPublicMessage(value: unknown): ChatMessage | null {
     createdAt,
   };
   if (typeof raw.model === "string") message.model = raw.model.slice(0, 80);
-  if (typeof raw.modelLabel === "string" && raw.modelLabel.trim()) message.modelLabel = raw.modelLabel.trim().slice(0, 48);
+  if (typeof raw.modelLabel === "string" && raw.modelLabel.trim())
+    message.modelLabel = raw.modelLabel.trim().slice(0, 48);
   if (typeof raw.providerName === "string") message.providerName = raw.providerName.slice(0, 48);
-  if (typeof raw.error === "string" && raw.error.trim()) message.error = raw.error.trim().slice(0, 300);
+  if (typeof raw.error === "string" && raw.error.trim())
+    message.error = raw.error.trim().slice(0, 300);
   if (raw.stopped) message.stopped = true;
   if (raw.praised === true) message.praised = true;
   if (raw.truncated) message.truncated = true;
   if (raw.image) message.image = true;
   if (raw.web) message.web = true;
+  const search = cleanSearchSummary(raw.search);
+  if (search) message.search = search;
   if (typeof raw.imageUrl === "string") {
     const disk = asDiskPath(raw.imageUrl);
     if (disk) message.imageUrl = disk;
-    else if (raw.imageUrl.startsWith("https://") && raw.imageUrl.length < 8000) message.imageUrl = raw.imageUrl;
+    else if (raw.imageUrl.startsWith("https://") && raw.imageUrl.length < 8000)
+      message.imageUrl = raw.imageUrl;
   }
   if (!message.content && !message.imageUrl && raw.image) message.content = "Картинка";
   if (typeof raw.reasoning === "string" && raw.reasoning.trim()) {
     message.reasoning = raw.reasoning.trim().slice(0, 4_000);
+  }
+  if (raw.role === "assistant" && Array.isArray(raw.steps)) {
+    const steps = new Map<string, NonNullable<ChatMessage["steps"]>[number]>();
+    for (const value of raw.steps.slice(0, 200)) {
+      if (!value || typeof value !== "object") continue;
+      const step = value as Record<string, unknown>;
+      if (
+        typeof step.id !== "string" ||
+        !step.id.trim() ||
+        typeof step.tool !== "string" ||
+        typeof step.label !== "string" ||
+        !["running", "done", "error"].includes(String(step.status))
+      )
+        continue;
+      const item: NonNullable<ChatMessage["steps"]>[number] = {
+        id: step.id.slice(0, 80),
+        tool: step.tool.slice(0, 80),
+        label: step.label.slice(0, 200),
+        status: step.status === "done" ? "done" : "error",
+      };
+      if (typeof step.detail === "string") item.detail = step.detail.slice(0, 500);
+      if (step.status === "running") item.label += " (не завершено)";
+      steps.set(item.id, item);
+    }
+    if (steps.size) message.steps = [...steps.values()];
   }
   if (Array.isArray(raw.sources)) {
     const sources = raw.sources.slice(0, 6).flatMap((item) => {
@@ -70,7 +104,14 @@ function asPublicMessage(value: unknown): ChatMessage | null {
       if (!item || typeof item !== "object") return [];
       const file = item as Partial<ChatFile>;
       const name = typeof file.name === "string" ? file.name.slice(0, 80) : "";
-      if (!name || (file.kind !== "image" && file.kind !== "text" && file.kind !== "audio" && file.kind !== "file")) return [];
+      if (
+        !name ||
+        (file.kind !== "image" &&
+          file.kind !== "text" &&
+          file.kind !== "audio" &&
+          file.kind !== "file")
+      )
+        return [];
       const next: ChatFile = {
         id: typeof file.id === "string" ? file.id.slice(0, 80) : name,
         name,
@@ -94,19 +135,31 @@ function asPublicMessage(value: unknown): ChatMessage | null {
     });
     if (files.length) message.files = files;
   }
-  if (!message.content && !message.imageUrl && !message.files?.length && !message.error) return null;
+  if (
+    !message.content &&
+    !message.imageUrl &&
+    !message.files?.length &&
+    !message.error &&
+    !message.steps?.length
+  )
+    return null;
   return message;
 }
 
 function asPublicChat(value: unknown): { title: string; messages: ChatMessage[] } {
   if (!value || typeof value !== "object") throw new Error("Не удалось подготовить диалог");
   const raw = value as { title?: unknown; messages?: unknown };
-  const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim().slice(0, 80) : "Диалог";
+  const title =
+    typeof raw.title === "string" && raw.title.trim() ? raw.title.trim().slice(0, 80) : "Диалог";
   const messages = Array.isArray(raw.messages)
-    ? raw.messages.map(asPublicMessage).filter((item): item is ChatMessage => item !== null).slice(-MAX_MESSAGES)
+    ? raw.messages
+        .map(asPublicMessage)
+        .filter((item): item is ChatMessage => item !== null)
+        .slice(-MAX_MESSAGES)
     : [];
   if (!messages.length) throw new Error("В диалоге пока нечего отправлять");
-  if (JSON.stringify(messages).length > MAX_JSON) throw new Error("Диалог слишком большой для ссылки");
+  if (JSON.stringify(messages).length > MAX_JSON)
+    throw new Error("Диалог слишком большой для ссылки");
   return { title, messages };
 }
 
@@ -155,7 +208,9 @@ export const publishChat = createServerFn({ method: "POST" })
 
 export const readSharedChat = createServerFn({ method: "GET" })
   // Public on purpose: the unguessable token is the capability. No other chats or keys are returned.
-  .validator((token: unknown): string => (typeof token === "string" && TOKEN.test(token) ? token : ""))
+  .validator((token: unknown): string =>
+    typeof token === "string" && TOKEN.test(token) ? token : "",
+  )
   .handler(async ({ data }): Promise<SharedChat | null> => {
     if (!data) return null;
     const sql = await getSql();

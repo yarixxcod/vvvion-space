@@ -21,7 +21,8 @@ function readAgentJson(clean: string): { answer?: string; call?: Call } | null {
     const parsed = JSON.parse(clean);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
     const row = parsed as Record<string, unknown>;
-    if (typeof row.answer === "string" && !row.tool && !row.name && !row.function) return { answer: row.answer };
+    if (typeof row.answer === "string" && !row.tool && !row.name && !row.function)
+      return { answer: row.answer };
     const call = callFromRecord(row);
     return call ? { call } : null;
   } catch {
@@ -46,9 +47,16 @@ function callFromRecord(row: Record<string, unknown>): Call | null {
   const name = nameRaw.trim();
   if (!TOOL_NAME.test(name)) return null;
   const nestedArgs = nested ? "arguments" in nested || "input" in nested : false;
-  const hasArgs = "arguments" in row || "args" in row || "input" in row || "tool" in row || "function" in row || nestedArgs;
+  const hasArgs =
+    "arguments" in row ||
+    "args" in row ||
+    "input" in row ||
+    "tool" in row ||
+    "function" in row ||
+    nestedArgs;
   if (!hasArgs) return null;
-  const argsSource = row.arguments ?? row.args ?? nested?.arguments ?? nested?.input ?? row.input ?? {};
+  const argsSource =
+    row.arguments ?? row.args ?? nested?.arguments ?? nested?.input ?? row.input ?? {};
   let args = "{}";
   if (typeof argsSource === "string") args = argsSource || "{}";
   else if (argsSource && typeof argsSource === "object" && !Array.isArray(argsSource)) {
@@ -58,8 +66,13 @@ function callFromRecord(row: Record<string, unknown>): Call | null {
       return null;
     }
   } else if (argsSource !== undefined && typeof argsSource !== "object") return null;
-  const limit = /^(save_my_text|write_my_file|save_files|edit_my_file)$/.test(name) ? 110_000 : 8_000;
-  const id = typeof row.id === "string" && row.id.trim() ? row.id.trim().slice(0, 80) : `json_${crypto.randomUUID()}`;
+  const limit = /^(save_my_text|write_my_file|save_files|edit_my_file)$/.test(name)
+    ? 110_000
+    : 8_000;
+  const id =
+    typeof row.id === "string" && row.id.trim()
+      ? row.id.trim().slice(0, 80)
+      : `json_${crypto.randomUUID()}`;
   return { id, name: name.slice(0, 80), args: args.slice(0, limit) || "{}" };
 }
 
@@ -90,7 +103,9 @@ export function embeddedToolCalls(text: string): Call[] {
   };
   // Some providers emit DSML-style tool invocations as assistant text rather than tool_calls.
   // Execute only explicitly named tools; the agent pack still checks that the name is registered.
-  for (const match of text.matchAll(/<\s*\|\s*DSML\s*\|\s*invoke\s+name\s*=\s*["']([A-Za-z][A-Za-z0-9_.:-]{0,79})["']\s*>/gi)) {
+  for (const match of text.matchAll(
+    /<\s*\|\s*DSML\s*\|\s*invoke\s+name\s*=\s*["']([A-Za-z][A-Za-z0-9_.:-]{0,79})["']\s*>/gi,
+  )) {
     if (calls.length >= 6) break;
     const name = match[1];
     const rest = text.slice((match.index ?? 0) + match[0].length);
@@ -104,12 +119,18 @@ export function embeddedToolCalls(text: string): Call[] {
       const decoded = JSON.parse(args);
       if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) continue;
       calls.push({ id: `dsml_${crypto.randomUUID()}`, name, args: JSON.stringify(decoded) });
-    } catch { /* malformed pseudo-call is not executed */ }
+    } catch {
+      /* malformed pseudo-call is not executed */
+    }
   }
   if (calls.length) return calls;
-  for (const block of text.matchAll(new RegExp(String.raw`<tool_call>([\s\S]*?)</tool_call>`, "gi"))) take(block[1] ?? "");
+  for (const block of text.matchAll(
+    new RegExp(String.raw`<tool_call>([\s\S]*?)</tool_call>`, "gi"),
+  ))
+    take(block[1] ?? "");
   if (calls.length) return calls;
-  for (const fence of text.matchAll(/```(?:json|tool_call|tool)?\s*([\s\S]*?)```/gi)) take(fence[1] ?? "");
+  for (const fence of text.matchAll(/```(?:json|tool_call|tool)?\s*([\s\S]*?)```/gi))
+    take(fence[1] ?? "");
   if (calls.length) return calls;
   const trimmed = text.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("```")) {
@@ -129,7 +150,8 @@ export function toolCallsFromMessage(message: unknown): Call[] {
     for (const part of row.content) {
       if (!part || typeof part !== "object") continue;
       const item = part as Record<string, unknown>;
-      if (item.type === "tool_use" || item.type === "function_call" || item.functionCall) raw.push(item.functionCall ?? item);
+      if (item.type === "tool_use" || item.type === "function_call" || item.functionCall)
+        raw.push(item.functionCall ?? item);
     }
   }
   const calls: Call[] = [];
@@ -155,6 +177,7 @@ type AgentWire = {
   role: string;
   content: string | import("./types").ChatPart[] | null;
   tool_calls?: unknown;
+  reasoning_content?: string;
   tool_call_id?: string;
 };
 type AgentUsage = import("./types").Usage;
@@ -177,7 +200,13 @@ export async function runAgentLoop(options: {
   hasChanges: () => boolean;
   hasFiles?: () => boolean;
   onStep?: (secret?: string) => void;
-  onProgress?: (step: { id: string; tool: string; label: string; detail?: string; status: "running" | "done" | "error" }) => void;
+  onProgress?: (step: {
+    id: string;
+    tool: string;
+    label: string;
+    detail?: string;
+    status: "running" | "done" | "error";
+  }) => void;
   forcePlain?: () => void;
   afterTools?: () => void;
 }): Promise<AgentResult | null> {
@@ -186,8 +215,43 @@ export async function runAgentLoop(options: {
   let lastToolError = "";
   let lastMemoryResult: { name: string; data: Record<string, unknown> } | null = null;
   let releaseAnswer = false;
+  const memoryReceipts: { name: string; data: Record<string, unknown> }[] = [];
+  const memoryAnswer = (): AgentResult | null => {
+    const saves = memoryReceipts.filter(
+      (r) => r.name === "memory_save" && r.data.saved === true,
+    ).length;
+    const forgotten = memoryReceipts
+      .filter((r) => r.name === "memory_forget")
+      .reduce((n, r) => n + (typeof r.data.forgotten === "number" ? r.data.forgotten : 0), 0);
+    const lines: string[] = [];
+    if (saves) lines.push("Факты сохранены в VVVion Memory.");
+    if (forgotten > 0) lines.push(`Удалено записей из VVVion Memory: ${forgotten}.`);
+    if (!lines.length) {
+      const listed = [...memoryReceipts].reverse().find((r) => r.name === "memory_list");
+      if (listed && Array.isArray(listed.data.entries)) {
+        const entries = listed.data.entries.filter((v): v is string => typeof v === "string");
+        lines.push(
+          entries.length
+            ? "Вот что я помню о тебе:\n" + entries.map((v) => `• ${v}`).join("\n")
+            : "В VVVion Memory пока нет сохранённых фактов.",
+        );
+      }
+    }
+    if (!lines.length) return null;
+    if (lastToolError) lines.push("Часть действий не выполнена: " + lastToolError);
+    lines.push(
+      "Модель не смогла продолжить ответ. Подтверждённые результаты памяти сохранены; остальные части запроса могли остаться без ответа.",
+    );
+    return { text: lines.join("\n\n"), reason: "", usage };
+  };
   const usage: AgentUsage = {};
-  const note = (id: string, label: string, status: "running" | "done" | "error", tool = "plan", detail?: string) => {
+  const note = (
+    id: string,
+    label: string,
+    status: "running" | "done" | "error",
+    tool = "plan",
+    detail?: string,
+  ) => {
     options.onProgress?.({ id, tool, label, detail, status });
   };
   const salvage = async (text: string): Promise<string | null> => {
@@ -207,7 +271,10 @@ export async function runAgentLoop(options: {
     let saved = 0;
     let errorText = "";
     try {
-      const parsed = JSON.parse(raw) as { error?: string; files?: Array<{ saved?: boolean; error?: string }> };
+      const parsed = JSON.parse(raw) as {
+        error?: string;
+        files?: Array<{ saved?: boolean; error?: string }>;
+      };
       if (typeof parsed.error === "string") errorText = parsed.error;
       saved = parsed.files?.filter((file) => file.saved).length ?? 0;
       if (!saved && !errorText) errorText = parsed.files?.find((file) => file.error)?.error || "";
@@ -224,7 +291,15 @@ export async function runAgentLoop(options: {
   };
   for (let round = 0; round < 24; round++) {
     signal.throwIfAborted();
-    note("plan", round === 0 ? "Думаю над задачей" : options.filesRequested || options.writeRequested || options.hasChanges() ? "Продолжаю сборку" : "Продолжаю", "running");
+    note(
+      "plan",
+      round === 0
+        ? "Думаю над задачей"
+        : options.filesRequested || options.writeRequested || options.hasChanges()
+          ? "Продолжаю сборку"
+          : "Продолжаю",
+      "running",
+    );
     // Keep identifiers and receipts while limiting repeated document text in smaller contexts.
     const oldTools = wire
       .map((item, index) => (item.role === "tool" ? index : -1))
@@ -250,14 +325,21 @@ export async function runAgentLoop(options: {
       ...options.payload,
       messages: wire,
       // A forced tool call cannot be the final answer. Once the files exist, or the tool says to stop, let the model speak or ask.
-      ...((options.payload.tool_choice === "required" &&
-        (releaseAnswer ||
-          (options.hasChanges() && (!options.filesRequested || options.hasFiles?.()))))
+      ...(options.payload.tool_choice === "required" &&
+      (releaseAnswer || (options.hasChanges() && (!options.filesRequested || options.hasFiles?.())))
         ? { tool_choice: "auto" }
         : {}),
     };
     if (round > 0 && sent.reasoning_effort === "medium") sent.reasoning_effort = "low";
-    const attempt = await options.send(sent);
+    let attempt: Awaited<ReturnType<typeof options.send>>;
+    try {
+      attempt = await options.send(sent);
+    } catch (error) {
+      signal.throwIfAborted();
+      const recovered = memoryAnswer();
+      if (recovered) return recovered;
+      throw error;
+    }
     if (attempt.failed) break;
     options.onStep?.(attempt.secret);
     const parsed = (await attempt.response.json()) as Record<string, unknown>;
@@ -270,10 +352,71 @@ export async function runAgentLoop(options: {
     ] as const)
       if (spent?.[key]) usage[key] = (usage[key] ?? 0) + spent[key];
     const parts = options.split(parsed);
+    // DeepSeek requires its exact reasoning_content back with subsequent tool requests.
+    const choice = Array.isArray(parsed.choices) ? parsed.choices[0] : null;
+    const message =
+      choice && typeof choice === "object"
+        ? (choice as { message?: { reasoning_content?: unknown } }).message
+        : undefined;
+    const reasoning =
+      typeof message?.reasoning_content === "string" ? message.reasoning_content : parts.reason;
+    const assistantReason =
+      reasoning !== undefined && (reasoning || typeof message?.reasoning_content === "string")
+        ? { reasoning_content: reasoning }
+        : {};
     const finish = finishReason(parsed);
     let calls = options.calls(parsed);
     if (!calls.length) calls = embeddedToolCalls(`${parts.text}\n${parts.reason}`);
-    if (!calls.length && attempt.plainTools) {
+    // The receipt is assigned by an awaited tool callback; expose that mutation to TypeScript.
+    const memoryReceipt = lastMemoryResult as {
+      name: string;
+      data: Record<string, unknown>;
+    } | null;
+    if (!calls.length && memoryReceipt && /^\s*\{/.test(parts.text)) {
+      try {
+        const reply = JSON.parse(parts.text.trim()) as Record<string, unknown>;
+        if (
+          reply &&
+          typeof reply === "object" &&
+          ("ok" in reply ||
+            "saved" in reply ||
+            "forgotten" in reply ||
+            "entries" in reply ||
+            "old_text" in reply)
+        ) {
+          if (memoryReceipt.name === "memory_save" && memoryReceipt.data.saved === true)
+            parts.text = "Запомнил. Факт добавлен в VVVion Memory.";
+          else if (
+            memoryReceipt.name === "memory_forget" &&
+            typeof memoryReceipt.data.forgotten === "number"
+          )
+            parts.text =
+              Number(memoryReceipt.data.forgotten) > 0
+                ? "Удалил выбранный факт из VVVion Memory."
+                : "Совпадающих фактов в VVVion Memory не найдено.";
+          else if (memoryReceipt.name === "memory_list") {
+            const entries = memoryReceipt.data.entries;
+            parts.text =
+              Array.isArray(entries) && entries.length
+                ? "Вот что я помню о тебе:\n" +
+                  entries
+                    .filter((v): v is string => typeof v === "string")
+                    .map((v) => "• " + v)
+                    .join("\n")
+                : "Пока в VVVion Memory нет сохранённых фактов.";
+          }
+        }
+      } catch {
+        /* normal prose is unchanged */
+      }
+    }
+    const readableMemoryReply =
+      memoryReceipts.length > 0 &&
+      !options.filesRequested &&
+      !options.writeRequested &&
+      parts.text.trim() &&
+      !parts.text.trim().startsWith("{");
+    if (!calls.length && attempt.plainTools && !readableMemoryReply) {
       const reply = plainAgentReply(parts.text);
       if (reply?.call) calls = [reply.call];
       else if (reply?.answer !== undefined) parts.text = reply.answer;
@@ -285,37 +428,19 @@ export async function runAgentLoop(options: {
         else {
           repaired += 1;
           note("plan", "Собираю файлы", "running");
-          wire.push({ role: "assistant", content: parts.text.slice(0, 1500) });
+          wire.push({ role: "assistant", content: parts.text.slice(0, 1500), ...assistantReason });
           wire.push({
             role: "user",
-            content: finish === "length" || !parts.text.trim().endsWith("}")
-              ? "Вызов не поместился. Раздели содержимое на несколько файлов меньшего размера и вызови save_files заново, одним JSON."
-              : 'Исправь формат: только JSON {"tool":"save_files","arguments":{"folder":"Название","files":[{"path":"index.html","text":"полный html"}]}} или {"answer":"итог"}. Код в ответе не сохраняется.',
+            content:
+              finish === "length" || !parts.text.trim().endsWith("}")
+                ? "Вызов не поместился. Раздели содержимое на несколько файлов меньшего размера и вызови save_files заново, одним JSON."
+                : 'Исправь формат: только JSON {"tool":"save_files","arguments":{"folder":"Название","files":[{"path":"index.html","text":"полный html"}]}} или {"answer":"итог"}. Код в ответе не сохраняется.',
           });
           continue;
         }
       }
     }
     const filesMissing = Boolean(options.filesRequested) && !(options.hasFiles?.() ?? true);
-    // The receipt is assigned by an awaited tool callback; expose that mutation to TypeScript.
-    const memoryReceipt = lastMemoryResult as { name: string; data: Record<string, unknown> } | null;
-    if (!calls.length && memoryReceipt && /^\\s*\\{/.test(parts.text)) {
-      try {
-        const reply = JSON.parse(parts.text.trim()) as Record<string, unknown>;
-        if (reply && typeof reply === "object" && ("ok" in reply || "entries" in reply || "old_text" in reply)) {
-          if (memoryReceipt.name === "memory_save" && memoryReceipt.data.saved === true)
-            parts.text = "Запомнил. Факт добавлен в VVVion Memory.";
-          else if (memoryReceipt.name === "memory_forget" && typeof memoryReceipt.data.forgotten === "number")
-            parts.text = "Удалил выбранный факт из VVVion Memory.";
-          else if (memoryReceipt.name === "memory_list") {
-            const entries = memoryReceipt.data.entries;
-            parts.text = Array.isArray(entries) && entries.length
-              ? "Вот что я помню о тебе:\\n" + entries.filter((v): v is string => typeof v === "string").map(v => "• " + v).join("\\n")
-              : "Пока в VVVion Memory нет сохранённых фактов.";
-          }
-        }
-      } catch { /* normal prose is unchanged */ }
-    }
     if (!calls.length) {
       const needWrite = Boolean(options.writeRequested) && !options.hasChanges();
       const asking = parts.text.trim().endsWith("?") && parts.text.trim().length < 600;
@@ -327,7 +452,7 @@ export async function runAgentLoop(options: {
           repaired += 1;
           if (!attempt.plainTools) options.forcePlain?.();
           note("plan", "Собираю файлы", "running");
-          wire.push({ role: "assistant", content: parts.text.slice(0, 1500) });
+          wire.push({ role: "assistant", content: parts.text.slice(0, 1500), ...assistantReason });
           wire.push({
             role: "user",
             content: filesMissing
@@ -342,9 +467,10 @@ export async function runAgentLoop(options: {
         const hint = options.hasChanges()
           ? "Папка есть, файлы не записались. Напишите «продолжай» — сохраню сайт целиком."
           : "Файлы на диск не легли. Напишите «продолжай» — соберу проект ещё раз.";
-        parts.text = kept.length > 80 && !/не легли|не записались/i.test(kept)
-          ? `${kept}\n\n${lastToolError ? `${lastToolError}\n\n` : ""}${hint}`
-          : `${lastToolError ? `${lastToolError} ` : ""}${hint}`;
+        parts.text =
+          kept.length > 80 && !/не легли|не записались/i.test(kept)
+            ? `${kept}\n\n${lastToolError ? `${lastToolError}\n\n` : ""}${hint}`
+            : `${lastToolError ? `${lastToolError} ` : ""}${hint}`;
       } else if (needWrite && !asking)
         parts.text = `Изменения на дисках не выполнялись. ${lastToolError || "Модель не вызвала запись. Напишите «продолжай»."}`;
       else if (lastToolError && !asking) parts.text += `\n\nНе выполнено: ${lastToolError}`;
@@ -355,6 +481,7 @@ export async function runAgentLoop(options: {
     wire.push({
       role: "assistant",
       content: parts.text || "",
+      ...assistantReason,
       tool_calls: calls.map((call) => ({
         id: call.id,
         type: "function",
@@ -366,7 +493,13 @@ export async function runAgentLoop(options: {
       signal.throwIfAborted();
       const args = parseToolArguments(call.args);
       const info = stepInfo(call.name, args);
-      options.onProgress?.({ id: call.id, tool: call.name, label: info.label, detail: info.detail, status: "running" });
+      options.onProgress?.({
+        id: call.id,
+        tool: call.name,
+        label: info.label,
+        detail: info.detail,
+        status: "running",
+      });
       const cut = !call.args.trim().endsWith("}") || finish === "length";
       const text = args
         ? await options.invoke(call.name, args)
@@ -378,29 +511,55 @@ export async function runAgentLoop(options: {
       let failed = false;
       try {
         const result = JSON.parse(text);
-        if (/^memory_(list|save|forget)$/.test(call.name) && result && typeof result === "object" && !result.error) lastMemoryResult = { name: call.name, data: result };
+        if (
+          /^memory_(list|save|forget)$/.test(call.name) &&
+          result &&
+          typeof result === "object" &&
+          !result.error &&
+          result.ok !== false
+        ) {
+          lastMemoryResult = { name: call.name, data: result };
+          memoryReceipts.push(lastMemoryResult);
+        }
         if (typeof result.error === "string") {
           failed = true;
           lastToolError = result.error.slice(0, 300);
           if (/достигнут предел|сообщите пользователю|квот|подписк/i.test(result.error))
             releaseAnswer = true;
-        } else if (result.saved || result.created || (Array.isArray(result.files) && result.files.some((item: { saved?: boolean }) => item?.saved))) lastToolError = "";
+        } else if (
+          result.saved ||
+          result.created ||
+          (Array.isArray(result.files) &&
+            result.files.some((item: { saved?: boolean }) => item?.saved))
+        )
+          lastToolError = "";
       } catch {
         /* External tool replies may be non-JSON. */
       }
-      options.onProgress?.({ id: call.id, tool: call.name, label: info.label, detail: info.detail, status: failed ? "error" : "done" });
+      options.onProgress?.({
+        id: call.id,
+        tool: call.name,
+        label: info.label,
+        detail: info.detail,
+        status: failed ? "error" : "done",
+      });
       return text;
     };
-    const writes = (name: string) => /^(save_my_text|save_files|create_my_folder|write_my_file|generate_image)$/.test(name);
+    const writes = (name: string) =>
+      /^(save_my_text|save_files|create_my_folder|write_my_file|generate_image)$/.test(name);
     const texts: string[] = [];
-    for (let index = 0; index < batch.length; ) {
-      if (writes(batch[index].name)) {
+    for (let index = 0; index < batch.length;) {
+      if (writes(batch[index].name) || /^memory_(save|forget)$/.test(batch[index].name)) {
         texts.push(await runCall(batch[index]));
         index += 1;
         continue;
       }
       const group: Call[] = [];
-      while (index < batch.length && !writes(batch[index].name)) {
+      while (
+        index < batch.length &&
+        !writes(batch[index].name) &&
+        !/^memory_(save|forget)$/.test(batch[index].name)
+      ) {
         group.push(batch[index]);
         index += 1;
       }
@@ -408,8 +567,25 @@ export async function runAgentLoop(options: {
     }
     for (let index = 0; index < batch.length; index += 1)
       wire.push({ role: "tool", tool_call_id: batch[index].id, content: texts[index] });
+    for (const skipped of calls.slice(batch.length))
+      wire.push({
+        role: "tool",
+        tool_call_id: skipped.id,
+        content: JSON.stringify({
+          error:
+            "Лимит 6 вызовов за один шаг. Этот вызов не выполнен; повторите его в следующем шаге.",
+        }),
+      });
     options.afterTools?.();
   }
+  const recoveredMemory = memoryAnswer();
+  if (
+    recoveredMemory &&
+    !options.hasChanges() &&
+    !options.filesRequested &&
+    !options.writeRequested
+  )
+    return recoveredMemory;
   if (options.hasChanges())
     return {
       text:
@@ -434,15 +610,23 @@ export async function runAgentLoop(options: {
   return null;
 }
 
-function stepInfo(name: string, args: Record<string, unknown> | null): { label: string; detail?: string } {
-  const text = (value: unknown, max = 80) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+function stepInfo(
+  name: string,
+  args: Record<string, unknown> | null,
+): { label: string; detail?: string } {
+  const text = (value: unknown, max = 80) =>
+    typeof value === "string" ? value.trim().slice(0, max) : "";
   if (name === "web_search") {
     const query = text(args?.query);
     return { label: query ? `Ищу «${query}»` : "Ищу в интернете" };
   }
   if (name === "fetch_url") {
     let host = "";
-    try { host = new URL(text(args?.url, 500)).hostname; } catch { host = ""; }
+    try {
+      host = new URL(text(args?.url, 500)).hostname;
+    } catch {
+      host = "";
+    }
     return { label: host ? `Читаю ${host}` : "Читаю страницу" };
   }
   if (name === "generate_image") return { label: "Рисую", detail: text(args?.prompt) || undefined };
@@ -453,13 +637,22 @@ function stepInfo(name: string, args: Record<string, unknown> | null): { label: 
   if (name === "save_files") {
     const folder = text(args?.folder, 60);
     const names = Array.isArray(args?.files)
-      ? args.files.flatMap((item) => {
-          if (!item || typeof item !== "object") return [];
-          const path = text((item as { path?: unknown; name?: unknown }).path || (item as { name?: unknown }).name, 40);
-          return path ? [path.split("/").pop() || path] : [];
-        }).slice(0, 4)
+      ? args.files
+          .flatMap((item) => {
+            if (!item || typeof item !== "object") return [];
+            const path = text(
+              (item as { path?: unknown; name?: unknown }).path ||
+                (item as { name?: unknown }).name,
+              40,
+            );
+            return path ? [path.split("/").pop() || path] : [];
+          })
+          .slice(0, 4)
       : [];
-    return { label: folder ? `Сохраняю проект «${folder}»` : "Сохраняю файлы", detail: names.length ? names.join(", ") : undefined };
+    return {
+      label: folder ? `Сохраняю проект «${folder}»` : "Сохраняю файлы",
+      detail: names.length ? names.join(", ") : undefined,
+    };
   }
   if (name === "save_my_text" || name === "write_my_file") {
     const file = text(args?.name, 60);
@@ -475,7 +668,10 @@ function stepInfo(name: string, args: Record<string, unknown> | null): { label: 
   if (name === "memory_forget") return { label: "Забываю", detail: text(args?.text) || undefined };
   if (/^m\d+_/.test(name)) {
     const label = name.replace(/^m\d+_/, "").replace(/_/g, " ");
-    return { label: label ? `MCP: ${label}` : "MCP", detail: text(args?.query || args?.q || args?.text || args?.input) || undefined };
+    return {
+      label: label ? `MCP: ${label}` : "MCP",
+      detail: text(args?.query || args?.q || args?.text || args?.input) || undefined,
+    };
   }
   return { label: name };
 }
@@ -494,15 +690,20 @@ export function filesFromAnswer(text: string): { path: string; text: string }[] 
     const info = (match[1] || "").trim();
     const body = match[2] || "";
     if (/^\s*\{/.test(body) && /"tool"\s*:/.test(body)) continue;
-    const named = /([\w.-]+\.(?:html|htm|css|scss|js|mjs|jsx|ts|tsx|json|md|svg|py|txt))$/i.exec(info);
+    const named = /([\w.-]+\.(?:html|htm|css|scss|js|mjs|jsx|ts|tsx|json|md|svg|py|txt))$/i.exec(
+      info,
+    );
     if (named?.[1]) {
       take(named[1], body);
       continue;
     }
     const lang = info.split(/\s+/)[0]?.toLowerCase() || "";
-    if (lang === "html" || /<!doctype|<html[\s>]/i.test(body)) take(used.has("index.html") ? `page${files.length}.html` : "index.html", body);
-    else if (lang === "css") take(used.has("styles.css") ? `styles${files.length}.css` : "styles.css", body);
-    else if (lang === "javascript" || lang === "js") take(used.has("script.js") ? `script${files.length}.js` : "script.js", body);
+    if (lang === "html" || /<!doctype|<html[\s>]/i.test(body))
+      take(used.has("index.html") ? `page${files.length}.html` : "index.html", body);
+    else if (lang === "css")
+      take(used.has("styles.css") ? `styles${files.length}.css` : "styles.css", body);
+    else if (lang === "javascript" || lang === "js")
+      take(used.has("script.js") ? `script${files.length}.js` : "script.js", body);
     else if (lang === "markdown" || lang === "md") take("README.md", body);
     else if (lang === "svg") take("image.svg", body);
     else if (lang === "json") take("data.json", body);
@@ -515,7 +716,9 @@ export function filesFromAnswer(text: string): { path: string; text: string }[] 
     if (doc) take("index.html", doc[0]);
   }
   const weight = files.reduce((sum, file) => sum + file.text.length, 0);
-  const html = files.some((file) => /\.html?$/i.test(file.path) && /<!doctype|<html[\s>]/i.test(file.text));
+  const html = files.some(
+    (file) => /\.html?$/i.test(file.path) && /<!doctype|<html[\s>]/i.test(file.text),
+  );
   if (html || weight >= 400 || (files.length >= 2 && weight >= 120)) return files;
   return [];
 }
@@ -523,7 +726,10 @@ export function filesFromAnswer(text: string): { path: string; text: string }[] 
 function folderTitle(files: { path: string; text: string }[]): string {
   const html = files.find((file) => /\.html?$/i.test(file.path));
   const title = html ? /<title>([^<]{1,40})<\/title>/i.exec(html.text)?.[1]?.trim() : "";
-  const clean = (title || "Сайт").replace(/[^\p{L}\p{N} _.-]/gu, "").trim().slice(0, 40);
+  const clean = (title || "Сайт")
+    .replace(/[^\p{L}\p{N} _.-]/gu, "")
+    .trim()
+    .slice(0, 40);
   return clean || "Сайт";
 }
 

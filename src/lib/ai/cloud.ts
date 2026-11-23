@@ -109,7 +109,7 @@ function asMessage(value: unknown): ChatMessage | null {
     message.reasoning = raw.reasoning.trim().slice(0, 24_000);
   }
   if (Array.isArray(raw.steps)) {
-    const steps = raw.steps.slice(0, 24).flatMap((item) => {
+    const steps = raw.steps.slice(0, 200).flatMap((item) => {
       if (!item || typeof item !== "object") return [];
       const step = item as { id?: unknown; tool?: unknown; label?: unknown; detail?: unknown; status?: unknown };
       const label = typeof step.label === "string" ? step.label.slice(0, 120) : "";
