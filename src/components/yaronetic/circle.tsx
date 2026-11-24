@@ -28,6 +28,25 @@ import { useSwipe } from "@/lib/gestures/use-swipe";
 
 export type { CircleTab };
 
+function CircleGate({ onClose }: { onClose?: () => void }) {
+  return (
+    <div className="relative h-full">
+      <div className="flex items-center justify-between p-4">
+        <Wordmark />
+        {onClose ? <ToChat onClick={onClose} /> : null}
+      </div>
+      {typeof document !== "undefined" ? createPortal(
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 sm:items-center sm:p-4" role="presentation" onClick={onClose}>
+          <div role="dialog" aria-modal="true" aria-label="Регистрация или вход" className="max-h-[min(90dvh,44rem)] w-full max-w-md overflow-y-auto rounded-t-3xl border border-line bg-elev px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shadow-[var(--shadow)] sm:rounded-3xl sm:p-5" onClick={(event) => event.stopPropagation()}>
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+            <AuthForm />
+          </div>
+        </div>, document.body,
+      ) : null}
+    </div>
+  );
+}
+
 export function Circle({
   onClose,
   tab: initialTab = "chat",
@@ -57,23 +76,8 @@ export function Circle({
     );
   }
 
-  if (!user) {
-    return (
-      <div className="relative h-full">
-        <div className="flex items-center justify-between p-4">
-          <Wordmark />
-          {onClose ? <ToChat onClick={onClose} /> : null}
-        </div>
-        {typeof document !== "undefined" ? createPortal(
-          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 sm:items-center sm:p-4" role="presentation" onClick={onClose}>
-            <div role="dialog" aria-modal="true" aria-label="Регистрация или вход" className="max-h-[min(90dvh,44rem)] w-full max-w-md overflow-y-auto rounded-t-3xl border border-line bg-elev px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shadow-[var(--shadow)] sm:rounded-3xl sm:p-5" onClick={(event) => event.stopPropagation()}>
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
-              <AuthForm />
-            </div>
-          </div>, document.body,
-        ) : null}
-      </div>
-    );
+  if (!user && initialTab !== "apps") {
+    return <CircleGate onClose={onClose} />;
   }
 
   return <Home onClose={onClose} initialTab={initialTab} onTab={onTab} theme={theme} onTheme={onTheme} roomId={roomId} />;
@@ -95,11 +99,13 @@ function Home({
   roomId?: string | null;
 }) {
   const lang = useLang();
+  const guest = !useCurrentUserState().user;
   const [tab, setTab] = useState<CircleTab>(initialTab);
   const owner = useCurrentUserState().user?.id || "guest";
   const paneRef = useSectionScroll(tab, owner);
   const [access, setAccess] = useState<Access | null>(null);
   const [more, setMore] = useState(false);
+  const [askAuth, setAskAuth] = useState(false);
   const [keys, setKeys] = useState(false);
   const [nested, setNested] = useState(false);
   const armed = useRef(0);
@@ -141,6 +147,10 @@ function Home({
   }, [initialTab]);
 
   function pick(next: CircleTab, fromUser = false) {
+    if (guest && next !== "apps") {
+      setAskAuth(true);
+      return;
+    }
     if (fromUser && next !== tab) haptic("selection");
     setTab(next);
     onTab?.(next);
@@ -277,6 +287,14 @@ function Home({
 
   return (
     <div className="flex h-full min-h-0 bg-elev">
+      {askAuth ? createPortal(
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/55 sm:items-center sm:p-4" role="presentation" onClick={() => setAskAuth(false)}>
+          <div role="dialog" aria-modal="true" aria-label="Регистрация или вход" className="max-h-[min(90dvh,44rem)] w-full max-w-md overflow-y-auto rounded-t-3xl border border-line bg-elev px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 shadow-[var(--shadow)] sm:rounded-3xl sm:p-5" onClick={(event) => event.stopPropagation()}>
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+            <AuthForm />
+          </div>
+        </div>, document.body,
+      ) : null}
       <nav className="hidden w-60 shrink-0 flex-col border-r border-line xl:flex" aria-label={ui(lang, "circle")} data-site-nav="sections">
         <div className="p-3">
           {onClose ? <ToChat onClick={onClose} wide /> : null}
