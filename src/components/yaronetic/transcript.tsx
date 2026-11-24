@@ -1,16 +1,17 @@
 import {StickerImage} from "@/components/yaronetic/sticker-picker";
-import {MessageLike} from "@/components/yaronetic/message-like";
+import { LikePin } from "@/components/yaronetic/message-like";
 import {splitStickerContent} from "@/lib/stickers";
 import { SearchEvidence } from "./search-evidence";
 import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { AlertCircle, ArrowDown, Check, ChevronDown, Download, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, TextSelect, Trash2, Volume2, X } from "lucide-react";
+import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, Download, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, TextSelect, Trash2, Volume2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { Markdown } from "@/components/yaronetic/markdown";
+import { copyText } from "@/components/yaronetic/markdown";
 import { SelectText } from "@/components/yaronetic/select-text";
 import { looksLikeAscii } from "@/lib/ascii";
 import { replaceStickerTokens } from "@/lib/stickers";
@@ -241,6 +242,7 @@ export function Transcript({
                       }}
                       onDelete={readonly || !onDelete ? undefined : () => onDelete(message.id)}
                       onQuote={onQuote}
+                      onLike={!readonly && onLike ? () => onLike(message.id) : undefined}
                     /> : null
                   ) : (
                     <AssistantBubble
@@ -261,15 +263,11 @@ export function Transcript({
                       onDelete={readonly || pending || !onDelete ? undefined : () => onDelete(message.id)}
                       onQuote={onQuote}
                       onContinue={!readonly && !pending && message.id === lastAssistantId && onContinue && /продолжай/i.test(message.content) ? onContinue : undefined}
+                      onLike={!readonly && onLike && !pending ? () => onLike(message.id) : undefined}
                     />
                   )}
                                   {visual.stickers.length?<div className={message.role==="user"?"flex gap-2":"mt-2 flex gap-2"}>{visual.stickers.map((code,i)=><StickerImage key={`${code}-${i}`} code={code} className="size-36 max-w-full"/>)}</div>:null}
                   {message.role==="user"&&!visual.text&&visual.stickers.length&&!readonly&&onDelete?<button type="button" aria-label="Удалить стикер" className="press ml-1 self-end rounded-full p-2 text-muted" onClick={()=>onDelete(message.id)}><Trash2 className="size-4"/></button>:null}
-                  {!readonly && onLike && !pending && message.role === "assistant" ? (
-                    <div className="mt-1">
-                      <MessageLike bare liked={message.liked} onClick={() => onLike(message.id)} />
-                    </div>
-                  ) : null}
 </motion.article>
               );
             })}
@@ -318,6 +316,7 @@ function UserBubble({
   onSave,
   onDelete,
   onQuote,
+  onLike,
 }: {
   message: ChatMessage;
   editing: boolean;
@@ -330,6 +329,7 @@ function UserBubble({
   onSave: () => void;
   onDelete?: () => void;
   onQuote?: (text: string) => void;
+  onLike?: () => void;
 }) {
   const [sheet, setSheet] = useState(false);
   const [pick, setPick] = useState(false);
@@ -431,11 +431,13 @@ function UserBubble({
               <Heart className="size-3" fill="currentColor" />
             </span>
           ) : null}
+          {onLike ? <LikePin liked={message.liked} onClick={onLike} /> : null}
         </div>
       )}
       {!editing ? (
         <div className="msg-actions mt-1 flex justify-end gap-1">
           <Ghost label="Выделить" onClick={() => setPick(true)}><TextSelect className="size-4" /></Ghost>
+          <Ghost label="Скопировать всё" onClick={() => void copyText(replaceStickerTokens(message.content))}><Copy className="size-4" /></Ghost>
           {readonly ? null : <Ghost label="Изменить" disabled={disabled} onClick={onEdit}><span className="text-xs">Изм</span></Ghost>}
           {onDelete ? <Ghost label="Удалить" disabled={disabled} onClick={onDelete}><Trash2 className="size-4" /></Ghost> : null}
         </div>
@@ -447,6 +449,13 @@ function UserBubble({
             onClick={() => {
               setSheet(false);
               setPick(true);
+            }}
+          />
+          <SheetRow
+            label="Скопировать всё"
+            onClick={() => {
+              setSheet(false);
+              void copyText(replaceStickerTokens(message.content));
             }}
           />
           {onQuote && message.content ? (
@@ -561,6 +570,7 @@ function AssistantBubble({
   onDelete,
   onQuote,
   onContinue,
+  onLike,
 }: {
   message: ChatMessage;
   pending: boolean;
@@ -579,6 +589,7 @@ function AssistantBubble({
   onDelete?: () => void;
   onQuote?: (text: string) => void;
   onContinue?: () => void;
+  onLike?: () => void;
 }) {
   const tokens = usageLine(message.usage);
   const waiting = pending && !message.content && !message.error && !message.imageUrl;
@@ -628,7 +639,7 @@ function AssistantBubble({
       <div className="hidden sm:block">
         {personaId ? <CatalogArt kind="personas" id={personaId} className="size-10 rounded-full" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={40} variant={face} />}
       </div>
-      <div ref={box} className="min-w-0 flex-1" {...hold}>
+      <div ref={box} className="relative min-w-0 flex-1 pb-3" {...hold}>
         <div className="mb-1 flex items-center gap-2 text-xs text-faint">
           <span className="sm:hidden">
             {personaId ? <CatalogArt kind="personas" id={personaId} className="size-6 rounded-full" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={24} variant={face} />}
@@ -686,10 +697,20 @@ function AssistantBubble({
         {message.error && canRegenerate ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onRegenerate}>Повторить ответ</button> : null}
         {onContinue ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onContinue}>Продолжить</button> : null}
         {message.stopped ? <p className="mt-2 text-sm text-faint">Остановлено</p> : null}
+        {onLike ? (
+          <div className="flex w-full">
+            <LikePin dock end liked={message.liked} onClick={onLike} />
+          </div>
+        ) : null}
         {done ? (
           <div className={full ? "msg-actions msg-actions-last mt-1 flex gap-1" : "msg-actions mt-1 flex gap-1"}>
             {message.content ? <SpeakButton text={message.content} /> : null}
             {message.content ? <SelectToggle text={message.content} /> : null}
+            {message.content ? (
+              <Ghost label="Скопировать всё" onClick={() => void copyText(replaceStickerTokens(message.content))}>
+                <Copy className="size-4" />
+              </Ghost>
+            ) : null}
             {canRegenerate ? (
               <Ghost label="Заново" onClick={onRegenerate}>
                 <RefreshCw className="size-4" />
@@ -719,6 +740,15 @@ function AssistantBubble({
                 onClick={() => {
                   setMore(false);
                   setPick(true);
+                }}
+              />
+            ) : null}
+            {message.content ? (
+              <SheetRow
+                label="Скопировать всё"
+                onClick={() => {
+                  setMore(false);
+                  void copyText(replaceStickerTokens(message.content));
                 }}
               />
             ) : null}

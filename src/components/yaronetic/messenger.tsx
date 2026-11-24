@@ -3,8 +3,8 @@ import {setRoomMessageLike} from "@/lib/social/messenger";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { SourcePicker } from "@/components/yaronetic/source-picker";
 import { sizeLabel, UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
-import { ArrowLeft, BookOpen, Check, Heart, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
-import { SelectText } from "@/components/yaronetic/select-text";
+import { ArrowLeft, BookOpen, Check, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
+import { LikePin } from "@/components/yaronetic/message-like";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { PersonFace } from "@/components/yaronetic/person-face";
 import { toast } from "sonner";
@@ -509,7 +509,6 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
   const [stickers, setStickers] = useState(false);
   const [likeBusy,setLikeBusy]=useState<string[]>([]);
   const [reportId, setReportId] = useState<string | null>(null);
-  const [pickText, setPickText] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadAbort = useRef<AbortController | null>(null);
@@ -791,20 +790,8 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
             return (
               <article key={message.id} className={cn("group/msg flex items-end gap-2", message.mine ? "justify-end" : "justify-start")}>
                 {message.mine ? null : <PersonFace name={message.name} image={message.image} size={28} userId={message.userId} />}
-                <div className={cn("flex max-w-[min(85%,32rem)] flex-col items-center", photoOnly && "max-w-[16rem]")}>
-                  {!local ? (
-                    <button
-                      type="button"
-                      className="like-pin press mb-1 inline-flex size-5 items-center justify-center text-[#ff2d55]"
-                      aria-label={message.liked ? "Убрать лайк" : "Нравится"}
-                      aria-pressed={Boolean(message.liked)}
-                      disabled={likeBusy.includes(message.id)}
-                      onClick={() => void like(message)}
-                    >
-                      <Heart className="size-3.5" fill={message.liked ? "currentColor" : "none"} strokeWidth={2.25} />
-                    </button>
-                  ) : null}
-                  <div className="relative max-w-full">
+                <div className={cn("flex max-w-[min(85%,32rem)] flex-col", photoOnly && "max-w-[16rem]", message.mine ? "items-end" : "items-start")}>
+                  <div className="relative mb-3 max-w-full">
                     {sticker ? (
                       <Holdable text={sticker} liked={message.liked} onLike={local ? undefined : () => void like(message)} onReport={!message.mine && !local ? () => setReportId(message.id) : undefined} className="max-w-[9.5rem]">
                         <StickerImage code={sticker} />
@@ -850,12 +837,8 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
                         <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={local} faint={photoOnly || !message.mine} />
                       </Holdable>
                     )}
+                    {!local ? <LikePin liked={message.liked} busy={likeBusy.includes(message.id)} end={!message.mine} onClick={() => void like(message)} /> : null}
                   </div>
-                  {clip.text.trim() && !sticker ? (
-                    <button type="button" className="press mt-0.5 px-1 text-xs text-faint" onClick={() => setPickText(clip.text)}>
-                      Выделить
-                    </button>
-                  ) : null}
                 </div>
               </article>
             );
@@ -875,7 +858,6 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
         onPost={(id) => void place("post", id)}
       />
       {reportId ? <ReportDialog targetType="message" targetId={reportId} onClose={() => setReportId(null)} /> : null}
-      {pickText ? <SelectText text={pickText} onClose={() => setPickText(null)} /> : null}
       <form className="border-t border-line bg-bg p-2" onSubmit={(event) => void submit(event)}>
         {progress ? (
           <div className="mb-2">
