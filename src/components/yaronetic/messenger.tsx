@@ -3,7 +3,8 @@ import {setRoomMessageLike} from "@/lib/social/messenger";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { SourcePicker } from "@/components/yaronetic/source-picker";
 import { sizeLabel, UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
-import { ArrowLeft, BookOpen, Check, Heart, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, Copy, Heart, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
+import { copyText } from "@/components/yaronetic/markdown";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { PersonFace } from "@/components/yaronetic/person-face";
 import { toast } from "sonner";
@@ -785,55 +786,76 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
               clip.books.length === 0 &&
               clip.posts.length === 0 &&
               clip.mega.length === 0;
+            const local = message.id.startsWith("local-");
             return (
-              <article key={message.id} className={cn("flex items-end gap-2", message.mine ? "justify-end" : "justify-start")}>
+              <article key={message.id} className={cn("group/msg flex items-end gap-2", message.mine ? "justify-end" : "justify-start")}>
                 {message.mine ? null : <PersonFace name={message.name} image={message.image} size={28} userId={message.userId} />}
-                <div className={cn("flex max-w-[min(85%,32rem)] flex-col", photoOnly && "max-w-[16rem]", message.mine ? "items-start" : "items-end")}>
-                  {!message.id.startsWith("local-") ? (
-                    <PinLike liked={message.liked} busy={likeBusy.includes(message.id)} onClick={() => void like(message)} />
-                  ) : null}
-                  {sticker ? (
-                    <Holdable text={sticker} onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined} className="max-w-[9.5rem]">
-                      <StickerImage code={sticker} />
-                      <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={message.id.startsWith("local-")} />
-                    </Holdable>
-                  ) : (
-                    <Holdable
-                      text={clip.text}
-                      onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined}
-                      className={cn(
-                        photoOnly
-                          ? "text-base"
-                          : cn(
-                              "rounded-3xl px-3 py-2 text-base leading-6 shadow-sm",
-                              message.mine ? "rounded-br-lg bg-accent text-accent-fg" : "rounded-bl-lg border border-line bg-elev text-fg",
-                            ),
-                      )}
-                    >
-                      {!message.mine && room.kind === "group" ? (
-                        <p className={cn("mb-0.5 text-xs font-medium", message.mine || photoOnly ? "text-muted" : "text-accent-fg/80")}>{message.name}</p>
+                <div className={cn("flex max-w-[min(85%,32rem)] flex-col", photoOnly && "max-w-[16rem]", message.mine ? "items-end" : "items-start")}>
+                  <div className="relative">
+                    {sticker ? (
+                      <Holdable text={sticker} liked={message.liked} onLike={local ? undefined : () => void like(message)} onReport={!message.mine && !local ? () => setReportId(message.id) : undefined} className="max-w-[9.5rem]">
+                        <StickerImage code={sticker} />
+                        <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={local} />
+                      </Holdable>
+                    ) : (
+                      <Holdable
+                        text={clip.text}
+                        liked={message.liked}
+                        onLike={local ? undefined : () => void like(message)}
+                        onReport={!message.mine && !local ? () => setReportId(message.id) : undefined}
+                        className={cn(
+                          photoOnly
+                            ? "text-base"
+                            : cn(
+                                "rounded-3xl px-3 py-2 text-base leading-6 shadow-sm",
+                                message.mine ? "rounded-br-lg bg-accent text-accent-fg" : "rounded-bl-lg border border-line bg-elev text-fg",
+                              ),
+                        )}
+                      >
+                        {!message.mine && room.kind === "group" ? (
+                          <p className="mb-0.5 text-xs font-medium text-muted">{message.name}</p>
+                        ) : null}
+                        {voice ? <VoiceNote file={voice} mine={message.mine} /> : null}
+                        {clip.text && !voice ? <p className="bubble-text whitespace-pre-wrap break-words">{clip.text}</p> : null}
+                        {clip.text && voice ? <p className={cn("bubble-text mt-1 text-xs leading-relaxed", message.mine ? "text-accent-fg/80" : "text-muted")}>{clip.text}</p> : null}
+                        {clip.screen.map((id) => (
+                          <ScreenClip key={id} id={id} />
+                        ))}
+                        {clip.books.map((id) => (
+                          <BookCard key={id} id={id} mine={message.mine} />
+                        ))}
+                        {clip.posts.map((id) => (
+                          <PostCard key={id} id={id} mine={message.mine} />
+                        ))}
+                        {clip.mega.map((id) => (
+                          <MegaCard key={id} id={id} mine={message.mine} />
+                        ))}
+                        {images.length > 0 ? <PhotoPile files={images} /> : null}
+                        {others.map((file) => (
+                          <Attachment key={file.id} file={file} mine={message.mine} />
+                        ))}
+                        <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={local} faint={photoOnly || !message.mine} />
+                      </Holdable>
+                    )}
+                  </div>
+                  {local ? null : (
+                    <div className={cn("msg-actions flex", message.liked && "msg-actions-last", message.mine && "flex-row-reverse")}>
+                      {clip.text.trim() ? (
+                        <button type="button" className="press inline-flex size-8 items-center justify-center rounded-lg text-faint" aria-label="Копировать" onClick={() => void copyText(clip.text)}>
+                          <Copy className="size-3.5" />
+                        </button>
                       ) : null}
-                      {voice ? <VoiceNote file={voice} mine={message.mine} /> : null}
-                      {clip.text && !voice ? <p className="whitespace-pre-wrap break-words">{clip.text}</p> : null}
-                      {clip.text && voice ? <p className={cn("mt-1 text-xs leading-relaxed", message.mine ? "text-accent-fg/80" : "text-muted")}>{clip.text}</p> : null}
-                      {clip.screen.map((id) => (
-                        <ScreenClip key={id} id={id} />
-                      ))}
-                      {clip.books.map((id) => (
-                        <BookCard key={id} id={id} mine={message.mine} />
-                      ))}
-                      {clip.posts.map((id) => (
-                        <PostCard key={id} id={id} mine={message.mine} />
-                      ))}
-                      {clip.mega.map((id) => (
-                        <MegaCard key={id} id={id} mine={message.mine} />
-                      ))}
-                      {images.length > 0 ? <PhotoPile files={images} /> : null}
-                      {others.map((file) => (
-                        <Attachment key={file.id} file={file} mine={message.mine} />
-                      ))}
-                      <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={message.id.startsWith("local-")} faint={photoOnly || !message.mine} />
-                    </Holdable>
+                      <button
+                        type="button"
+                        className={cn("press inline-flex size-8 items-center justify-center rounded-lg", message.liked ? "text-[#ff2d55]" : "like-idle text-faint")}
+                        aria-label={message.liked ? "Убрать лайк" : "Нравится"}
+                        aria-pressed={message.liked}
+                        disabled={likeBusy.includes(message.id)}
+                        onClick={() => void like(message)}
+                      >
+                        <Heart className="size-3.5" fill={message.liked ? "currentColor" : "none"} strokeWidth={2.25} />
+                      </button>
+                    </div>
                   )}
                 </div>
               </article>
@@ -954,24 +976,6 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
         </div>
       </form>
     </div>
-  );
-}
-
-function PinLike({ liked, busy, onClick }: { liked?: boolean; busy: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={liked ? "Убрать лайк" : "Нравится сообщение"}
-      aria-pressed={liked}
-      disabled={busy}
-      className="press mb-0.5 inline-flex size-6 shrink-0 items-center justify-center text-[#ff2d55]"
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick();
-      }}
-    >
-      <Heart className="size-4" fill={liked ? "currentColor" : "none"} strokeWidth={2.25} />
-    </button>
   );
 }
 

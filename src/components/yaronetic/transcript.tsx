@@ -333,7 +333,10 @@ function UserBubble({
   const [sheet, setSheet] = useState(false);
   const fine = useFinePointer();
   const gestures = useGestureSurface();
-  const hold = useLongPress(() => setSheet(true));
+  const hold = useLongPress(() => {
+    if (window.getSelection()?.toString()) return;
+    setSheet(true);
+  });
   const box = useRef<HTMLDivElement>(null);
   const crossed = useRef(false);
   const swipe = useSwipe({
@@ -385,7 +388,7 @@ function UserBubble({
       ) : (
         <div
           ref={box}
-          className="relative rounded-[1.35rem] rounded-br-md border-0 bg-fg/[0.06] px-4 py-3 shadow-none select-none [-webkit-touch-callout:none] md:select-text"
+          className="bubble-text relative rounded-[1.35rem] rounded-br-md border-0 bg-fg/[0.06] px-4 py-3 shadow-none"
           onClick={() => {
             if (fine || window.getSelection()?.toString() || hold.fired.current) return;
           }}

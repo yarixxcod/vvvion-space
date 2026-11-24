@@ -190,7 +190,19 @@ html.vv-lowend, html.vv-lowend *, html.vv-lowend *::before, html.vv-lowend *::af
   .msg-actions-last { opacity: 1; }
 }
 @media (pointer: coarse) {
-  .msg-actions { display: none; }
+  .msg-actions { opacity: 1; }
+  .like-idle { display: none; }
+}
+.bubble-text,
+.prose-y,
+.prose-y p,
+.prose-y li,
+.prose-y blockquote,
+.prose-y pre,
+.prose-y code {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 @media (min-width: 1024px) {
   .prose-y { font-size: 1.0625rem; line-height: 1.65; max-inline-size: 68ch; }
