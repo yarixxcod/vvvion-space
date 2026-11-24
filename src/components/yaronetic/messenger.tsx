@@ -508,6 +508,8 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
   const [fromCircle, setFromCircle] = useState(false);
   const [stickers, setStickers] = useState(false);
   const [likeBusy,setLikeBusy]=useState<string[]>([]);
+  const liking=useRef(new Set<string>());
+  const likeEpoch=useRef(0);
   const [reportId, setReportId] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -519,17 +521,23 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
   const edge = useEdgeBack(true, onBack);
 
   async function like(message:RoomMessage){
-    if(likeBusy.includes(message.id)||message.id.startsWith("local-"))return;
+    if(liking.current.has(message.id)||message.id.startsWith("local-"))return;
+    liking.current.add(message.id);likeEpoch.current++;
     setLikeBusy(v=>[...v,message.id]);
-    try{const next=await setRoomMessageLike({data:{roomId:room.id,messageId:message.id,liked:!message.liked}});setMessages(v=>v?.map(m=>m.id===message.id?{...m,...next}:m)||null);}
-    catch(e){toast.error(e instanceof Error?e.message:"Лайк не сохранился");}
-    finally{setLikeBusy(v=>v.filter(id=>id!==message.id));}
+    const liked=!message.liked;
+    setMessages(v=>v?.map(m=>m.id===message.id?{...m,liked,likes:Math.max(0,(m.likes||0)+(liked?1:-1))}:m)||null);
+    try{const next=await setRoomMessageLike({data:{roomId:room.id,messageId:message.id,liked}});setMessages(v=>v?.map(m=>m.id===message.id?{...m,...next}:m)||null);}
+    catch(e){setMessages(v=>v?.map(m=>m.id===message.id?{...m,liked:message.liked,likes:message.likes}:m)||null);toast.error(e instanceof Error?e.message:"Лайк не сохранился");}
+    finally{liking.current.delete(message.id);likeEpoch.current++;setLikeBusy(v=>v.filter(id=>id!==message.id));}
   }
   const pull = useCallback(async () => {
+    const epoch=likeEpoch.current;
     const rows = await listRoomMessages({ data: room.id });
+    if(epoch!==likeEpoch.current)return;
     setMessages((current) => {
       const pending = (current ?? []).filter((item) => item.id.startsWith("local-"));
-      return pending.length ? [...rows, ...pending] : rows;
+      const merged=rows.map(row=>{const old=current?.find(m=>m.id===row.id);return liking.current.has(row.id)&&old?{...row,liked:old.liked,likes:old.likes}:row;});
+      return pending.length ? [...merged, ...pending] : merged;
     });
   }, [room.id]);
 
@@ -837,7 +845,7 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
                         <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={local} faint={photoOnly || !message.mine} />
                       </Holdable>
                     )}
-                    {!local ? <LikePin liked={message.liked} busy={likeBusy.includes(message.id)} end={!message.mine} onClick={() => void like(message)} /> : null}
+                    {!local ? <LikePin count={message.likes} liked={message.liked} busy={likeBusy.includes(message.id)} end onClick={() => void like(message)} /> : null}
                   </div>
                 </div>
               </article>

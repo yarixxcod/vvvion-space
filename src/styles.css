@@ -210,16 +210,12 @@ html.vv-lowend, html.vv-lowend *, html.vv-lowend *::before, html.vv-lowend *::af
   user-select: text !important;
   -webkit-touch-callout: default;
 }
-.like-pin,
-.like-pin:focus,
-.like-pin:focus-visible {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  outline: none;
-  border-radius: 0;
-  -webkit-tap-highlight-color: transparent;
-}
+.message-like { color: #e32650; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.message-like-active { background: rgb(227 38 80 / 12%); }
+.message-like-idle { background: transparent; }
+.message-like:hover { background: rgb(227 38 80 / 10%); }
+.message-like:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+html.dark .message-like, [data-theme="dark"] .message-like { color: #ff5274; }
 @media (min-width: 1024px) {
   .prose-y { font-size: 1.0625rem; line-height: 1.65; max-inline-size: 68ch; }
   .prose-y h2 { font-size: 1.25rem; line-height: 1.3; }

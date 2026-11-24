@@ -426,14 +426,12 @@ function UserBubble({
               <p className="whitespace-pre-wrap text-pretty">{replaceStickerTokens(message.content)}</p>
             )
           ) : null}
-          {message.praised ? (
-            <span className="absolute -right-1 -bottom-1 text-[#ff3b5c]" title="Модели понравился вопрос" aria-label="Модели понравился вопрос">
-              <Heart className="size-3" fill="currentColor" />
-            </span>
-          ) : null}
-          {onLike ? <LikePin liked={message.liked} onClick={onLike} /> : null}
         </div>
       )}
+      {!editing && (message.praised || onLike) ? <div className="mt-1 flex min-h-11 items-center justify-end gap-1">
+        {message.praised ? <span className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#e32650]" title="Модели понравился вопрос" aria-label="Модели понравился вопрос"><Heart aria-hidden="true" className="size-[18px]" fill="currentColor" /></span> : null}
+        {onLike ? <LikePin dock end liked={message.liked} onClick={onLike} /> : null}
+      </div> : null}
       {!editing ? (
         <div className="msg-actions mt-1 flex justify-end gap-1">
           <Ghost label="Выделить" onClick={() => setPick(true)}><TextSelect className="size-4" /></Ghost>

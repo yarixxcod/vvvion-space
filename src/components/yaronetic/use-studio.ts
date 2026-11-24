@@ -1538,7 +1538,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
 
   function likeMessage(messageId:string){
     const target = messagesRef.current.find((item) => item.id === messageId);
-    if (!target || target.role !== "assistant") return;
+    if (!target || (target.role !== "assistant" && target.role !== "user")) return;
     const liked = !target.liked;
     const next=messagesRef.current.map(m=>m.id===messageId?{...m,liked}:m);
     const live = liveRef.current;
