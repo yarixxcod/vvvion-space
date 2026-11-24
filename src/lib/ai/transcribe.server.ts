@@ -21,9 +21,9 @@ function clientIp(request: Request): string {
   return "local";
 }
 
-function allow(ip: string, limit = LIMIT): boolean {
+function allow(ip: string, limit = LIMIT, mode = ""): boolean {
   const now = Date.now();
-  const key = limit === LIMIT ? ip : `${ip}:part`;
+  const key = `${ip}:${mode || (limit === LIMIT ? "full" : "part")}`;
   const bucket = buckets.get(key);
   if (!bucket || now > bucket.reset) {
     buckets.set(key, { n: 1, reset: now + WINDOW_MS });
@@ -67,7 +67,8 @@ export async function handleTranscribe(request: Request): Promise<Response> {
   }
   if (!secret) return json(503, { message: "Расшифровка ещё не подключена" });
   const partial = request.headers.get("x-vvvion-partial") === "1";
-  if (!allow(clientIp(request), partial ? PARTIAL_LIMIT : LIMIT)) {
+  const call = request.headers.get("x-vvvion-call") === "1";
+  if (!allow(clientIp(request), call ? 60 : partial ? PARTIAL_LIMIT : LIMIT, call ? "call" : "")) {
     return json(429, { message: "Слишком много записей. Подождите пару минут." });
   }
 
@@ -98,7 +99,7 @@ export async function handleTranscribe(request: Request): Promise<Response> {
       headers: { authorization: `Bearer ${secret}` },
       body,
       redirect: "manual",
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(60_000)]),
     });
     if (upstream.status >= 300 && upstream.status < 400) {
       return json(502, { message: "Провайдер вернул редирект — запрос остановлен" });

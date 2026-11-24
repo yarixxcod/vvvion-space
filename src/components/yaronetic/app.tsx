@@ -46,6 +46,7 @@ import { haptic } from "@/lib/haptic";
 import { AppTour } from "@/components/yaronetic/app-tour";
 import { dayPart, FREE_ROLES, nickOf } from "@/lib/social/persona-free";
 
+const VoiceCallDialog = lazy(() => import("./voice-call-dialog").then(mod => ({ default: mod.VoiceCallDialog })));
 const Transcript = lazy(() => import("@/components/yaronetic/transcript").then((mod) => ({ default: mod.Transcript })));
 const Circle = lazy(() => import("@/components/yaronetic/circle").then((mod) => ({ default: mod.Circle })));
 
@@ -68,6 +69,7 @@ export function App({
   const [sidebar, setSidebar] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [voiceCall, setVoiceCall] = useState(false);
   const [headerMenu, setHeaderMenu] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   const [tour, setTour] = useState<number | null>(null);
@@ -85,6 +87,7 @@ export function App({
   }, [studio.setTheme]);
   const [personaShop, setPersonaShop] = useState<PersonaShop | null>(null);
   const { user, isPending } = useCurrentUserState();
+  useEffect(() => { if (studio.needAccount) setVoiceCall(false); }, [studio.needAccount]);
   const unread = useCircleUnread(Boolean(user) && !isPending);
   const release = useReleaseFlag();
   const empty = studio.messages.length === 0;
@@ -685,6 +688,7 @@ export function App({
                 }
                 onSend={() => void studio.send(studio.draft, { image: studio.imageMode, web: studio.webMode, ask: studio.askMode })}
                 onSticker={(body) => void studio.send(body, { image: false, web: false, ask: false })}
+                onCall={() => setVoiceCall(true)}
                 captureFiles={!circle}
               />
             </div>
@@ -692,6 +696,19 @@ export function App({
         </main>
       </div>
       </div>
+      {voiceCall ? <Suspense fallback={<div className="fixed inset-0 z-[110] grid place-items-center bg-bg"><span className="vv-loader" /></div>}>
+        <VoiceCallDialog
+          name={personaShop?.items.find(item => item.id === personaShop.activeId)?.name || studio.displayName}
+          model={studio.modelLabels[studio.activeProvider.model] || studio.activeProvider.model}
+          face={studio.face}
+          personaId={personaShop?.activeId}
+          userName={user?.displayName || "Вы"}
+          userImage={user?.profileImageUrl}
+          onTurn={text => studio.send(text, { voice: true, image: false, web: studio.webMode, ask: false })}
+          onStop={studio.stop}
+          onClose={() => setVoiceCall(false)}
+        />
+      </Suspense> : null}
       {studio.needAccount ? <AccountGate /> : null}
       {circle ? (
         <>

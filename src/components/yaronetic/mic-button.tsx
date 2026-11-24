@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Mic } from "lucide-react";
+import { Mic, Phone } from "lucide-react";
 import { toast } from "sonner";
 import type { ChatFile } from "@/lib/ai/types";
 import { useLang } from "@/lib/lang";
@@ -30,7 +30,10 @@ function mimeType(): string {
 
 function speechCtor(): (new () => SpeechRec) | null {
   if (typeof window === "undefined") return null;
-  const host = window as Window & { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
+  const host = window as Window & {
+    SpeechRecognition?: new () => SpeechRec;
+    webkitSpeechRecognition?: new () => SpeechRec;
+  };
   return host.SpeechRecognition || host.webkitSpeechRecognition || null;
 }
 
@@ -48,13 +51,22 @@ export function MicButton({
   onVoice,
   disabled,
   className,
+  callMode,
+  onCall,
+  onMode,
 }: {
   value: string;
   onChange: (value: string) => void;
   onVoice?: (file: ChatFile) => void;
   disabled?: boolean;
   className?: string;
+  callMode?: boolean;
+  onCall?: () => void;
+  onMode?: () => void;
 }) {
+  const hold = useRef(0);
+  const held = useRef(false);
+  const origin = useRef({ x: 0, y: 0 });
   const lang = useLang();
   const [phase, setPhase] = useState<"idle" | "rec" | "work">("idle");
   const [seconds, setSeconds] = useState(0);
@@ -92,6 +104,7 @@ export function MicButton({
 
   useEffect(() => {
     return () => {
+      window.clearTimeout(hold.current);
       clearTimers();
       const speech = speechRef.current;
       speechRef.current = null;
@@ -162,7 +175,8 @@ export function MicButton({
   }
 
   async function pushPartial() {
-    if (partialBusy.current || phaseRef.current !== "rec" || engineRef.current !== "whisper") return;
+    if (partialBusy.current || phaseRef.current !== "rec" || engineRef.current !== "whisper")
+      return;
     const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type || "audio/webm" });
     if (blob.size < 1200) return;
     partialBusy.current = true;
@@ -194,7 +208,12 @@ export function MicButton({
         })(),
         credentials: "same-origin",
       });
-      const info = (await saved.json().catch(() => ({}))) as { url?: string; name?: string; mime?: string; message?: string };
+      const info = (await saved.json().catch(() => ({}))) as {
+        url?: string;
+        name?: string;
+        mime?: string;
+        message?: string;
+      };
       if (saved.ok && info.url && onVoice) {
         onVoice({
           id: crypto.randomUUID(),
@@ -214,7 +233,8 @@ export function MicButton({
       }
       paint(text);
     } catch (error) {
-      if (!saidRef.current.trim()) toast.error(error instanceof Error ? error.message : "Не удалось расшифровать запись");
+      if (!saidRef.current.trim())
+        toast.error(error instanceof Error ? error.message : "Не удалось расшифровать запись");
     } finally {
       setPhase("idle");
       setSeconds(0);
@@ -292,7 +312,10 @@ export function MicButton({
     if (!canSpeak) {
       try {
         const status = await fetch("/api/transcribe", { credentials: "same-origin" });
-        const info = (await status.json().catch(() => ({}))) as { ready?: boolean; message?: string };
+        const info = (await status.json().catch(() => ({}))) as {
+          ready?: boolean;
+          message?: string;
+        };
         if (!info.ready) {
           toast.error(info.message || "Расшифровка ещё не подключена");
           return;
@@ -308,8 +331,10 @@ export function MicButton({
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       const name = err instanceof DOMException ? err.name : "";
-      if (name === "NotAllowedError" || name === "SecurityError") toast.error("Нет доступа к микрофону");
-      else if (name === "NotFoundError" || name === "OverconstrainedError") toast.error("Микрофон не найден");
+      if (name === "NotAllowedError" || name === "SecurityError")
+        toast.error("Нет доступа к микрофону");
+      else if (name === "NotFoundError" || name === "OverconstrainedError")
+        toast.error("Микрофон не найден");
       else toast.error("Не удалось включить микрофон");
       return;
     }
@@ -335,13 +360,21 @@ export function MicButton({
     setPhase("rec");
     setSeconds(0);
     tickRef.current = window.setInterval(() => setSeconds((n) => n + 1), 1000);
-    if (engineRef.current === "whisper") partialRef.current = window.setInterval(() => void pushPartial(), 2800);
+    if (engineRef.current === "whisper")
+      partialRef.current = window.setInterval(() => void pushPartial(), 2800);
     capRef.current = window.setTimeout(() => {
       if (recRef.current === rec && rec.state === "recording") stop();
     }, MAX_MS);
   }
 
-  const label = phase === "rec" ? "Остановить и оставить текст" : phase === "work" ? "Дописываю текст" : "Голосовой ввод";
+  const label =
+    phase === "rec"
+      ? "Остановить и оставить текст"
+      : phase === "work"
+        ? "Дописываю текст"
+        : callMode
+          ? "Звонок с ИИ"
+          : "Голосовой ввод";
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
   return (
@@ -349,15 +382,57 @@ export function MicButton({
       type="button"
       className={cn(
         "mic-btn press relative inline-flex h-11 items-center justify-center rounded-2xl border",
-        phase === "rec" ? "mic-live w-[4.5rem] gap-1.5 border-accent bg-accent/15 text-accent" : "size-11 border-transparent text-muted hover:bg-subtle",
+        phase === "rec"
+          ? "mic-live w-[4.5rem] gap-1.5 border-accent bg-accent/15 text-accent"
+          : "size-11 border-transparent text-muted hover:bg-subtle",
         phase === "work" && "mic-wait",
         className,
       )}
       aria-label={label}
-      title={label}
+      title={`${label}${onMode ? " · удерживайте для смены режима" : ""}`}
+      style={{ touchAction: "manipulation" }}
+      onPointerDown={(event) => {
+        if (!onMode || disabled || phase !== "idle" || event.button !== 0) return;
+        origin.current = { x: event.clientX, y: event.clientY };
+        held.current = false;
+        window.clearTimeout(hold.current);
+        hold.current = window.setTimeout(() => {
+          held.current = true;
+          onMode();
+        }, 520);
+      }}
+      onPointerMove={(event) => {
+        if (Math.hypot(event.clientX - origin.current.x, event.clientY - origin.current.y) > 12)
+          window.clearTimeout(hold.current);
+      }}
+      onPointerUp={() => window.clearTimeout(hold.current)}
+      onPointerCancel={() => window.clearTimeout(hold.current)}
+      onPointerLeave={() => window.clearTimeout(hold.current)}
+      onContextMenu={(event) => {
+        if (onMode && phase === "idle") {
+          event.preventDefault();
+          window.clearTimeout(hold.current);
+          if (!held.current) onMode();
+          held.current = true;
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.altKey && event.key === "ArrowDown" && onMode && phase === "idle") {
+          event.preventDefault();
+          onMode();
+        }
+      }}
       aria-pressed={phase === "rec"}
       disabled={disabled || phase === "work"}
-      onClick={() => {
+      onClick={(event) => {
+        if (held.current) {
+          held.current = false;
+          if (event.detail !== 0) return;
+        }
+        if (callMode && onCall) {
+          onCall();
+          return;
+        }
         if (phase === "rec") stop();
         else void start();
       }}
@@ -373,6 +448,8 @@ export function MicButton({
           </span>
           <span className="text-xs tabular-nums">{clock}</span>
         </>
+      ) : callMode ? (
+        <Phone className="size-5" strokeWidth={1.8} />
       ) : (
         <Mic className="size-5" strokeWidth={1.8} />
       )}

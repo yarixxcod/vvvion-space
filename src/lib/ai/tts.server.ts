@@ -127,7 +127,7 @@ async function asAudio(upstream: Response, secret: string): Promise<Response> {
   });
 }
 
-async function postSpeech(url: string, secret: string, body: Record<string, unknown>) {
+async function postSpeech(url: string, secret: string, body: Record<string, unknown>, signal?: AbortSignal) {
   return fetch(url, {
     method: "POST",
     headers: {
@@ -136,11 +136,20 @@ async function postSpeech(url: string, secret: string, body: Record<string, unkn
       accept: "audio/mpeg, audio/*, application/json",
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(45_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000),
   });
 }
 
-export async function speakText(text: string): Promise<Response> {
+/** Only readiness is public; provider settings and keys stay on the server. */
+export async function speechReady(): Promise<Response> {
+  try {
+    const sql = await getSql();
+    const rows = await sql<{ name: string }>`select name from tts_models where api_key <> '' order by created_at asc limit 1`;
+    return Response.json({ ready: Boolean(rows[0]) }, { headers: { "cache-control": "no-store" } });
+  } catch { return Response.json({ ready: false }, { status: 503, headers: { "cache-control": "no-store" } }); }
+}
+
+export async function speakText(text: string, signal?: AbortSignal): Promise<Response> {
   const input = speakable(typeof text === "string" ? text : "");
   if (input.length < 2) return json(400, "Нечего озвучивать");
   const sql = await getSql();
@@ -158,7 +167,7 @@ export async function speakText(text: string): Promise<Response> {
   const base = { model: model.name, input, voice };
   let upstream: Response;
   try {
-    upstream = await postSpeech(url, model.api_key, { ...base, response_format: "mp3" });
+    upstream = await postSpeech(url, model.api_key, { ...base, response_format: "mp3" }, signal);
   } catch {
     return json(502, "Голос не ответил");
   }
@@ -166,7 +175,7 @@ export async function speakText(text: string): Promise<Response> {
     const reason = await readError(upstream, model.api_key);
     if (/response_format|format|unsupported|unrecognized|unknown parameter|extra/i.test(reason)) {
       try {
-        upstream = await postSpeech(url, model.api_key, base);
+        upstream = await postSpeech(url, model.api_key, base, signal);
       } catch {
         return json(502, "Голос не ответил");
       }

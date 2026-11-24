@@ -493,3 +493,12 @@ html.light .image-plate{background:#e7e1d8}
 .composer-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .composer-surface button[aria-haspopup="listbox"] { height: 44px; min-height: 44px; }
 .composer-surface textarea { scrollbar-width: thin; }
+
+.voice-call-portrait { isolation: isolate; }
+.voice-call-halo { box-shadow: 0 0 60px color-mix(in srgb,var(--accent) 20%,transparent); transform: scale(calc(1 + var(--voice-level,0) * .15)); transition: transform 100ms ease; }
+.voice-call-portrait[data-phase="thinking"] .voice-call-halo, .voice-call-portrait[data-phase="speaking"] .voice-call-halo { animation: voice-breathe 2.4s ease-in-out infinite; }
+.voice-call-face { transform: scale(.82); }
+@media(min-width:640px) { .voice-call-face { transform: scale(1.1); } }
+@keyframes voice-breathe { 50% { transform: scale(1.07); opacity:.5; } }
+@media(prefers-reduced-motion:reduce) { .voice-call-halo { animation:none!important; transition:none; } }
+.vv-reduce-motion .voice-call-halo,.vv-lowend .voice-call-halo { animation:none!important; box-shadow:none; }

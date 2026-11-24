@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { speakText } from "@/lib/ai/tts.server";
+import { speakText, speechReady } from "@/lib/ai/tts.server";
 
 export const Route = createFileRoute("/api/tts")({
   server: {
     handlers: {
+      GET: () => speechReady(),
       POST: async ({ request }) => {
         let body: unknown = {};
         try {
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/api/tts")({
           body = {};
         }
         const text = body && typeof body === "object" && typeof (body as { text?: unknown }).text === "string" ? (body as { text: string }).text : "";
-        return speakText(text.slice(0, 8_000));
+        return speakText(text.slice(0, 8_000), request.signal);
       },
     },
   },

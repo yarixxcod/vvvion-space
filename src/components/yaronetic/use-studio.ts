@@ -1,3 +1,4 @@
+import { VOICE_PROMPT } from "@/lib/ai/voice-turn";
 import {stickerMeaning} from "@/lib/stickers";
 import { peelQuestionLike } from "@/lib/ai/question-like";
 import { readDraft, writeDraft } from "@/lib/ai/drafts";
@@ -730,9 +731,10 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   persistRef.current = persistChat;
 
   const send = useCallback(
-    async (text: string, opts?: { history?: ChatMessage[]; reuseUser?: ChatMessage; image?: boolean; web?: boolean; ask?: boolean }) => {
+    async (text: string, opts?: { history?: ChatMessage[]; reuseUser?: ChatMessage; image?: boolean; web?: boolean; ask?: boolean; voice?: boolean }) => {
       const trimmed = text.trim();
-      const pending = opts?.reuseUser ? opts.reuseUser.files ?? [] : attachmentsRef.current;
+      const pending = opts?.voice ? [] : opts?.reuseUser ? opts.reuseUser.files ?? [] : attachmentsRef.current;
+      let voiceReply: { text: string; error?: string } | undefined;
       if (busyRef.current) {
         const other = chatsRef.current.find((item) => item.id === streamingIdRef.current);
         const raw = other?.title?.trim();
@@ -844,6 +846,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
           /* хранилище переполнено — ответ всё равно уходит */
         }
       }
+      if (opts?.voice && stopRef.current) return;
       const memory = memoryOn ? memoryForChat(userIdRef.current, draftOrigin) : undefined;
       const chatId = existing?.id ?? crypto.randomUUID();
       const nextMessages = [...history, userMsg, asst];
@@ -851,7 +854,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       setActiveChatIdState(chatId);
       setMsgs(nextMessages);
 
-      if (!opts?.reuseUser) setAttachments([]);
+      if (!opts?.reuseUser && !opts?.voice) setAttachments([]);
       setStreaming(true);
       setStreamId(chatId);
       haptic("medium");
@@ -868,12 +871,15 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       await persistChat(chatBase, true);
       if (!draftOrigin) moveNewChatMemory(userIdRef.current, chatId);
       if (userIdRef.current) void flushOwner(userIdRef.current);
-      writeDraft(userIdRef.current, draftOrigin, "");
-      setDraftState("");
+      if (!opts?.voice) {
+        writeDraft(userIdRef.current, draftOrigin, "");
+        setDraftState("");
+      }
       streamingStarted = true;
 
       const controller = new AbortController();
       abortRef.current = controller;
+      if (opts?.voice && stopRef.current) controller.abort();
       let acc = "";
       let reason = "";
       let usage: Usage | undefined;
@@ -964,6 +970,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             imageModel: imageChoice,
             systemPrompt: catalogPrompt ? "" : provider.systemPrompt,
             toolNote: [
+              opts?.voice ? VOICE_PROMPT : "",
               pluginNote({ calc: false, clock: false, brief: false, translate: false, ask: wantAsk }, trimmed),
               shownName.toLowerCase() === DEFAULT_NAME ? "" : `Тебя зовут «${shownName}». Если спрашивают, как тебя зовут, отвечай этим именем.`,
               wantImage ? "" : "Если вопрос пользователя по-настоящему хороший — конкретный, живой, с деталями — закончи ответ отдельной строкой [[like]]. Не ставь её на приветствия, короткие реплики, оскорбления и обычные вопросы. Не упоминай метку.",
@@ -981,7 +988,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             agent: wantImage ? undefined : readAgentPrefs(),
             memory: memoryOn ? memory : undefined,
             memoryOn: memoryOn || undefined,
-            stickerReplies: (()=>{try{return localStorage.getItem("vvvion.stickers.replies")!=="0";}catch{return true;}})(),
+            stickerReplies: !opts?.voice && (()=>{try{return localStorage.getItem("vvvion.stickers.replies")!=="0";}catch{return true;}})(),
             messages: wireTurns(nextMessages.filter((item) => item.id !== asstId).slice(-32)),
           },
           {
@@ -1036,7 +1043,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
           if (stopRef.current) stopped = true;
           else if (abandonRef.current) left = true;
           else stopped = true;
-        } else if (userIdRef.current && !wantImage && isNetworkDrop(err)) {
+        } else if (userIdRef.current && !wantImage && !opts?.voice && isNetworkDrop(err)) {
           detached = true;
         } else {
           error = err instanceof Error ? err.message : "Не удалось получить ответ";
@@ -1071,6 +1078,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             error = wantImage ? "Картинка не пришла. Попробуйте ещё раз." : "Модель ничего не ответила. Попробуйте ещё раз.";
           }
           paint(true);
+          if (opts?.voice) voiceReply = { text: peelQuestionLike(acc).text, error: error || (stopped ? "Ответ прерван" : undefined) };
           if (document.visibilityState === "visible" && !stopped && !left) {
             if (error && !acc.trim() && !imageUrl) haptic("error");
             else if (acc.trim() || imageUrl) haptic("success");
@@ -1127,6 +1135,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       } finally {
         if (!streamingStarted) busyRef.current = false;
       }
+      return voiceReply;
     },
     [activeProviderId, persistChat, setMsgs],
   );
@@ -1144,6 +1153,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     }
     const live = liveRef.current;
     if (!live) {
+      stopRef.current = true;
       abortRef.current?.abort();
       return;
     }

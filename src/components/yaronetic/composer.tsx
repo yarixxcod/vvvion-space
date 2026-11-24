@@ -10,6 +10,7 @@ import {
   ImageIcon,
   MessageCircleQuestion,
   Paperclip,
+  Phone,
   Plus,
   Square,
   UserRound,
@@ -57,6 +58,7 @@ export function Composer({
   roleLabel,
   endSlot,
   captureFiles = true,
+  onCall,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -82,6 +84,7 @@ export function Composer({
   roleLabel?: string;
   endSlot?: ReactNode;
   captureFiles?: boolean;
+  onCall?: () => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -95,6 +98,28 @@ export function Composer({
   const cancelled = useRef(0);
   const alive = useRef(true);
   const [processing, setProcessing] = useState(false);
+  const [callMode, setCallMode] = useState(false);
+  useEffect(() => {
+    try {
+      setCallMode(localStorage.getItem("vvvion.voice.mode") === "call");
+    } catch {
+      /* optional preference */
+    }
+  }, []);
+  function switchVoiceMode() {
+    const next = !callMode;
+    setCallMode(next);
+    try {
+      localStorage.setItem("vvvion.voice.mode", next ? "call" : "dictation");
+    } catch {
+      /* optional preference */
+    }
+    toast(
+      next
+        ? "Режим звонка. Нажмите трубку, чтобы начать."
+        : "Режим диктофона. Нажмите микрофон для записи.",
+    );
+  }
   useEffect(() => {
     const cancellation = cancelled;
     alive.current = true;
@@ -461,6 +486,9 @@ export function Composer({
             onChange={onChange}
             disabled={locked}
             onVoice={voice}
+            callMode={Boolean(onCall && callMode)}
+            onCall={onCall}
+            onMode={onCall ? switchVoiceMode : undefined}
           />
           <div data-composer-tools className="hidden items-center gap-0.5 lg:flex">
             <ModeButton
@@ -563,6 +591,18 @@ export function Composer({
       ) : null}
       {more ? (
         <MoreSheet onClose={() => setMore(false)}>
+          {onCall ? (
+            <ToolRow
+              icon={<Phone className="size-4" />}
+              title="Голосовой звонок"
+              hint="Разговор с выбранной моделью"
+              disabled={locked}
+              onClick={() => {
+                setMore(false);
+                onCall();
+              }}
+            />
+          ) : null}
           {imageMode ? null : (
             <ToolRow
               icon={<Paperclip className="size-4" />}
