@@ -124,6 +124,16 @@ function Home({
     };
   }, [nested]);
 
+  useEffect(() => {
+    const sync = () => {
+      const want = document.documentElement.dataset.tour === "more";
+      const narrow = window.matchMedia("(max-width: 767px)").matches;
+      setMore(want && narrow);
+    };
+    sync();
+    window.addEventListener("vv-circle-more", sync);
+    return () => window.removeEventListener("vv-circle-more", sync);
+  }, [tab]);
 
   useEffect(() => {
     setTab(initialTab);
@@ -306,7 +316,7 @@ function Home({
         </header>
         <div ref={tabsRef} role="tablist" aria-label={ui(lang, "circle")} className="snap-row hidden gap-1 px-3 py-2 md:flex xl:hidden" onKeyDown={(event) => onTabKey(event, order, tab, (id) => pick(id, true))}>
           {order.map((id) => (
-            <TabButton key={id} active={tab === id} onClick={() => { if (tab === id) scrollTop(); else pick(id, true); }}>
+            <TabButton key={id} tour={`place-${id}`} active={tab === id} onClick={() => { if (tab === id) scrollTop(); else pick(id, true); }}>
               <TabIcon id={id} />
               {ui(lang, id === "chat" ? "messages" : id)}
             </TabButton>
@@ -352,6 +362,7 @@ function Home({
               key={id}
               type="button"
               className={cn("circle-nav-item press flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-[11px] leading-none min-[400px]:text-xs", tab === id ? "text-fg" : "text-muted")}
+              data-tour={`place-${id}`}
               aria-current={tab === id ? "page" : undefined}
               onClick={() => {
                 if (tab === id) scrollTop();
@@ -379,7 +390,7 @@ function Home({
       </div>
       {more ? <MoreSheet title="Ещё" onClose={() => setMore(false)}>
         {moreTabs.map((id) => (
-          <button key={id} type="button" className="press flex min-h-12 w-full items-center gap-2 rounded-2xl px-3 text-left text-base" onClick={() => { setMore(false); pick(id, true); }}>
+          <button key={id} type="button" data-tour={`place-${id}`} className="press flex min-h-12 w-full items-center gap-2 rounded-2xl px-3 text-left text-base" onClick={() => { setMore(false); pick(id, true); }}>
             <TabIcon id={id} />
             {ui(lang, id === "admin" ? "admin" : id)}
           </button>
@@ -410,7 +421,7 @@ function TabIcon({ id, big = false }: { id: CircleTab; big?: boolean }) {
 
 function RailTab({ id, active, label, onClick }: { id: CircleTab; active: boolean; label: string; onClick: () => void }) {
   return (
-    <button type="button" role="tab" aria-selected={active} className={cn("circle-tab press flex h-10 items-center gap-2 rounded-xl px-3 text-left text-sm", active ? "bg-subtle text-fg" : "text-muted")} onClick={onClick}>
+    <button type="button" role="tab" aria-selected={active} data-tour={`place-${id}`} className={cn("circle-tab press flex h-10 items-center gap-2 rounded-xl px-3 text-left text-sm", active ? "bg-subtle text-fg" : "text-muted")} onClick={onClick}>
       <TabIcon id={id} />
       <span className="truncate">{label}</span>
     </button>
@@ -427,9 +438,9 @@ function ToChat({ onClick, wide = false }: { onClick: () => void; wide?: boolean
   );
 }
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function TabButton({ active, onClick, tour, children }: { active: boolean; onClick: () => void; tour?: string; children: ReactNode }) {
   return (
-    <button type="button" role="tab" aria-selected={active} onClick={onClick} className={cn("circle-tab press inline-flex h-10 shrink-0 snap-start items-center gap-2 rounded-xl px-3 text-sm whitespace-nowrap", active ? "bg-subtle text-fg" : "text-muted")}>
+    <button type="button" role="tab" aria-selected={active} data-tour={tour} onClick={onClick} className={cn("circle-tab press inline-flex h-10 shrink-0 snap-start items-center gap-2 rounded-xl px-3 text-sm whitespace-nowrap", active ? "bg-subtle text-fg" : "text-muted")}>
       {children}
     </button>
   );

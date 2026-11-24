@@ -198,7 +198,7 @@ export function Shop() {
         <div className="px-4 pt-3">
           <button type="button" className="press mb-2 min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setPeople(false)}>← В магазин</button>
           <h2 className="font-serif text-2xl tracking-tight">Роли и персонажи</h2>
-          <p className="text-xs text-faint">Пока действует Premium, все уже доступны. Покупка оставляет персонажа и после.</p>
+          <p className="text-xs text-faint">Психолог, маркетолог, повар и программист бесплатны. Остальные покупаются. Premium по-прежнему открывает всех.</p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
           {shop ? (
@@ -208,10 +208,9 @@ export function Shop() {
                   <CatalogArt kind="personas" id={item.id} alt={item.name} className="aspect-square w-full rounded-2xl" />
                   <p className="mt-2 text-sm font-medium">{item.name}</p>
                   <p className="mt-0.5 min-h-8 text-xs text-faint">{item.role}</p>
-                  <p className="mt-2 font-serif text-lg tabular-nums">{fmtVub(item.price)}</p>
-                  <p className="text-xs text-faint">{fmtRubApprox(item.price)}</p>
+                  {item.free ? <p className="mt-2 text-sm text-muted">Бесплатно</p> : <><p className="mt-2 font-serif text-lg tabular-nums">{fmtVub(item.price)}</p><p className="text-xs text-faint">{fmtRubApprox(item.price)}</p></>}
                   {item.owned || item.viaPremium ? (
-                    <><p className="mt-2 text-xs text-muted">{item.owned ? "В коллекции" : "Доступен с Premium"}</p><button type="button" disabled={busy} className="press mt-2 min-h-11 w-full rounded-xl border border-line-strong text-sm disabled:opacity-50" onClick={() => { setBusy(true); void setActivePersona({ data: item.id }).then((next) => { setShop(next); writeLivePersona(next.activeId); toast.success(`Выбран ${item.name}`); }).catch((err: unknown) => toast.error(loadError(err instanceof Error ? err.message : "", "Не удалось выбрать персонажа"))).finally(() => setBusy(false)); }}>{shop.activeId === item.id ? "Выбран" : "Выбрать"}</button></>
+                    <>{item.free ? null : <p className="mt-2 text-xs text-muted">{item.owned ? "В коллекции" : "Доступен с Premium"}</p>}<button type="button" disabled={busy} className="press mt-2 min-h-11 w-full rounded-xl border border-line-strong text-sm disabled:opacity-50" onClick={() => { setBusy(true); void setActivePersona({ data: item.id }).then((next) => { setShop(next); writeLivePersona(next.activeId); toast.success(`Выбран ${item.name}`); }).catch((err: unknown) => toast.error(loadError(err instanceof Error ? err.message : "", "Не удалось выбрать персонажа"))).finally(() => setBusy(false)); }}>{shop.activeId === item.id ? "Выбран" : "Выбрать"}</button></>
                   ) : (
                     <button
                       type="button"
@@ -238,7 +237,7 @@ export function Shop() {
     premium.active ? `Premium до ${untilLabel(premium.until)}` : "",
     vpn?.active ? `VPN до ${untilLabel(vpn.until)}` : "",
     mega?.active ? `Мегадиск до ${untilLabel(mega.until)}` : "",
-    ...(shop?.items.filter((item) => item.owned).map((item) => item.name) ?? []),
+    ...(shop?.items.filter((item) => item.owned && !item.free).map((item) => item.name) ?? []),
   ].filter(Boolean);
 
   return (

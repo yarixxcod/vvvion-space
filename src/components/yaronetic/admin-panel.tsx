@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Archive, BarChart3, Cpu, Image, Key, LifeBuoy, Mic, Send, Server, Smartphone, Tag, Users, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { PageLoader } from "@/components/yaronetic/page-loader";
 import { SecretInput } from "@/components/yaronetic/secret-input";
@@ -41,22 +42,22 @@ import {
 } from "@/lib/social/admin";
 
 const MODEL_RE = /^[A-Za-z0-9._:/-]+$/;
-const TABS = [
-  ["people", "Участники"],
-  ["telegram", "Telegram"],
-  ["models", "Модели"],
-  ["images", "Картинки"],
-  ["voice", "Голос"],
-  ["desk", "Поддержка"],
-  ["stats", "Статистика"],
-  ["servers", "Серверы"],
-  ["release", "Обновление"],
-  ["prices", "Цены"],
-  ["api", "API"],
-  ["backup", "Бэкап"],
-] as const;
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
+  { id: "people", label: "Участники", icon: Users },
+  { id: "telegram", label: "Telegram", icon: Send },
+  { id: "models", label: "Модели", icon: Cpu },
+  { id: "images", label: "Картинки", icon: Image },
+  { id: "voice", label: "Голос", icon: Mic },
+  { id: "desk", label: "Поддержка", icon: LifeBuoy },
+  { id: "stats", label: "Статистика", icon: BarChart3 },
+  { id: "servers", label: "Серверы", icon: Server },
+  { id: "release", label: "Обновление", icon: Smartphone },
+  { id: "prices", label: "Цены", icon: Tag },
+  { id: "api", label: "API", icon: Key },
+  { id: "backup", label: "Бэкап", icon: Archive },
+];
 
-type TabId = (typeof TABS)[number][0];
+type TabId = "people" | "telegram" | "models" | "images" | "voice" | "desk" | "stats" | "servers" | "release" | "prices" | "api" | "backup";
 
 type DraftProvider = AdminProvider;
 
@@ -253,17 +254,23 @@ export function AdminPanel() {
       <h3 className="font-serif text-2xl tracking-tight">Админ</h3>
       <BackupChip />
       <p className="mt-1 text-sm text-muted">Модели, лимиты и участники. В чате видно название, запрос уходит с именем модели провайдера.</p>
-      <div className="mt-3 flex gap-1 overflow-x-auto">
-        {TABS.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={tab === id ? "press h-9 shrink-0 rounded-xl bg-subtle px-3 text-sm" : "press h-9 shrink-0 rounded-xl px-3 text-sm text-muted"}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mt-4 grid grid-cols-3 gap-1.5 min-[420px]:grid-cols-4 lg:grid-cols-6">
+        {TABS.map((item) => {
+          const Icon = item.icon;
+          const on = tab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={on}
+              className={on ? "press flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl bg-accent px-1 text-xs font-medium text-accent-fg shadow-sm" : "press flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl bg-subtle px-1 text-xs text-muted hover:text-fg"}
+              onClick={() => setTab(item.id)}
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              <span className="max-w-full truncate">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
       {tab === "telegram" ? <TelegramAdmin /> : null}
       {tab === "people" ? <People members={members} onChange={setMembers} /> : null}

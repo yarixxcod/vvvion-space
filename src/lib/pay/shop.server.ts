@@ -4,6 +4,7 @@ import { purchaseLimitBoost } from "@/lib/social/bank";
 import { purchaseDiskSpace } from "@/lib/social/disk.fn";
 import { purchaseMega } from "@/lib/social/mega";
 import { PERSONAS } from "@/lib/social/persona-data";
+import { personaIsFree } from "@/lib/social/persona-free";
 import { purchasePersona } from "@/lib/social/personas";
 import { PREMIUM_DAYS, PREMIUM_PRICE, purchasePremium } from "@/lib/social/premium";
 import { MEGA_PRICE } from "@/lib/social/mega-plan";
@@ -27,7 +28,8 @@ async function parseSku(sku: string): Promise<Sku | null> {
     const id = sku.slice("persona:".length);
     const persona = PERSONAS.find((item) => item.id === id);
     if (!persona) return null;
-    return { sku, kind: "persona", price: await priceOf(sku, persona.price), ledger: "shop_persona", persona: id };
+    const price = personaIsFree(id) ? 0 : await priceOf(sku, persona.price);
+    return { sku, kind: "persona", price, ledger: "shop_persona", persona: id };
   }
   return null;
 }
@@ -155,7 +157,7 @@ export async function shopCatalog() {
       ...PERSONAS.map((persona) => ({
         sku: `persona:${persona.id}`,
         title: persona.name,
-        price: cost(`persona:${persona.id}`, persona.price),
+        price: personaIsFree(persona.id) ? 0 : cost(`persona:${persona.id}`, persona.price),
         section: "look",
         note: persona.role,
       })),

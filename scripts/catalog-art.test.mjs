@@ -18,7 +18,7 @@ test("every catalog persona and gift SKU has distinct real raster art", () => {
         ),
     ),
   ];
-  assert.equal(personas.length, 19);
+  assert.equal(personas.length, 20);
   assert.equal(gifts.length, 26);
   const hashes = new Set();
   for (const [kind, ids] of [
@@ -35,5 +35,5 @@ test("every catalog persona and gift SKU has distinct real raster art", () => {
       hashes.add(hash);
     }
   }
-  assert.equal(hashes.size, 45);
+  assert.equal(hashes.size, 46);
 });

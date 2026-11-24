@@ -5,6 +5,7 @@ import { assertActive } from "@/lib/social/access";
 import { isPremium } from "@/lib/social/premium";
 import { isUniqueViolation } from "@/lib/social/sql-error";
 import { loadPrices, priceOf } from "@/lib/social/prices";
+import { personaIsFree } from "@/lib/social/persona-free";
 
 export type PersonaCard = {
   id: string;
@@ -14,6 +15,7 @@ export type PersonaCard = {
   face: string;
   owned: boolean;
   viaPremium: boolean;
+  free: boolean;
   prompt: string | null;
 };
 
@@ -46,23 +48,25 @@ async function readShop(userId: string): Promise<PersonaShop> {
   const premium = await isPremium(userId);
   const prices = await loadPrices();
   let activeId: string | null = active[0]?.persona_id ?? null;
-  if (activeId && !have.has(activeId) && !premium) {
+  if (activeId && !have.has(activeId) && !premium && !personaIsFree(activeId)) {
     await sql`delete from active_persona where user_id = ${userId}`;
     activeId = null;
   }
   return {
     activeId,
     items: PERSONAS.map((item) => {
-      const mine = have.has(item.id);
+      const free = personaIsFree(item.id);
+      const mine = have.has(item.id) || free;
       const viaPremium = premium && !mine;
       return {
         id: item.id,
         name: item.name,
         role: item.role,
-        price: prices.get(`persona:${item.id}`) ?? item.price,
+        price: free ? 0 : (prices.get(`persona:${item.id}`) ?? item.price),
         face: `/personas/${item.id}-v2.webp`,
         owned: mine,
         viaPremium,
+        free,
         prompt: mine || premium ? item.prompt : null,
       };
     }),
@@ -73,6 +77,7 @@ export async function ownedPersonaPrompt(userId: string, id: string): Promise<st
   const { personaById } = await catalog();
   const persona = personaById(id);
   if (!persona) return "";
+  if (personaIsFree(id)) return persona.prompt;
   const sql = await getSql();
   const rows = await sql<{ persona_id: string }>`
     select persona_id from owned_personas
@@ -95,6 +100,7 @@ export async function purchasePersona(userId: string, id: string, idem?: string)
   if (!PERSONAS.some((item) => item.id === id)) throw new Error("Такого персонажа нет");
   const persona = personaById(id);
   if (!persona) throw new Error("Такого персонажа нет");
+  if (personaIsFree(id)) return readShop(userId);
   const price = await priceOf(`persona:${id}`, persona.price);
   const sql = await getSql();
   await sql`
@@ -180,7 +186,7 @@ export const setActivePersona = createServerFn({ method: "POST" })
       select persona_id from owned_personas
       where user_id = ${context.userId} and persona_id = ${id}
     `;
-    if (!owned.length && !(await isPremium(context.userId))) throw new Error("Сначала купите персонажа в магазине");
+    if (!owned.length && !personaIsFree(id) && !(await isPremium(context.userId))) throw new Error("Сначала купите персонажа в магазине");
     await sql`
       insert into active_persona (user_id, persona_id)
       values (${context.userId}, ${id})

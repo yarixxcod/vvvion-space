@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
 import { assertActive, assertAdmin } from "@/lib/social/access";
+import { personaIsFree } from "@/lib/social/persona-free";
 
 const GIFT_SKU = /^gift:[a-z][a-z0-9-]{1,23}$/;
 const PERSONA_SKU = /^persona:[a-z0-9-]{1,40}$/;
@@ -17,6 +18,7 @@ export type ShopPrice = {
 };
 
 export async function priceOf(sku: string, fallback: number): Promise<number> {
+  if (sku.startsWith("persona:") && personaIsFree(sku.slice("persona:".length))) return 0;
   const sql = await getSql();
   const rows = await sql<{ price: number }>`
     select price from shop_prices where sku = ${sku} and enabled = true

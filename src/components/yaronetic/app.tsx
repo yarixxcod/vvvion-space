@@ -43,6 +43,8 @@ import { circleExitDelta } from "@/lib/circle-history";
 import { shareOut } from "@/lib/app-bridge";
 import { modLabel, useChatShortcuts } from "@/lib/chat-shortcuts";
 import { haptic } from "@/lib/haptic";
+import { AppTour } from "@/components/yaronetic/app-tour";
+import { dayPart, FREE_ROLES, nickOf } from "@/lib/social/persona-free";
 
 const Transcript = lazy(() => import("@/components/yaronetic/transcript").then((mod) => ({ default: mod.Transcript })));
 const Circle = lazy(() => import("@/components/yaronetic/circle").then((mod) => ({ default: mod.Circle })));
@@ -68,6 +70,7 @@ export function App({
   const [settings, setSettings] = useState(false);
   const [headerMenu, setHeaderMenu] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
+  const [tour, setTour] = useState<number | null>(null);
   const [signIn, setSignIn] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -128,6 +131,23 @@ export function App({
     if (steps > 0) window.history.go(-steps);
     else void navigate({ to: "/", search: lang !== "ru" ? { lang } : {}, replace: true });
     window.setTimeout(() => circleBtn.current?.focus(), 0);
+  }
+
+  async function pickRole(id: string) {
+    if (!user) {
+      setSignIn(true);
+      return;
+    }
+    try {
+      const next = personaShop?.activeId === id ? "" : id;
+      const shop = await setActivePersona({ data: next });
+      setPersonaShop(shop);
+      writeLivePersona(shop.activeId);
+      const role = FREE_ROLES.find((item) => item.id === id);
+      toast(next ? fill(ui(lang, "roleOn"), { name: role?.name || "" }) : ui(lang, "roleOff"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : ui(lang, "personaFailed"));
+    }
   }
 
   useEffect(() => {
@@ -461,6 +481,7 @@ export function App({
           <button
             type="button"
             className="press inline-flex size-11 shrink-0 items-center justify-center rounded-2xl border border-line bg-elev/80 text-muted"
+            data-tour="history"
             aria-label={sidebar ? ui(lang, "hideHistory") : ui(lang, "showHistory")}
             title={`${sidebar ? ui(lang, "hideHistory") : ui(lang, "showHistory")} (${modLabel()}+B)`}
             onClick={toggleSidebar}
@@ -481,6 +502,7 @@ export function App({
                 ref={circleBtn}
                 type="button"
                 className="press inline-flex h-11 items-center gap-1.5 rounded-2xl border px-3 text-sm"
+                data-tour="circle"
                 onClick={() => (circle ? closeCircle() : openPlace("chat"))}
               >
                 {ui(lang, "circle")}
@@ -560,6 +582,10 @@ export function App({
               disabled={builtinLocked || streamingHere}
               suggestions={user && !interests ? [] : suggestions}
               personal={personal}
+              name={nickOf(user?.displayName)}
+              activeRole={personaShop?.activeId ?? null}
+              onRole={(id) => void pickRole(id)}
+              onTour={() => setTour(0)}
               onPick={(prompt) => void studio.send(prompt)}
             />
           ) : (
@@ -752,6 +778,22 @@ export function App({
       {headerMenu ? <HeaderMenu onClose={() => setHeaderMenu(false)} onShare={() => void shareDialog()} onTheme={() => studio.setTheme(studio.theme === "dark" ? "light" : "dark")} theme={studio.theme} onSettings={() => { setHeaderMenu(false); setSettings(true); }} shareDisabled={studio.messages.length === 0 || streamingHere || sharing} /> : null}
       {keysOpen ? <KeysSheet onClose={() => setKeysOpen(false)} /> : null}
       {signIn ? <SignInSheet onClose={() => setSignIn(false)} /> : null}
+      {tour != null ? (
+        <AppTour
+          index={tour}
+          open={Boolean(circle)}
+          onIndex={setTour}
+          onClose={() => {
+            setTour(null);
+            window.dispatchEvent(new CustomEvent("vv-circle-more", { detail: false }));
+            if (circle) closeCircle();
+          }}
+          onPlace={(tab) => {
+            if (tab) openPlace(tab);
+            else if (circle) closeCircle();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -915,43 +957,85 @@ function mixCards<T>(items: readonly T[], salt: number): T[] {
 
 function EmptyChat({
   onPick,
+  onRole,
+  onTour,
   disabled,
   suggestions,
   personal,
+  name,
+  activeRole,
 }: {
   onPick: (prompt: string) => void;
+  onRole: (id: string) => void;
+  onTour: () => void;
   disabled?: boolean;
   suggestions: readonly { title: string; prompt: string }[];
   personal: boolean;
+  name: string;
+  activeRole: string | null;
 }) {
   const lang = useLang();
   const [salt] = useState(visitSalt);
+  const [hour, setHour] = useState(() => new Date().getHours());
   const cards = useMemo(() => mixCards(suggestions, salt).slice(0, 4), [suggestions, salt]);
+  useEffect(() => {
+    const tick = () => setHour(new Date().getHours());
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const part = dayPart(hour);
+  const greet = ui(lang, part === "morning" ? "greetMorning" : part === "afternoon" ? "greetAfternoon" : part === "evening" ? "greetEvening" : "greetNight");
+  const title = name ? `${greet}, ${name}` : greet;
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4">
-      <div className="m-auto flex w-full max-w-2xl flex-col items-center py-8">
+      <div className="m-auto flex w-full max-w-3xl flex-col items-center py-8">
         <Mark size={72} />
-        <h1 className="mt-5 text-center font-serif text-4xl tracking-tight">{ui(lang, "howHelp")}</h1>
-        <p className="mt-2 max-w-md text-center text-sm text-pretty text-muted">
+        <h1 className="mt-5 text-center font-serif text-4xl tracking-tight" suppressHydrationWarning>{title}</h1>
+        <p className="mt-2 max-w-md text-center text-sm text-pretty text-muted lg:hidden">{ui(lang, "emptyRoles")}</p>
+        <p className="mt-2 hidden max-w-xl text-center text-sm text-pretty text-muted lg:block">
           {personal ? ui(lang, "emptyPersonal") : ui(lang, "emptyPlain")}
         </p>
+        <div className="mt-8 grid w-full grid-cols-2 gap-2 lg:hidden">
+          {FREE_ROLES.map((item) => {
+            const on = activeRole === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                disabled={disabled}
+                aria-pressed={on}
+                className={`press flex min-h-32 flex-col items-center justify-center gap-1.5 rounded-3xl border px-3 py-3 text-center disabled:opacity-40 ${on ? "border-accent bg-elev shadow-sm" : "border-line bg-elev/90 hover:bg-subtle"}`}
+                onClick={() => onRole(item.id)}
+              >
+                <img src={`/personas/${item.id}-v2.webp`} alt="" className="size-12 rounded-2xl object-cover" />
+                <span className="text-sm font-medium">{item.name}</span>
+                <span className="text-[11px] leading-tight text-muted">{item.role}</span>
+              </button>
+            );
+          })}
+        </div>
         {suggestions.length === 0 ? (
-          <p className="mt-8 text-sm text-faint">{ui(lang, "gathering")}</p>
+          <p className="mt-8 hidden text-sm text-faint lg:block">{ui(lang, "gathering")}</p>
         ) : (
-          <div className="mt-8 grid w-full grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mt-8 hidden w-full grid-cols-2 gap-3 lg:grid">
             {cards.map((item, index) => (
               <button
                 key={`${item.title}-${index}`}
                 type="button"
                 disabled={disabled}
-                className="press min-h-12 min-w-0 rounded-2xl border border-line bg-elev/90 px-3 py-2 text-center text-sm font-medium leading-snug break-words hover:bg-subtle disabled:opacity-40"
+                className="press flex min-h-28 flex-col items-start rounded-3xl border border-line bg-elev/80 px-4 py-4 text-left hover:border-line-strong hover:bg-elev disabled:opacity-40"
                 onClick={() => onPick(item.prompt)}
               >
-                {item.title}
+                <span className="text-[15px] font-medium leading-snug">{item.title}</span>
+                <span className="mt-1.5 line-clamp-3 text-sm leading-relaxed text-muted">{item.prompt}</span>
               </button>
             ))}
           </div>
         )}
+        <button type="button" className="press mt-6 text-sm text-faint underline-offset-4 hover:text-fg hover:underline" onClick={onTour}>
+          {ui(lang, "tourStart")}
+        </button>
       </div>
     </div>
   );
