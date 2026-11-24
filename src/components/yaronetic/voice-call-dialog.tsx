@@ -169,7 +169,7 @@ export function VoiceCallDialog({
                 className="size-full rounded-full"
               />
             ) : (
-              <div className="voice-call-face">
+              <div className="voice-call-face size-full">
                 <ModelFace
                   name={name}
                   variant={face}

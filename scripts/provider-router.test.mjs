@@ -190,6 +190,93 @@ test("weak-model JSON parser accepts only explicit action objects and rejects ma
   assert.equal(flat[0].name, "my_folders");
 });
 
+test("soft HTTP 503 is retried on the next send; 401 is not, even after a soft reset", async () => {
+  const softUsed = [];
+  const soft = createProviderRouter(
+    targets,
+    async (url) => {
+      softUsed.push(url);
+      return fail();
+    },
+    new AbortController().signal,
+  );
+  await soft.send({});
+  await soft.send({});
+  assert.deepEqual(softUsed, ["0", "1", "2", "0", "1", "2"]);
+  await soft.send({});
+  assert.deepEqual(softUsed, ["0", "1", "2", "0", "1", "2"]);
+  soft.clearSoftFailures();
+  await soft.send({});
+  assert.deepEqual(softUsed, ["0", "1", "2", "0", "1", "2", "0", "1", "2"]);
+
+  const hardUsed = [];
+  const hard = createProviderRouter(
+    targets,
+    async (url) => {
+      hardUsed.push(url);
+      return url === "0"
+        ? { failed: true, response: Response.json({ message: "denied" }, { status: 401 }) }
+        : ok();
+    },
+    new AbortController().signal,
+  );
+  await hard.send({});
+  await hard.send({});
+  hard.clearSoftFailures();
+  await hard.send({});
+  assert.deepEqual(hardUsed, ["0", "1", "1", "1"]);
+});
+
+test("slot wait stays short without tools and splits the long budget across backups", () => {
+  const { providerSlotWait } = load("provider-router");
+  assert.equal(providerSlotWait({ timeoutMs: 25_000, long: false, ahead: 3, elapsedMs: 0 }), 25_000);
+  assert.equal(providerSlotWait({ timeoutMs: 25_000, long: true, ahead: 3, elapsedMs: 0 }), 45_000);
+  assert.equal(providerSlotWait({ timeoutMs: 25_000, long: true, ahead: 1, elapsedMs: 0 }), 110_000);
+  assert.equal(providerSlotWait({ timeoutMs: 25_000, long: true, ahead: 2, elapsedMs: 180_000 }), 20_000);
+  assert.equal(providerSlotWait({ timeoutMs: 25_000, long: true, ahead: 1, elapsedMs: 200_000 }), 0);
+});
+
+test("a stream that dies before visible text still moves to the next slot", async () => {
+  const used = [];
+  const result = await createProviderRouter(
+    targets,
+    async (url) => {
+      used.push(url);
+      return url === "0"
+        ? {
+            failed: false,
+            response: new Response('data: {"choices":[{"delta":{"content":""}}]}\n\ndata: [DONE]\n\n', {
+              headers: { "content-type": "text/event-stream" },
+            }),
+          }
+        : ok("дальше");
+    },
+    new AbortController().signal,
+  ).send({ stream: true });
+  assert.deepEqual(used, ["0", "1"]);
+  assert.equal(result.failed, false);
+});
+
+test("visible text is kept and a later provider continues; the error appears only if nobody can", async () => {
+  const { recoverChatStream } = load("provider-router");
+  const stream = (parts) =>
+    new ReadableStream({
+      start(controller) {
+        for (const part of parts) controller.enqueue(new TextEncoder().encode(part));
+        controller.close();
+      },
+    });
+  const dead = recoverChatStream(
+    stream(['event: delta\ndata: {"text":"Кусок"}\n\n', 'event: error\ndata: {"message":"down"}\n\n']),
+    async () => null,
+    new AbortController().signal,
+  );
+  const text = await new Response(dead).text();
+  assert.ok(text.includes("Кусок"));
+  assert.ok(text.includes("event: error"));
+  assert.ok(text.includes("Ответ прервался"));
+});
+
 test('a provider error after visible text continues once without exposing an intermediate error', async()=>{
   const {recoverChatStream}=load('provider-router');
   const stream=(parts)=>new ReadableStream({start(controller){for(const part of parts)controller.enqueue(new TextEncoder().encode(part));controller.close();}});

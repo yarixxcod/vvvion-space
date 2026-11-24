@@ -172,31 +172,92 @@ export async function probeChatResponse(
   );
 }
 
-/** Priority is reset for each user turn. Failed targets are skipped only within this turn. */
+/** Priority is reset for each user turn. Hard failures stay out for this request; soft ones are skipped in the current send and tried again after healthier slots. */
+const HARD_STATUS = new Set([401, 402, 403, 404]);
+const SLOT_BUDGET_MS = 200_000;
+
+export function providerSlotWait(input: {
+  timeoutMs: number;
+  long: boolean;
+  ahead: number;
+  elapsedMs: number;
+  budgetMs?: number;
+}): number {
+  const left = (input.budgetMs ?? SLOT_BUDGET_MS) - input.elapsedMs;
+  if (left <= 0) return 0;
+  const cap = !input.long ? input.timeoutMs : input.ahead <= 1 ? 110_000 : 45_000;
+  return Math.min(cap, left);
+}
+
+function hostOf(url: string) {
+  try {
+    const host = new URL(url).host;
+    return host || url.slice(0, 80);
+  } catch {
+    return url.slice(0, 80);
+  }
+}
+
+function noteSlot(slot: number, url: string, kind: string, status?: number) {
+  console.info("[provider]", { slot, host: hostOf(url), kind, status: status ?? 0 });
+}
+
+function needsLongWait(payload: Record<string, unknown>) {
+  if (payload.tools) return true;
+  const messages = Array.isArray(payload.messages) ? payload.messages : [];
+  return messages.some((message) => {
+    if (!message || typeof message !== "object") return false;
+    const row = message as { role?: unknown; tool_calls?: unknown };
+    return row.role === "tool" || row.tool_calls != null;
+  });
+}
+
 export function createProviderRouter(
   targets: ChatTarget[],
   send: Send,
   signal: AbortSignal,
   timeoutMs = 25_000,
 ) {
-  const failed = new Set<number>();
+  const hard = new Set<number>();
+  const soft = new Map<number, number>();
+  const started = Date.now();
   const plain = new Set<number>();
   let last: ChatAttempt | undefined;
   let selected = -1;
+  const markSoft = (index: number) => soft.set(index, (soft.get(index) ?? 0) + 1);
   return {
     failCurrent() {
-      if (selected >= 0) failed.add(selected);
+      if (selected >= 0 && !hard.has(selected)) markSoft(selected);
     },
     forcePlain() {
       if (selected >= 0) plain.add(selected);
     },
+    clearSoftFailures() {
+      soft.clear();
+    },
     async send(payload: Record<string, unknown>): Promise<ChatAttempt> {
+      const fresh: number[] = [];
+      const retry: number[] = [];
       for (let i = 0; i < targets.length; i++) {
-        if (failed.has(i)) continue;
+        if (hard.has(i)) continue;
+        const times = soft.get(i) ?? 0;
+        if (times === 0) fresh.push(i);
+        else if (times < 2) retry.push(i);
+      }
+      const queue = [...fresh, ...retry];
+      const long = needsLongWait(payload);
+      for (let n = 0; n < queue.length; n++) {
+        const i = queue[n]!;
         signal.throwIfAborted();
-        const target = targets[i];
+        const waitMs = providerSlotWait({
+          timeoutMs,
+          long,
+          ahead: queue.length - n,
+          elapsedMs: Date.now() - started,
+        });
+        if (waitMs <= 0) break;
+        const target = targets[i]!;
         const controller = new AbortController();
-        const waitMs = payload.tools ? Math.max(timeoutMs, 110_000) : timeoutMs;
         const timer = setTimeout(() => controller.abort(), waitMs);
         const combined = AbortSignal.any([signal, controller.signal]);
         const request = async () =>
@@ -222,11 +283,22 @@ export function createProviderRouter(
           if (!result.failed) {
             const response = await probeChatResponse(result.response, combined);
             selected = i;
+            soft.delete(i);
             return { failed: false, response, plainTools: plain.has(i), secret: target.secret };
           }
           last = result;
+          const status = result.response.status;
+          if (HARD_STATUS.has(status)) {
+            hard.add(i);
+            noteSlot(i + 1, target.url, "auth", status);
+          } else {
+            markSoft(i);
+            noteSlot(i + 1, target.url, status === 429 || status >= 500 ? "http" : "http", status);
+          }
         } catch (error) {
           if (signal.aborted) throw error;
+          markSoft(i);
+          noteSlot(i + 1, target.url, controller.signal.aborted ? "timeout" : "empty");
           last = {
             failed: true,
             response: Response.json({ message: "Провайдер не ответил корректно" }, { status: 502 }),
@@ -234,7 +306,12 @@ export function createProviderRouter(
         } finally {
           clearTimeout(timer);
         }
-        failed.add(i);
+      }
+      if (targets.length > 1) {
+        return {
+          failed: true,
+          response: Response.json({ message: "Ни один из провайдеров не ответил" }, { status: 502 }),
+        };
       }
       return (
         last ?? {

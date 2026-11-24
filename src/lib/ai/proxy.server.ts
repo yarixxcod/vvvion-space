@@ -1349,9 +1349,20 @@ export async function handleChat(request: Request): Promise<Response> {
                             if (sys >= 0) wire[sys] = { role: "system", content: `${contentToText(wire[sys]?.content)}\n\n${note}`.slice(0, 20000) };
                             else wire.unshift({ role: "system", content: note });
                           }
+                          providerRouter.clearSoftFailures();
                           const upstreamNow = await providerRouter.send({ ...payload, messages: wire });
                           secret = upstreamNow.secret ?? secret;
-                          if (upstreamNow.failed || !upstreamNow.response.body) { push("error", { message: "Провайдер не ответил" }); return; }
+                          if (upstreamNow.failed || !upstreamNow.response.body) {
+                            let message = "Ни один из провайдеров не ответил";
+                            try {
+                              const body = (await upstreamNow.response.clone().json()) as { message?: unknown };
+                              if (typeof body?.message === "string" && body.message.trim()) message = body.message.trim();
+                            } catch {
+                              /* keep the fallback line */
+                            }
+                            push("error", { message });
+                            return;
+                          }
                           const attemptId = await recordAttempt({ userId: actorUser, guestId: actorGuest, model, kind, mode: body.webSearch === true ? "web" : "chat", ok: true, note: attemptNote(body) });
                           const remember = (total: number) => { void storeTokens(attemptId, total); };
                           if (limitNotice) push("limit", limitNotice);
@@ -1725,7 +1736,7 @@ async function callChat(url: string, headers: Headers, payload: Record<string, u
 		headers,
 		body: JSON.stringify(body),
 		signal
-	}, { hops: 0 });
+	}, { hops: 0, timeoutMs: 180_000 });
 	const fail = (response: Response, unsupportedTools = false) => ({
         unsupportedTools,
 		failed: true,

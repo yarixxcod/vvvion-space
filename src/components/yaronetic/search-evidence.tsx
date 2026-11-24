@@ -85,6 +85,8 @@ export function SearchEvidence({
               : summary?.used.length
                 ? summary.used.map((engine) => labels[engine]).join(" · ") +
                   (fallback ? " · резерв" : "")
+                : safe.length
+                ? "Источники в ответе"
                 : "Ответ не подтверждён веб-источниками"}
           </span>
         </span>
