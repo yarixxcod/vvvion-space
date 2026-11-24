@@ -23,6 +23,7 @@ const STEPS: Step[] = [
   { target: "place-disk", place: "disk", more: true, title: "tourDiskTitle", body: "tourDiskBody" },
   { target: "place-bank", place: "bank", more: true, title: "tourBankTitle", body: "tourBankBody" },
   { target: "place-shop", place: "shop", more: true, title: "tourShopTitle", body: "tourShopBody" },
+  { target: "place-apps", place: "apps", more: true, title: "tourAppsTitle", body: "tourAppsBody" },
 ];
 
 type Rect = { top: number; left: number; width: number; height: number };

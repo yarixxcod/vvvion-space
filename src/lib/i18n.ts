@@ -103,9 +103,9 @@ const UI = {
   },
   tourDiskTitle: { ru: "Диск", en: "Disk", kk: "Диск" },
   tourDiskBody: {
-    ru: "Рисунки и голосовые из чата. На телефоне Диск, Банк и Магазин лежат в «Ещё».",
-    en: "Pictures and voice from chat. On a phone, Disk, Bank and Shop sit under More.",
-    kk: "Чаттағы сурет пен дауыс. Телефонда Диск, Банк және Дүкен «Тағы» ішінде.",
+    ru: "Рисунки и голосовые из чата. На телефоне Диск, Банк, Магазин и Приложения лежат в «Ещё».",
+    en: "Pictures and voice from chat. On a phone, Disk, Bank, Shop and Apps sit under More.",
+    kk: "Чаттағы сурет пен дауыс. Телефонда Диск, Банк, Дүкен және Қолданбалар «Тағы» ішінде.",
   },
   tourBankTitle: { ru: "Банк", en: "Bank", kk: "Банк" },
   tourBankBody: {
@@ -118,6 +118,12 @@ const UI = {
     ru: "Подписка, место на диске и остальные персонажи. Четыре роли на главной уже бесплатные.",
     en: "The plan, disk space and the other characters. Four roles on the home screen are already free.",
     kk: "Жазылым, диск орны және қалған кейіпкерлер. Басты беттегі төрт рөл тегін.",
+  },
+  tourAppsTitle: { ru: "Приложения", en: "Apps", kk: "Қолданбалар" },
+  tourAppsBody: {
+    ru: "Свежие программы для Windows и Android. На компьютере раздел в списке слева, на телефоне — в «Ещё».",
+    en: "Fresh apps for Windows and Android. On a computer it is in the list on the left, on a phone it is under More.",
+    kk: "Windows пен Android үшін жаңа бағдарламалар. Компьютерде сол жақ тізімде, телефонда «Тағы» ішінде.",
   },
   emptyPersonal: {
     ru: "Вопросы под ваши интересы. Напишите внизу или выберите карточку. Сменить темы можно в настройках.",

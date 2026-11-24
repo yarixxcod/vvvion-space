@@ -66,18 +66,37 @@ export function Composer({
   ask?: boolean;
   onAsk?: (value: boolean) => void;
   modelSlot?: ReactNode;
-  roleSlot?: ReactNode | ((close:()=>void)=>ReactNode);
+  roleSlot?: ReactNode | ((close: () => void, roomy?: boolean) => ReactNode);
   roleLabel?: string;
   endSlot?: ReactNode;
   captureFiles?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const uploadAbort = useRef<AbortController | null>(null);
   const sentAt = useRef(0);
   const [upload, setUpload] = useState<UploadView | null>(null);
   const [more, setMore] = useState(false);
-  const [stickers,setStickers]=useState(false);
+  const [roles, setRoles] = useState(false);
+  const [stickers, setStickers] = useState(false);
+  useEffect(() => {
+    if (!roles) return;
+    const onDown = (event: PointerEvent) => {
+      const node = formRef.current;
+      if (!node || !(event.target instanceof Node) || node.contains(event.target)) return;
+      setRoles(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRoles(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [roles]);
   const lang = useLang();
 
   useEffect(() => {
@@ -149,14 +168,31 @@ export function Composer({
 
   return (
     <form
+      ref={formRef}
       data-vv-upload=""
       data-tour="composer"
-      className="rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent"
+      className="relative rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent"
       onSubmit={(event) => {
         event.preventDefault();
         fire();
       }}
     >
+      {roles && roleSlot ? (
+        <div className="absolute bottom-[calc(100%+0.6rem)] left-0 z-30 hidden w-full lg:block">
+          <div role="dialog" aria-label="Роли" className="max-h-[min(70dvh,34rem)] overflow-y-auto rounded-3xl border border-line bg-elev p-3 shadow-[var(--shadow)]">
+            <div className="mb-3 flex items-start justify-between gap-3 px-1">
+              <div>
+                <p className="font-serif text-2xl tracking-tight">Роли</p>
+                <p className="mt-1 text-sm text-muted">Только персонаж и его описание. Файл, сеть, картинка и модель остаются в строке ввода.</p>
+              </div>
+              <button type="button" className="press grid size-9 shrink-0 place-items-center rounded-xl text-muted" aria-label="Закрыть" onClick={() => setRoles(false)}>
+                <X className="size-4" />
+              </button>
+            </div>
+            {typeof roleSlot === "function" ? roleSlot(() => setRoles(false), true) : roleSlot}
+          </div>
+        </div>
+      ) : null}
       {stickers && onSticker ? <div className="mb-2"><StickerPicker ai disabled={Boolean(disabled||streaming||upload)} onClose={()=>setStickers(false)} onPick={code=>{setStickers(false);onSticker(stickerBody(code));}}/></div>:null}
       {files.length > 0 ? (
         <div className="flex flex-wrap gap-1 px-1 pb-1">
@@ -232,9 +268,10 @@ export function Composer({
           }}
           onKeyDown={(event) => {
             if (event.nativeEvent.isComposing || event.keyCode === 229) return;
-            if (event.key === "Escape" && more) {
+            if (event.key === "Escape" && (more || roles)) {
               event.preventDefault();
               setMore(false);
+              setRoles(false);
               return;
             }
             if (event.key === "Enter" && !event.shiftKey) {
@@ -357,7 +394,7 @@ export function Composer({
             </button>
           ) : null}
         </div>
-        {roleSlot ? <button type="button" aria-label="Роли и инструменты" aria-expanded={more} onClick={()=>setMore(value=>!value)} className="press hidden h-10 max-w-28 shrink-0 items-center gap-1 truncate rounded-2xl border border-line px-2.5 text-sm lg:inline-flex"><Plus className="size-4 shrink-0"/><span className="truncate">{roleLabel || "Роль"}</span></button> : null}
+        {roleSlot ? <button type="button" aria-label="Роли" aria-expanded={roles} onClick={() => setRoles((value) => !value)} className="press hidden h-10 max-w-36 shrink-0 items-center gap-1 truncate rounded-2xl border border-line px-2.5 text-sm lg:inline-flex"><Plus className="size-4 shrink-0"/><span className="truncate">{roleLabel || "Роль"}</span></button> : null}
         {endSlot ? <div className="w-[9.75rem] shrink-0">{endSlot}</div> : null}
         <div className="shrink-0">
           {streaming ? (

@@ -1,7 +1,7 @@
 import { useSectionScroll } from "@/lib/section-scroll";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BookOpen, Compass, HardDrive, Landmark, MessageCircle, MessageSquare, MonitorSmartphone, Moon, MoreHorizontal, Newspaper, Shield, ShoppingBag, Sun } from "lucide-react";
+import { BookOpen, ChevronLeft, Compass, HardDrive, Landmark, MessageCircle, MonitorSmartphone, Moon, MoreHorizontal, Newspaper, Shield, ShoppingBag, Sun } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { AuthForm } from "@/components/yaronetic/auth-form";
 import { Bank } from "@/components/yaronetic/bank";
@@ -295,8 +295,7 @@ function Home({
         <header className="flex min-h-14 items-center gap-2 border-b border-line px-2 pt-[env(safe-area-inset-top)]">
           {onClose ? (
             <button type="button" className="press inline-flex size-11 items-center justify-center rounded-2xl text-fg xl:hidden" aria-label={ui(lang, "toChat")} onClick={onClose}>
-              <MessageSquare className="hidden size-4 md:block" />
-              <span className="font-serif text-2xl leading-none md:hidden" aria-hidden="true">‹</span>
+              <ChevronLeft className="size-5" strokeWidth={2.25} aria-hidden="true" />
             </button>
           ) : null}
           <h1 className="min-w-0 flex-1 truncate font-serif text-xl leading-tight">{title}</h1>
@@ -435,9 +434,9 @@ function RailTab({ id, active, label, onClick }: { id: CircleTab; active: boolea
 function ToChat({ onClick, wide = false }: { onClick: () => void; wide?: boolean }) {
   const lang = useLang();
   return (
-    <button type="button" className={cn("press inline-flex h-11 items-center gap-2 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg", wide && "w-full justify-center")} aria-label={ui(lang, "toChat")} onClick={onClick}>
-      <span aria-hidden="true">‹</span>
-      {ui(lang, "toChat")}
+    <button type="button" className={cn("press inline-flex h-11 items-center gap-1.5 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg", wide && "w-full")} aria-label={ui(lang, "toChat")} onClick={onClick}>
+      <ChevronLeft className="size-4 shrink-0" strokeWidth={2.25} aria-hidden="true" />
+      <span className="leading-none">{ui(lang, "toChat")}</span>
     </button>
   );
 }

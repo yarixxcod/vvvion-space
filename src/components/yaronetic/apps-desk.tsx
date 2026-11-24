@@ -4,7 +4,7 @@ import { isApp, isDesktop } from "@/lib/app-bridge";
 import { ui } from "@/lib/i18n";
 import { useLang, useTx } from "@/lib/lang";
 
-type WindowsRelease = { version: string; notes: string };
+type WindowsRelease = { version: string; notes: string; href: string };
 type AndroidRelease = { versionName: string; apkUrl: string; changelog: string };
 
 type BeforeInstallPromptEvent = Event & {
@@ -40,8 +40,9 @@ export function AppsDesk() {
       void fetch("/api/app/desktop/update/windows/x86_64/0.0.0")
         .then(async (res) => {
           if (dead || res.status !== 200) return;
-          const body = (await res.json()) as { version?: string; notes?: string };
-          if (body.version) setWindows({ version: body.version, notes: typeof body.notes === "string" ? body.notes : "" });
+          const body = (await res.json()) as { version?: string; notes?: string; url?: string };
+          const href = typeof body.url === "string" ? safeDesktop(body.url) : null;
+          if (body.version) setWindows({ version: body.version, notes: typeof body.notes === "string" ? body.notes : "", href: href || "/app/desktop/latest" });
         })
         .catch(() => undefined);
     }
@@ -94,7 +95,7 @@ export function AppsDesk() {
                     })}
             </p>
             {windows && !here ? (
-              <a className="press mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" href="/app/desktop/latest">
+              <a className="press mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" href={windows.href} download>
                 {ui(lang, "windowsDownload")}
               </a>
             ) : (
@@ -122,7 +123,7 @@ export function AppsDesk() {
                   })}
             </p>
             {android ? (
-              <a className="press mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" href={android.apkUrl}>
+              <a className="press mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" href={android.apkUrl} download>
                 {tx({ ru: "Скачать для Android", en: "Download for Android", kk: "Android үшін жүктеу" })}
               </a>
             ) : (
@@ -162,6 +163,18 @@ export function AppsDesk() {
       </div>
     </div>
   );
+}
+
+function safeDesktop(url: string): string | null {
+  try {
+    const parsed = new URL(url, "https://vvvion.space");
+    if (parsed.protocol !== "https:") return null;
+    if (parsed.hostname !== "vvvion.space" && parsed.hostname !== "www.vvvion.space") return null;
+    if (!/^\/app\/desktop\/[\w.-]+\.exe$/i.test(parsed.pathname)) return null;
+    return parsed.pathname;
+  } catch {
+    return null;
+  }
 }
 
 function safeApk(url: string): string | null {

@@ -185,7 +185,7 @@ function InstallHint() {
         <p>{ui(lang, "installBrowser")}</p>
       )}
       {windows && !isApp() ? (
-        <a className="press mt-3 inline-flex h-11 items-center rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" href="/app/desktop/latest">
+        <a className="press mt-3 inline-flex h-11 items-center rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" href="/app/desktop/latest" download>
           {ui(lang, "windowsDownload")}
         </a>
       ) : null}

@@ -15,7 +15,7 @@ function sameOriginPath(href: string): string | null {
     return null;
   }
   if (url.origin !== window.location.origin) return null;
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth") || url.pathname.startsWith("/__grok/")) return null;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth") || url.pathname.startsWith("/__grok/") || url.pathname.startsWith("/app/")) return null;
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
