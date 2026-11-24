@@ -1,10 +1,9 @@
 import {StickerPicker, StickerImage} from "@/components/yaronetic/sticker-picker";
-import {MessageLike} from "@/components/yaronetic/message-like";
 import {setRoomMessageLike} from "@/lib/social/messenger";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { SourcePicker } from "@/components/yaronetic/source-picker";
 import { sizeLabel, UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
-import { ArrowLeft, BookOpen, Check, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, Heart, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { PersonFace } from "@/components/yaronetic/person-face";
 import { toast } from "sonner";
@@ -775,66 +774,68 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
             const voice = message.files.find((file) => file.mime.startsWith("audio/") && !isMusicFile(file.name, file.mime));
             const rest = message.files.filter((file) => file !== voice);
             const clip = splitChat(message.body);
-            const wide =
-              clip.screen.length > 0 ||
-              clip.books.length > 0 ||
-              clip.posts.length > 0 ||
-              clip.mega.length > 0 ||
-              rest.some((file) => file.mime.startsWith("video/") || isMusicFile(file.name, file.mime));
+            const images = rest.filter((file) => file.mime.startsWith("image/"));
+            const others = rest.filter((file) => !file.mime.startsWith("image/"));
+            const photoOnly =
+              images.length > 0 &&
+              !clip.text &&
+              !voice &&
+              others.length === 0 &&
+              clip.screen.length === 0 &&
+              clip.books.length === 0 &&
+              clip.posts.length === 0 &&
+              clip.mega.length === 0;
             return (
               <article key={message.id} className={cn("flex items-end gap-2", message.mine ? "justify-end" : "justify-start")}>
                 {message.mine ? null : <PersonFace name={message.name} image={message.image} size={28} userId={message.userId} />}
-                {sticker ? (
-                  <Holdable text={sticker} onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined} className="max-w-[9.5rem]">
-                    <StickerImage code={sticker} />
-                    <p className={cn("mt-0.5 text-xs", message.mine ? "text-right text-faint" : "text-faint")}>
-                      {!message.id.startsWith("local-")?<span className="mr-2 inline-flex align-middle"><MessageLike liked={message.liked} count={message.likes} busy={likeBusy.includes(message.id)} onClick={()=>void like(message)}/></span>:null}
-                      {when(message.createdAt)}
-                      {message.mine && !message.id.startsWith("local-") ? (
-                        <span className="ml-1" aria-label={message.read ? "Прочитано" : "Отправлено"}>{message.read ? "✓✓" : "✓"}</span>
+                <div className={cn("relative max-w-[min(85%,32rem)]", photoOnly && "max-w-[16rem]")}>
+                  {!message.id.startsWith("local-") ? (
+                    <PinLike liked={message.liked} busy={likeBusy.includes(message.id)} mine={message.mine} onClick={() => void like(message)} />
+                  ) : null}
+                  {sticker ? (
+                    <Holdable text={sticker} onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined} className="max-w-[9.5rem]">
+                      <StickerImage code={sticker} />
+                      <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={message.id.startsWith("local-")} />
+                    </Holdable>
+                  ) : (
+                    <Holdable
+                      text={clip.text}
+                      onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined}
+                      className={cn(
+                        photoOnly
+                          ? "text-base"
+                          : cn(
+                              "rounded-3xl px-3 py-2 text-base leading-6 shadow-sm",
+                              message.mine ? "rounded-br-lg bg-accent text-accent-fg" : "rounded-bl-lg border border-line bg-elev text-fg",
+                            ),
+                      )}
+                    >
+                      {!message.mine && room.kind === "group" ? (
+                        <p className={cn("mb-0.5 text-xs font-medium", message.mine || photoOnly ? "text-muted" : "text-accent-fg/80")}>{message.name}</p>
                       ) : null}
-                    </p>
-                  </Holdable>
-                ) : (
-                  <Holdable
-                    text={clip.text}
-                    onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined}
-                    className={cn(
-                      "max-w-[min(85%,32rem)] rounded-3xl px-3 py-2 text-base leading-6 shadow-sm",
-                      wide && "max-w-[min(85%,32rem)]",
-                      message.mine ? "rounded-br-lg bg-accent text-accent-fg" : "rounded-bl-lg border border-line bg-elev text-fg",
-                    )}
-                  >
-                    {!message.mine && room.kind === "group" ? (
-                      <p className={cn("mb-0.5 text-xs font-medium", message.mine ? "text-accent-fg/80" : "text-muted")}>{message.name}</p>
-                    ) : null}
-                    {voice ? <VoiceNote file={voice} mine={message.mine} /> : null}
-                    {clip.text && !voice ? <p className="whitespace-pre-wrap break-words">{clip.text}</p> : null}
-                    {clip.text && voice ? <p className={cn("mt-1 text-xs leading-relaxed", message.mine ? "text-accent-fg/80" : "text-muted")}>{clip.text}</p> : null}
-                    {clip.screen.map((id) => (
-                      <ScreenClip key={id} id={id} />
-                    ))}
-                    {clip.books.map((id) => (
-                      <BookCard key={id} id={id} mine={message.mine} />
-                    ))}
-                    {clip.posts.map((id) => (
-                      <PostCard key={id} id={id} mine={message.mine} />
-                    ))}
-                    {clip.mega.map((id) => (
-                      <MegaCard key={id} id={id} mine={message.mine} />
-                    ))}
-                    {rest.map((file) => (
-                      <Attachment key={file.id} file={file} mine={message.mine} />
-                    ))}
-                    <p className={cn("mt-0.5 text-right text-xs tabular-nums", message.mine ? "text-accent-fg/70" : "text-faint")}>
-                      {!message.id.startsWith("local-")?<span className="mr-2 inline-flex align-middle"><MessageLike liked={message.liked} count={message.likes} busy={likeBusy.includes(message.id)} onClick={()=>void like(message)}/></span>:null}
-                      {when(message.createdAt)}
-                      {message.mine && !message.id.startsWith("local-") ? (
-                        <span className="ml-1" aria-label={message.read ? "Прочитано" : "Отправлено"}>{message.read ? "✓✓" : "✓"}</span>
-                      ) : null}
-                    </p>
-                  </Holdable>
-                )}
+                      {voice ? <VoiceNote file={voice} mine={message.mine} /> : null}
+                      {clip.text && !voice ? <p className="whitespace-pre-wrap break-words">{clip.text}</p> : null}
+                      {clip.text && voice ? <p className={cn("mt-1 text-xs leading-relaxed", message.mine ? "text-accent-fg/80" : "text-muted")}>{clip.text}</p> : null}
+                      {clip.screen.map((id) => (
+                        <ScreenClip key={id} id={id} />
+                      ))}
+                      {clip.books.map((id) => (
+                        <BookCard key={id} id={id} mine={message.mine} />
+                      ))}
+                      {clip.posts.map((id) => (
+                        <PostCard key={id} id={id} mine={message.mine} />
+                      ))}
+                      {clip.mega.map((id) => (
+                        <MegaCard key={id} id={id} mine={message.mine} />
+                      ))}
+                      {images.length > 0 ? <PhotoPile files={images} /> : null}
+                      {others.map((file) => (
+                        <Attachment key={file.id} file={file} mine={message.mine} />
+                      ))}
+                      <Meta whenAt={message.createdAt} mine={message.mine} read={message.read} pending={message.id.startsWith("local-")} faint={photoOnly || !message.mine} />
+                    </Holdable>
+                  )}
+                </div>
               </article>
             );
           })
@@ -953,6 +954,125 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
         </div>
       </form>
     </div>
+  );
+}
+
+function PinLike({ liked, busy, mine, onClick }: { liked?: boolean; busy: boolean; mine?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={liked ? "Убрать лайк" : "Нравится сообщение"}
+      aria-pressed={liked}
+      disabled={busy}
+      className={cn("press absolute -top-2.5 z-10 grid size-6 place-items-center rounded-full bg-elev text-[#e11d48] shadow-sm", mine ? "-left-2.5" : "-right-2.5")}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      <Heart className="size-3.5" fill={liked ? "currentColor" : "none"} strokeWidth={2.4} />
+    </button>
+  );
+}
+
+function WaTicks({ read }: { read: boolean }) {
+  return (
+    <svg width="16" height="11" viewBox="0 0 16 11" aria-hidden="true" className={cn("ml-0.5 inline shrink-0", read ? "text-[#53bdeb]" : "text-current opacity-55")}>
+      <path d="M1.2 5.6 3.4 7.9 8.2 2.4" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5.1 5.6 7.3 7.9 12.1 2.4" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Meta({ whenAt, mine, read, pending, faint }: { whenAt: string; mine?: boolean; read?: boolean; pending: boolean; faint?: boolean }) {
+  return (
+    <p className={cn("mt-0.5 flex items-center justify-end gap-0.5 text-[11px] tabular-nums leading-none", faint || !mine ? "text-faint" : "text-accent-fg/75")}>
+      <span>{when(whenAt)}</span>
+      {mine && !pending ? <span className="inline-flex" aria-label={read ? "Прочитано" : "Отправлено"}><WaTicks read={Boolean(read)} /></span> : null}
+    </p>
+  );
+}
+
+function useRoomImage(file: FileMeta): string | null {
+  const [url, setUrl] = useState<string | null>(fileUrls.get(file.id) ?? null);
+  const local = file.id.startsWith("local-");
+  useEffect(() => {
+    if (local || fileUrls.has(file.id)) {
+      setUrl(fileUrls.get(file.id) ?? null);
+      return;
+    }
+    if (file.blob) {
+      if (file.size > 12_000_000) return;
+      let dead = false;
+      void fetchCircleBlob(file.id)
+        .then((next) => {
+          if (dead) {
+            URL.revokeObjectURL(next);
+            return;
+          }
+          fileUrls.set(file.id, next);
+          setUrl(next);
+        })
+        .catch(() => undefined);
+      return () => {
+        dead = true;
+      };
+    }
+    let dead = false;
+    void readRoomFile({ data: file.id })
+      .then((row) => {
+        if (dead) return;
+        const next = b64Url(row.data, row.mime);
+        fileUrls.set(file.id, next);
+        setUrl(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [file.blob, file.id, file.size, local]);
+  return url;
+}
+
+function PhotoPile({ files }: { files: FileMeta[] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const pile = files.length > 1;
+  const shown = pile ? files.slice(0, 4) : files;
+  return (
+    <div className={cn(pile ? "relative mt-1 h-32 w-40" : "mt-1")}>
+      {shown.map((file, index) => (
+        <Shot
+          key={file.id}
+          file={file}
+          pile={pile}
+          style={pile ? { left: index * 12, top: index * 7, zIndex: shown.length - index, transform: `rotate(${index === 0 ? -4 : index * 3.5}deg)` } : undefined}
+          onOpen={setOpen}
+        />
+      ))}
+      {files.length > shown.length ? (
+        <span className="absolute right-0 bottom-0 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] text-white">+{files.length - shown.length}</span>
+      ) : null}
+      {open ? (
+        <div className="fixed inset-0 z-[80] flex flex-col bg-black/80 p-3" role="dialog" aria-modal="true">
+          <div className="flex justify-end">
+            <button type="button" className="press h-11 rounded-2xl bg-elev px-3 text-sm" onClick={() => setOpen(null)}>Закрыть</button>
+          </div>
+          <button type="button" className="flex min-h-0 flex-1 items-center justify-center" aria-label="Закрыть" onClick={() => setOpen(null)}>
+            <img src={open} alt="" className="max-h-full max-w-full object-contain" />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Shot({ file, pile, style, onOpen }: { file: FileMeta; pile: boolean; style?: CSSProperties; onOpen: (src: string) => void }) {
+  const url = useRoomImage(file);
+  if (!url) return pile ? null : <LoaderMark className="vv-loader-sm mt-1.5" />;
+  return (
+    <button type="button" className={cn("block text-left", pile && "absolute")} style={style} onClick={() => onOpen(url)}>
+      <img src={url} alt={file.name} className={cn("rounded-xl object-cover", pile ? "h-[6.1rem] w-[7.1rem] shadow-md ring-2 ring-bg" : "max-h-44 max-w-[15rem] rounded-2xl")} />
+    </button>
   );
 }
 

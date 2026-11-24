@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useRouter } from "@tanstack/react-router";
+import { windowsShellFrom } from "@/lib/desktop-shell";
 
 function stylesLanded() {
   const root = document.body.firstElementChild;
@@ -28,6 +29,15 @@ function paintTheme() {
 
 export function Pwa() {
   const router = useRouter();
+  useEffect(() => {
+    const mark = () => {
+      const on = windowsShellFrom(navigator.userAgent, window.VvvionDesktop);
+      document.documentElement.classList.toggle("vv-desktop", on);
+    };
+    mark();
+    window.addEventListener("vvvion-desktop-ready", mark);
+    return () => window.removeEventListener("vvvion-desktop-ready", mark);
+  }, []);
   useEffect(() => {
     paintTheme();
     const theme = new MutationObserver(paintTheme);

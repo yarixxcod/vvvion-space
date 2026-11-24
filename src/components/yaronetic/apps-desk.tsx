@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Monitor, Smartphone } from "lucide-react";
+import { Monitor, Share2, Smartphone } from "lucide-react";
+import { toast } from "sonner";
 import { isApp, isDesktop } from "@/lib/app-bridge";
 import { ui } from "@/lib/i18n";
 import { useLang, useTx } from "@/lib/lang";
+import { absoluteUrl, placePath } from "@/lib/places";
 
 type WindowsRelease = { version: string; notes: string; href: string };
 type AndroidRelease = { versionName: string; apkUrl: string; changelog: string };
@@ -21,6 +23,24 @@ export function AppsDesk() {
   const [ios, setIos] = useState(false);
   const [standalone, setStandalone] = useState(false);
   const here = isDesktop();
+  const pageUrl = absoluteUrl(placePath("apps"));
+
+  async function sharePage() {
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title: ui(lang, "apps"), text: ui(lang, "subApps"), url: pageUrl });
+        return;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(pageUrl);
+      toast(ui(lang, "copied"));
+    } catch {
+      toast(pageUrl);
+    }
+  }
 
   useEffect(() => {
     const nav = navigator as Navigator & { standalone?: boolean };
@@ -68,6 +88,13 @@ export function AppsDesk() {
           {tx({ ru: "Свежие приложения", en: "Latest apps", kk: "Жаңа қолданбалар" })}
         </h2>
         <p className="mt-2 max-w-xl text-sm text-muted">{ui(lang, "subApps")}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button type="button" className="press inline-flex h-10 items-center gap-2 rounded-xl border border-line px-3 text-sm" onClick={() => void sharePage()}>
+            <Share2 className="size-4" />
+            {ui(lang, "share")}
+          </button>
+          <p className="min-w-0 truncate font-mono text-xs text-faint">{pageUrl}</p>
+        </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <article className="flex min-h-72 flex-col rounded-[1.6rem] border border-line bg-elev p-4">
             <Device art="windows" />

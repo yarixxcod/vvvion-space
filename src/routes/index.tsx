@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { App } from "@/components/yaronetic/app";
-import { homeSeo, langOf, normalizeLang, type Lang } from "@/lib/i18n";
+import { homeSeo, langOf, normalizeLang, placeCopy, type Lang } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
-import { isCircleTab, type CircleTab } from "@/lib/places";
-import { seoHead, websiteJsonLd } from "@/lib/seo";
+import { isCircleTab, placePath, type CircleTab } from "@/lib/places";
+import { appsJsonLd, seoHead, websiteJsonLd } from "@/lib/seo";
 import { listModels } from "@/lib/social/admin";
 
 function cleanId(value: unknown) {
@@ -45,6 +45,15 @@ export const Route = createFileRoute("/")({
   loader: () => listModels().catch(() => []),
   head: ({ match }) => {
     const lang = langOf(match.search.lang);
+    const place = match.search.place;
+    if (place === "admin") {
+      return { meta: [{ title: "vvvion.space" }, { name: "robots", content: "noindex, nofollow" }] };
+    }
+    if (place) {
+      const slug = place === "chat" ? "messages" : place;
+      const copy = placeCopy(slug, lang);
+      if (copy) return seoHead(lang, placePath(slug), copy.title, copy.description);
+    }
     const seo = homeSeo(lang);
     return seoHead(lang, "/", seo.title, seo.description);
   },
@@ -56,10 +65,11 @@ function Home() {
   const { place, chat, room, new: startNew } = Route.useSearch();
   const lang = useLang();
   const seo = homeSeo(lang);
+  const graph = place === "apps" ? appsJsonLd(lang) : websiteJsonLd(seo.description);
   return (
     <>
       <App initialModels={models} place={place} openChat={chat} openRoom={room} startNew={startNew} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd(seo.description)) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }} />
     </>
   );
 }

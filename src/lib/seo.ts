@@ -1,4 +1,4 @@
-import { aboutCopy, type FaqItem, type Lang } from "@/lib/i18n";
+import { aboutCopy, placeCopy, type FaqItem, type Lang } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/places";
 
 export function localeOf(lang: Lang): string {
@@ -87,7 +87,23 @@ export function faqJsonLd(items: FaqItem[], path: string, lang: Lang) {
   };
 }
 
-export function aboutJsonLd(lang: Lang) {
+export function appsJsonLd(lang: Lang) {
+  const copy = placeCopy("apps", lang);
+  const url = localizedUrl("/c/apps", lang);
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "VVVion Space",
+    applicationCategory: "CommunicationApplication",
+    operatingSystem: "Windows, Android",
+    url,
+    description: copy?.description ?? "",
+    inLanguage: lang,
+    downloadUrl: url,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "RUB" },
+  };
+}
+  export function aboutJsonLd(lang: Lang) {
   const copy = aboutCopy(lang);
   return [faqJsonLd(copy.faq, "/about", lang)];
 }

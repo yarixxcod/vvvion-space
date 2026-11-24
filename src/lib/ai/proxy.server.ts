@@ -548,6 +548,13 @@ async function readJson(request: Request) {
 }
 async function loadCatalog(model: string): Promise<CatalogChat> {
 	const sql = await getSql();
+	const direct = await sql<{ name: string }>`select name from catalog_models where name = ${model} limit 1`;
+	if (!direct[0]) {
+		const via = await sql<{ model_name: string }>`
+      select model_name from catalog_providers where model_id = ${model} and model_id <> '' order by slot asc limit 1
+    `;
+		if (via[0]?.model_name) model = via[0].model_name;
+	}
 	const rows = await sql<{ base_url?: string; api_key?: string; system_prompt?: string }>`
     select base_url, api_key, system_prompt from catalog_models where name = ${model}
   `;
