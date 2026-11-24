@@ -6,11 +6,12 @@ import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, Download, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, Trash2, Volume2, X } from "lucide-react";
+import { AlertCircle, ArrowDown, Check, ChevronDown, Download, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, TextSelect, Trash2, Volume2, X } from "lucide-react";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
-import { copyText, Markdown } from "@/components/yaronetic/markdown";
+import { Markdown } from "@/components/yaronetic/markdown";
+import { SelectText } from "@/components/yaronetic/select-text";
 import { looksLikeAscii } from "@/lib/ascii";
 import { replaceStickerTokens } from "@/lib/stickers";
 import { peelQuestionLike } from "@/lib/ai/question-like";
@@ -331,6 +332,7 @@ function UserBubble({
   onQuote?: (text: string) => void;
 }) {
   const [sheet, setSheet] = useState(false);
+  const [pick, setPick] = useState(false);
   const fine = useFinePointer();
   const gestures = useGestureSurface();
   const hold = useLongPress(() => {
@@ -388,7 +390,7 @@ function UserBubble({
       ) : (
         <div
           ref={box}
-          className="bubble-text relative rounded-[1.35rem] rounded-br-md border-0 bg-fg/[0.06] px-4 py-3 shadow-none"
+          className="relative rounded-[1.35rem] rounded-br-md border-0 bg-fg/[0.06] px-4 py-3 shadow-none select-none [-webkit-touch-callout:none]"
           onClick={() => {
             if (fine || window.getSelection()?.toString() || hold.fired.current) return;
           }}
@@ -433,7 +435,7 @@ function UserBubble({
       )}
       {!editing ? (
         <div className="msg-actions mt-1 flex justify-end gap-1">
-          <Ghost label="Копировать" onClick={() => void copyText(replaceStickerTokens(message.content))}><Copy className="size-4" /></Ghost>
+          <Ghost label="Выделить" onClick={() => setPick(true)}><TextSelect className="size-4" /></Ghost>
           {readonly ? null : <Ghost label="Изменить" disabled={disabled} onClick={onEdit}><span className="text-xs">Изм</span></Ghost>}
           {onDelete ? <Ghost label="Удалить" disabled={disabled} onClick={onDelete}><Trash2 className="size-4" /></Ghost> : null}
         </div>
@@ -441,10 +443,10 @@ function UserBubble({
       {sheet && !editing ? (
         <ActionSheet title={clock(message.createdAt)} onClose={() => setSheet(false)}>
           <SheetRow
-            label="Копировать"
+            label="Выделить"
             onClick={() => {
               setSheet(false);
-              void copyText(replaceStickerTokens(message.content));
+              setPick(true);
             }}
           />
           {onQuote && message.content ? (
@@ -478,6 +480,7 @@ function UserBubble({
           ) : null}
         </ActionSheet>
       ) : null}
+      {pick ? <SelectText text={replaceStickerTokens(message.content)} onClose={() => setPick(false)} /> : null}
     </div>
   );
 }
@@ -584,6 +587,7 @@ function AssistantBubble({
   );
   const src = pictureSrc(message.imageUrl);
   const [more, setMore] = useState(false);
+  const [pick, setPick] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const fine = useFinePointer();
   const gestures = useGestureSurface();
@@ -685,7 +689,7 @@ function AssistantBubble({
         {done ? (
           <div className={full ? "msg-actions msg-actions-last mt-1 flex gap-1" : "msg-actions mt-1 flex gap-1"}>
             {message.content ? <SpeakButton text={message.content} /> : null}
-            {message.content ? <CopyToggle text={message.content} /> : null}
+            {message.content ? <SelectToggle text={message.content} /> : null}
             {canRegenerate ? (
               <Ghost label="Заново" onClick={onRegenerate}>
                 <RefreshCw className="size-4" />
@@ -711,10 +715,10 @@ function AssistantBubble({
             ) : null}
             {message.content ? (
               <SheetRow
-                label="Копировать"
+                label="Выделить"
                 onClick={() => {
                   setMore(false);
-                  void copyText(replaceStickerTokens(message.content));
+                  setPick(true);
                 }}
               />
             ) : null}
@@ -747,6 +751,7 @@ function AssistantBubble({
             ) : null}
           </ActionSheet>
         ) : null}
+        {pick ? <SelectText text={replaceStickerTokens(message.content)} onClose={() => setPick(false)} /> : null}
       </div>
     </div>
   );
@@ -1014,20 +1019,15 @@ function SpeakButton({ text }: { text: string }) {
   );
 }
 
-function CopyToggle({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
+function SelectToggle({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <Ghost
-      label="Копировать"
-      onClick={() => {
-        void copyText(text).then(() => {
-          setDone(true);
-          window.setTimeout(() => setDone(false), 1200);
-        });
-      }}
-    >
-      {done ? <Check className="size-4" /> : <Copy className="size-4" />}
-    </Ghost>
+    <>
+      <Ghost label="Выделить" onClick={() => setOpen(true)}>
+        <TextSelect className="size-4" />
+      </Ghost>
+      {open ? <SelectText text={replaceStickerTokens(text)} onClose={() => setOpen(false)} /> : null}
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { toast } from "sonner";
+import { SelectText } from "@/components/yaronetic/select-text";
 import { pushBackLayer } from "@/lib/app-back";
 import { useLongPress } from "@/lib/gestures/use-long-press";
 
@@ -24,6 +24,7 @@ export function HoldSheet({ title, onClose, children }: { title: string; onClose
 
 export function Holdable({ text, className, children, onReport, onLike, liked }: { text: string; className?: string; children: ReactNode; onReport?: () => void; onLike?: () => void; liked?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [pick, setPick] = useState(false);
   const hold = useLongPress(() => {
     if (window.getSelection()?.toString()) return;
     if (text.trim() || onReport || onLike) setOpen(true);
@@ -40,20 +41,18 @@ export function Holdable({ text, className, children, onReport, onLike, liked }:
       >
         {children}
       </div>
+      {pick ? <SelectText text={text} onClose={() => setPick(false)} /> : null}
       {open ? (
         <HoldSheet title="Сообщение" onClose={() => setOpen(false)}>
           <button
             type="button"
             className="press flex min-h-12 w-full items-center rounded-2xl px-3 text-left text-base"
             onClick={() => {
-              void navigator.clipboard.writeText(text).then(
-                () => toast("Скопировано"),
-                () => toast(text),
-              );
               setOpen(false);
+              setPick(true);
             }}
           >
-            Копировать
+            Выделить
           </button>
           {onLike ? (
             <button

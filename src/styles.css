@@ -195,14 +195,26 @@ html.vv-lowend, html.vv-lowend *, html.vv-lowend *::before, html.vv-lowend *::af
 }
 .bubble-text,
 .prose-y,
-.prose-y p,
-.prose-y li,
-.prose-y blockquote,
-.prose-y pre,
-.prose-y code {
-  -webkit-user-select: text;
-  user-select: text;
+.prose-y * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.select-sheet,
+.select-sheet * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
   -webkit-touch-callout: default;
+}
+.like-pin,
+.like-pin:focus,
+.like-pin:focus-visible {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  border-radius: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 @media (min-width: 1024px) {
   .prose-y { font-size: 1.0625rem; line-height: 1.65; max-inline-size: 68ch; }
