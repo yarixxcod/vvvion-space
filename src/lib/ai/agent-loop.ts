@@ -480,7 +480,7 @@ export async function runAgentLoop(options: {
     // Record actual execution, then keep exactly that history when the provider changes.
     wire.push({
       role: "assistant",
-      content: parts.text || "",
+      content: parts.text.trim() ? parts.text : null,
       ...assistantReason,
       tool_calls: calls.map((call) => ({
         id: call.id,

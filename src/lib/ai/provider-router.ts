@@ -198,8 +198,25 @@ function hostOf(url: string) {
   }
 }
 
-function noteSlot(slot: number, url: string, kind: string, status?: number) {
-  console.info("[provider]", { slot, host: hostOf(url), kind, status: status ?? 0 });
+function clipPublic(text: string) {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/Bearer\s+\S+/gi, "Bearer •••")
+    .replace(/\b(?:sk|xai|whsec)-[A-Za-z0-9_-]{6,}\b/g, "•••")
+    .slice(0, 160)
+    .trim();
+}
+
+function noteSlot(slot: number, url: string, kind: string, status: number | undefined, detail: string, last: { current?: { status: number; host: string; kind: string; detail: string } }) {
+  const host = hostOf(url);
+  const safe = clipPublic(detail);
+  last.current = { status: status ?? 0, host, kind, detail: safe };
+  console.info("[provider]", { slot, host, kind, status: status ?? 0, detail: safe });
+}
+
+function failureDetail(last: { status: number; host: string; kind: string; detail: string } | undefined) {
+  if (!last) return "";
+  return [String(last.status || "—"), last.host, last.kind, last.detail].filter(Boolean).join(" ").slice(0, 220);
 }
 
 function needsLongWait(payload: Record<string, unknown>) {
@@ -224,6 +241,7 @@ export function createProviderRouter(
   const plain = new Set<number>();
   let last: ChatAttempt | undefined;
   let selected = -1;
+  const noted: { current?: { status: number; host: string; kind: string; detail: string } } = {};
   const markSoft = (index: number) => soft.set(index, (soft.get(index) ?? 0) + 1);
   return {
     failCurrent() {
@@ -288,17 +306,24 @@ export function createProviderRouter(
           }
           last = result;
           const status = result.response.status;
-          if (HARD_STATUS.has(status)) {
-            hard.add(i);
-            noteSlot(i + 1, target.url, "auth", status);
-          } else {
-            markSoft(i);
-            noteSlot(i + 1, target.url, status === 429 || status >= 500 ? "http" : "http", status);
+          const raw = await result.response.clone().text().catch(() => "");
+          let detail = raw;
+          try {
+            const parsed = JSON.parse(raw) as { message?: unknown; error?: { message?: unknown } };
+            if (typeof parsed?.message === "string") detail = parsed.message;
+            else if (typeof parsed?.error?.message === "string") detail = parsed.error.message;
+          } catch {
+            /* keep the raw body */
           }
+          const kind = HARD_STATUS.has(status) ? "auth" : "http";
+          if (HARD_STATUS.has(status)) hard.add(i);
+          else markSoft(i);
+          noteSlot(i + 1, target.url, kind, status, detail, noted);
         } catch (error) {
           if (signal.aborted) throw error;
           markSoft(i);
-          noteSlot(i + 1, target.url, controller.signal.aborted ? "timeout" : "empty");
+          const kind = controller.signal.aborted ? "timeout" : "empty";
+          noteSlot(i + 1, target.url, kind, kind === "timeout" ? 504 : 502, error instanceof Error ? error.message : kind, noted);
           last = {
             failed: true,
             response: Response.json({ message: "Провайдер не ответил корректно" }, { status: 502 }),
@@ -307,16 +332,17 @@ export function createProviderRouter(
           clearTimeout(timer);
         }
       }
+      const detail = failureDetail(noted.current);
       if (targets.length > 1) {
         return {
           failed: true,
-          response: Response.json({ message: "Ни один из провайдеров не ответил" }, { status: 502 }),
+          response: Response.json({ message: "Ни один из провайдеров не ответил", detail }, { status: 502 }),
         };
       }
       return (
         last ?? {
           failed: true,
-          response: Response.json({ message: "Нет доступного провайдера" }, { status: 502 }),
+          response: Response.json({ message: "Нет доступного провайдера", detail }, { status: 502 }),
         }
       );
     },

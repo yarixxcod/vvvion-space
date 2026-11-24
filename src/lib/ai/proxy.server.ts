@@ -1,5 +1,6 @@
 import {STICKER_REPLY_GUIDE, stickersAllowed} from "@/lib/stickers";
 import { createProviderRouter, recoverChatStream } from "@/lib/ai/provider-router";
+import { closeoutChatPayload } from "@/lib/ai/chat-wire";
 import { AGENT_CORE, AGENT_CORE_LITE, buildSystemPrompt } from "@/lib/ai/agent-prompt";
 import { runAgentLoop, toolCallsFromMessage } from "@/lib/ai/agent-loop";
 import { createWebTools } from "@/lib/ai/agent-web";
@@ -1350,17 +1351,19 @@ export async function handleChat(request: Request): Promise<Response> {
                             else wire.unshift({ role: "system", content: note });
                           }
                           providerRouter.clearSoftFailures();
-                          const upstreamNow = await providerRouter.send({ ...payload, messages: wire });
+                          const upstreamNow = await providerRouter.send(closeoutChatPayload(payload, wire, model, pack.tools));
                           secret = upstreamNow.secret ?? secret;
                           if (upstreamNow.failed || !upstreamNow.response.body) {
                             let message = "Ни один из провайдеров не ответил";
+                            let detail = "";
                             try {
-                              const body = (await upstreamNow.response.clone().json()) as { message?: unknown };
+                              const body = (await upstreamNow.response.clone().json()) as { message?: unknown; detail?: unknown };
                               if (typeof body?.message === "string" && body.message.trim()) message = body.message.trim();
+                              if (typeof body?.detail === "string") detail = body.detail.trim();
                             } catch {
                               /* keep the fallback line */
                             }
-                            push("error", { message });
+                            push("error", { message, detail });
                             return;
                           }
                           const attemptId = await recordAttempt({ userId: actorUser, guestId: actorGuest, model, kind, mode: body.webSearch === true ? "web" : "chat", ok: true, note: attemptNote(body) });
@@ -1372,7 +1375,7 @@ export async function handleChat(request: Request): Promise<Response> {
                             await relay(recoverChatStream(normalizeSse(upstreamNow.response.body, secret, remember, sink, reasoningOn), async () => {
                               providerRouter.failCurrent();
                               const context = sink.text ? [...wire, { role: "assistant", content: sink.text }, { role: "user", content: "Предыдущий ответ оборвался. Продолжи его с места остановки без повторения уже написанного, без вступления и без повторного выполнения действий с файлами." }] : wire;
-                              const next = await providerRouter.send({ ...payload, messages: context });
+                              const next = await providerRouter.send(closeoutChatPayload(payload, context, model, pack.tools));
                               if (next.failed || !next.response.body) return null;
                               secret = next.secret ?? secret;
                               sink.error = "";

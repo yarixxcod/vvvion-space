@@ -690,7 +690,7 @@ function AssistantBubble({
           </div>
         ) : null}
         {message.error ? (
-          <p className="mt-2 rounded-2xl border border-line bg-subtle px-3 py-2 text-sm text-danger">{message.error}</p>
+          <p className="mt-2 whitespace-pre-line rounded-2xl border border-line bg-subtle px-3 py-2 text-sm text-danger">{message.error}</p>
         ) : null}
         {message.error && canRegenerate ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onRegenerate}>Повторить ответ</button> : null}
         {onContinue ? <button type="button" className="press mt-3 min-h-11 rounded-xl border border-line px-4 text-sm" onClick={onContinue}>Продолжить</button> : null}

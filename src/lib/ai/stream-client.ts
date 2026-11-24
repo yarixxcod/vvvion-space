@@ -106,7 +106,7 @@ function parseEvent(raw: string, handlers: Handlers) {
     else if (line.startsWith("data:")) data += line.slice(5).trim();
   }
   if (!data) return;
-  let json: { text?: string; message?: string; usage?: Usage; truncated?: boolean; url?: string; sources?: Source[]; search?: SearchSummary; remainingPct?: number; id?: string; tool?: string; label?: string; detail?: string; status?: "running" | "done" | "error"; entries?: string[]; revision?: number };
+  let json: { text?: string; message?: string; detail?: string; usage?: Usage; truncated?: boolean; url?: string; sources?: Source[]; search?: SearchSummary; remainingPct?: number; id?: string; tool?: string; label?: string; status?: "running" | "done" | "error"; entries?: string[]; revision?: number };
   try {
     json = JSON.parse(data) as typeof json;
   } catch {
@@ -117,7 +117,10 @@ function parseEvent(raw: string, handlers: Handlers) {
   else if (event === "usage" && json.usage) handlers.onUsage(json.usage);
   else if (event === "limit" && typeof json.remainingPct === "number") handlers.onLimit?.(json.remainingPct);
   else if (event === "meta" && json.truncated) handlers.onMeta?.({ truncated: true });
-  else if (event === "error" && json.message) handlers.onError(json.message);
+  else if (event === "error" && json.message) {
+    const detail = typeof json.detail === "string" ? json.detail.trim() : "";
+    handlers.onError(detail ? `${json.message}\n${detail}` : json.message);
+  }
   else if (event === "image" && json.url) handlers.onImage?.(json.url);
   else if (event === "sources" && Array.isArray(json.sources)) handlers.onSources?.(json.sources, cleanSearchSummary(json.search));
   else if (event === "step" && json.id && json.label && json.status) handlers.onStep?.({ id: json.id, tool: json.tool || "", label: json.label, detail: json.detail, status: json.status });
