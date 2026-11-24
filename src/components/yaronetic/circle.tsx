@@ -317,9 +317,6 @@ function Home({
             </button>
           ) : null}
           <h1 className="min-w-0 flex-1 truncate font-serif text-xl leading-tight">{title}</h1>
-          <button type="button" className="desktop-only-nav press h-9 items-center rounded-xl border border-line px-2.5 text-xs" onClick={() => pick("apps", true)}>
-            {ui(lang, "apps")}
-          </button>
           {admin ? (
             <button type="button" className="desktop-only-nav press h-9 items-center rounded-xl border border-line px-2.5 text-xs" onClick={() => pick("admin", true)}>
               {ui(lang, "admin")}

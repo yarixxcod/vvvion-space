@@ -47,11 +47,13 @@ export function MicButton({
   onChange,
   onVoice,
   disabled,
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
   onVoice?: (file: ChatFile) => void;
   disabled?: boolean;
+  className?: string;
 }) {
   const lang = useLang();
   const [phase, setPhase] = useState<"idle" | "rec" | "work">("idle");
@@ -346,9 +348,10 @@ export function MicButton({
     <button
       type="button"
       className={cn(
-        "mic-btn press relative inline-flex h-10 items-center justify-center rounded-2xl border",
-        phase === "rec" ? "mic-live w-[4.5rem] gap-1.5 border-accent bg-accent/15 text-accent" : "size-10 border-line text-muted",
+        "mic-btn press relative inline-flex h-11 items-center justify-center rounded-2xl border",
+        phase === "rec" ? "mic-live w-[4.5rem] gap-1.5 border-accent bg-accent/15 text-accent" : "size-11 border-transparent text-muted hover:bg-subtle",
         phase === "work" && "mic-wait",
+        className,
       )}
       aria-label={label}
       title={label}
@@ -371,7 +374,7 @@ export function MicButton({
           <span className="text-xs tabular-nums">{clock}</span>
         </>
       ) : (
-        <Mic className="size-4" />
+        <Mic className="size-5" strokeWidth={1.8} />
       )}
     </button>
   );

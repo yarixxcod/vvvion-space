@@ -1,11 +1,23 @@
-import {StickerPicker} from "@/components/yaronetic/sticker-picker";
-import {stickerBody} from "@/lib/stickers";
+import { StickerPicker } from "@/components/yaronetic/sticker-picker";
+import { stickerBody } from "@/lib/stickers";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Smile, ArrowUp, Brain, Globe, ImageIcon, MessageCircleQuestion, Paperclip, Plus, Square, X } from "lucide-react";
+import {
+  Smile,
+  ArrowUp,
+  Brain,
+  Globe,
+  ImageIcon,
+  MessageCircleQuestion,
+  Paperclip,
+  Plus,
+  Square,
+  UserRound,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { MicButton } from "@/components/yaronetic/mic-button";
-import { HoldHint } from "@/components/yaronetic/hold-hint";
+import { attachmentQueue, composerSubmitKey } from "@/lib/ai/composer-input";
 import { CHAT_FILE_COUNT, CHAT_FILE_MAX, pasteAsFile, readChatFile } from "@/lib/ai/attach";
 import { uploadChatFile } from "@/lib/social/circle-upload";
 import { UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
@@ -49,7 +61,7 @@ export function Composer({
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
-  onSticker?: (body:string)=>void;
+  onSticker?: (body: string) => void;
   onStop: () => void;
   streaming: boolean;
   disabled?: boolean;
@@ -76,6 +88,31 @@ export function Composer({
   const formRef = useRef<HTMLFormElement>(null);
   const uploadAbort = useRef<AbortController | null>(null);
   const sentAt = useRef(0);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const queue = useRef(attachmentQueue());
+  const pendingRef = useRef(0);
+  const cancelled = useRef(0);
+  const alive = useRef(true);
+  const [processing, setProcessing] = useState(false);
+  useEffect(() => {
+    const cancellation = cancelled;
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      cancellation.current++;
+      uploadAbort.current?.abort();
+    };
+  }, []);
+  function changeFiles(next: ChatFile[]) {
+    filesRef.current = next;
+    onFiles(next);
+  }
+  function cancelUpload() {
+    cancelled.current++;
+    uploadAbort.current?.abort();
+  }
+
   const [upload, setUpload] = useState<UploadView | null>(null);
   const [more, setMore] = useState(false);
   const [roles, setRoles] = useState(false);
@@ -120,7 +157,7 @@ export function Composer({
   function fire() {
     const now = Date.now();
     if (now - sentAt.current < 350) return;
-    if (streaming || disabled || upload) return;
+    if (streaming || disabled || pendingRef.current) return;
     if (!value.trim() && files.length === 0) return;
     sentAt.current = now;
     onSend();
@@ -129,49 +166,93 @@ export function Composer({
 
   const empty = !value.trim() && files.length === 0;
 
-  async function takeFiles(list: File[]) {
-    const next = [...files];
-    let added = 0;
-    for (const file of list) {
-      if (next.length >= CHAT_FILE_COUNT) {
-        toast(ui(lang, "tooManyFiles"));
-        break;
-      }
-      if (file.size > CHAT_FILE_MAX) {
-        toast.error(ui(lang, "fileTooBig"));
-        continue;
-      }
+  function takeFiles(list: File[]) {
+    if (disabled || !captureFiles) return Promise.resolve(0);
+    const generation = cancelled.current;
+    pendingRef.current++;
+    setProcessing(true);
+    return queue.current(async () => {
+      let added = 0;
       try {
-        const read = await readChatFile(file);
-        if (read.kind === "file") {
+        for (const file of list) {
+          if (!alive.current || generation !== cancelled.current) break;
+          if (filesRef.current.length >= CHAT_FILE_COUNT) {
+            toast(ui(lang, "tooManyFiles"));
+            break;
+          }
+          if (file.size > CHAT_FILE_MAX) {
+            toast.error(ui(lang, "fileTooBig"));
+            continue;
+          }
           const ctrl = new AbortController();
           uploadAbort.current = ctrl;
           setUpload({ name: file.name, ratio: 0, loaded: 0, total: file.size, speed: 0 });
-          const saved = await uploadChatFile(file, (tick) => setUpload({ name: file.name, ...tick }), ctrl.signal);
-          read.id = saved.id;
-          read.url = `/api/circle-file/${saved.id}`;
+          try {
+            const read = await readChatFile(file);
+            ctrl.signal.throwIfAborted();
+            if (read.kind === "file") {
+              const saved = await uploadChatFile(
+                file,
+                (tick) => {
+                  if (alive.current) setUpload({ name: file.name, ...tick });
+                },
+                ctrl.signal,
+              );
+              read.id = saved.id;
+              read.url = `/api/circle-file/${saved.id}`;
+            }
+            ctrl.signal.throwIfAborted();
+            if (!alive.current || generation !== cancelled.current) break;
+            changeFiles([...filesRef.current, read].slice(0, CHAT_FILE_COUNT));
+            added++;
+          } catch (err) {
+            if (!ctrl.signal.aborted && alive.current)
+              toast.error(err instanceof Error ? err.message : ui(lang, "fileRejected"));
+          } finally {
+            uploadAbort.current = null;
+          }
         }
-        next.push(read);
-        added += 1;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : ui(lang, "fileRejected");
-        if (message === "Загрузка отменена") toast("Загрузка отменена");
-        else toast.error(message);
+        return added;
       } finally {
-        uploadAbort.current = null;
-        setUpload(null);
+        pendingRef.current--;
+        if (alive.current) {
+          setProcessing(pendingRef.current > 0);
+          setUpload(null);
+        }
       }
-    }
-    if (added) onFiles(next.slice(0, CHAT_FILE_COUNT));
-    return added;
+    });
   }
+  const locked = Boolean(disabled || streaming || processing);
+  const attachLocked = Boolean(disabled || processing);
+  const toolClass =
+    "composer-tool press inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-transparent text-muted transition-colors hover:bg-subtle hover:text-fg disabled:opacity-40";
+  const deepLabel = `${lang === "ru" ? "Рассуждение" : lang === "kk" ? "Ойлау" : "Reasoning"} · ${reasonLabel(lang, reasoningMode, Boolean(reasoning))}`;
+  const voice = (file: ChatFile) => {
+    if (filesRef.current.length >= CHAT_FILE_COUNT) {
+      toast.error(ui(lang, "tooManyFiles"));
+      return;
+    }
+    changeFiles([...filesRef.current, file]);
+  };
 
   return (
     <form
       ref={formRef}
       data-vv-upload=""
       data-tour="composer"
-      className="relative rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent"
+      className="composer-surface relative min-w-0 rounded-3xl border border-line bg-elev p-2 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent/70"
+      onDragOver={(event) => {
+        if (captureFiles && event.dataTransfer.types.includes("Files")) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = attachLocked ? "none" : "copy";
+        }
+      }}
+      onDrop={(event) => {
+        if (!captureFiles || !event.dataTransfer.files.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!attachLocked) void takeFiles([...event.dataTransfer.files]);
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         fire();
@@ -179,13 +260,25 @@ export function Composer({
     >
       {roles && roleSlot ? (
         <div className="absolute bottom-[calc(100%+0.6rem)] left-0 z-30 hidden w-full lg:block">
-          <div role="dialog" aria-label="Роли" className="max-h-[min(70dvh,34rem)] overflow-y-auto rounded-3xl border border-line bg-elev p-3 shadow-[var(--shadow)]">
+          <div
+            role="dialog"
+            aria-label="Роли"
+            className="max-h-[min(70dvh,34rem)] overflow-y-auto rounded-3xl border border-line bg-elev p-3 shadow-[var(--shadow)]"
+          >
             <div className="mb-3 flex items-start justify-between gap-3 px-1">
               <div>
                 <p className="font-serif text-2xl tracking-tight">Роли</p>
-                <p className="mt-1 text-sm text-muted">Только персонаж и его описание. Файл, сеть, картинка и модель остаются в строке ввода.</p>
+                <p className="mt-1 text-sm text-muted">
+                  Только персонаж и его описание. Файл, сеть, картинка и модель остаются в строке
+                  ввода.
+                </p>
               </div>
-              <button type="button" className="press grid size-9 shrink-0 place-items-center rounded-xl text-muted" aria-label="Закрыть" onClick={() => setRoles(false)}>
+              <button
+                type="button"
+                className="press grid size-9 shrink-0 place-items-center rounded-xl text-muted"
+                aria-label="Закрыть"
+                onClick={() => setRoles(false)}
+              >
                 <X className="size-4" />
               </button>
             </div>
@@ -193,7 +286,19 @@ export function Composer({
           </div>
         </div>
       ) : null}
-      {stickers && onSticker ? <div className="mb-2"><StickerPicker ai disabled={Boolean(disabled||streaming||upload)} onClose={()=>setStickers(false)} onPick={code=>{setStickers(false);onSticker(stickerBody(code));}}/></div>:null}
+      {stickers && onSticker ? (
+        <div className="mb-2">
+          <StickerPicker
+            ai
+            disabled={locked}
+            onClose={() => setStickers(false)}
+            onPick={(code) => {
+              setStickers(false);
+              onSticker(stickerBody(code));
+            }}
+          />
+        </div>
+      ) : null}
       {files.length > 0 ? (
         <div className="flex flex-wrap gap-1 px-1 pb-1">
           {files.map((file) => (
@@ -201,7 +306,8 @@ export function Composer({
               key={file.id}
               type="button"
               className="press inline-flex h-8 max-w-full items-center gap-1 rounded-full border border-line px-2 text-xs"
-              onClick={() => onFiles(files.filter((item) => item.id !== file.id))}
+              aria-label={`${lang === "ru" ? "Убрать файл" : lang === "kk" ? "Файлды алып тастау" : "Remove file"}: ${file.name}`}
+              onClick={() => changeFiles(filesRef.current.filter((item) => item.id !== file.id))}
             >
               <span className="truncate">{file.name}</span>
               <X className="size-3 shrink-0" />
@@ -212,7 +318,11 @@ export function Composer({
       {upload ? (
         <div className="px-1 pb-1">
           <div className="flex justify-end">
-            <button type="button" className="press h-8 rounded-xl px-2 text-xs text-muted" onClick={() => uploadAbort.current?.abort()}>
+            <button
+              type="button"
+              className="press h-8 rounded-xl px-2 text-xs text-muted"
+              onClick={cancelUpload}
+            >
               Отменить
             </button>
           </div>
@@ -222,13 +332,21 @@ export function Composer({
       {imageMode || webMode ? (
         <div className="mb-1 flex flex-wrap gap-1 px-1 lg:hidden">
           {webMode ? (
-            <button type="button" className="press inline-flex h-8 items-center gap-1 rounded-full border border-accent bg-subtle px-2 text-xs" onClick={() => onWebMode(false)}>
+            <button
+              type="button"
+              className="press inline-flex h-8 items-center gap-1 rounded-full border border-accent bg-subtle px-2 text-xs"
+              onClick={() => onWebMode(false)}
+            >
               {ui(lang, "web")}
               <X className="size-3" />
             </button>
           ) : null}
           {imageMode ? (
-            <button type="button" className="press inline-flex h-8 items-center gap-1 rounded-full border border-accent bg-subtle px-2 text-xs" onClick={() => onImageMode(false)}>
+            <button
+              type="button"
+              className="press inline-flex h-8 items-center gap-1 rounded-full border border-accent bg-subtle px-2 text-xs"
+              onClick={() => onImageMode(false)}
+            >
               {ui(lang, "image")}
               <X className="size-3" />
             </button>
@@ -236,15 +354,6 @@ export function Composer({
         </div>
       ) : null}
       <div className="flex items-end gap-1">
-        <button
-          type="button"
-          className="press mb-0.5 inline-flex size-11 shrink-0 items-center justify-center rounded-2xl border border-line text-muted lg:hidden"
-          aria-label="Ещё"
-          aria-expanded={more}
-          onClick={() => setMore((open) => !open)}
-        >
-          <Plus className="size-5" />
-        </button>
         <textarea
           ref={ref}
           id="composer"
@@ -253,13 +362,19 @@ export function Composer({
           disabled={disabled}
           aria-label={ui(lang, "messageAria")}
           placeholder={placeholder}
-          className="max-h-[min(200px,30dvh)] min-h-11 w-full flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-base shadow-none outline-none ring-0 placeholder:text-faint focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60"
+          className="max-h-[min(200px,30dvh)] min-h-14 min-w-0 w-full flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-base shadow-none outline-none ring-0 placeholder:text-faint focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60"
           onChange={(event) => onChange(event.target.value)}
           onPaste={(event) => {
             const data = event.clipboardData;
-            if (!data || data.files.length > 0) return;
+            if (!data || !captureFiles) return;
+            if (data.files.length) {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!attachLocked) void takeFiles([...data.files]);
+              return;
+            }
             const text = data.getData("text/plain");
-            if (!pasteAsFile(text)) return;
+            if (!pasteAsFile(text) || locked) return;
             event.preventDefault();
             const file = new File([text], "Вставленный текст.txt", { type: "text/plain" });
             void takeFiles([file]).then((added) => {
@@ -274,164 +389,177 @@ export function Composer({
               setRoles(false);
               return;
             }
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Escape" && streaming) {
+              event.preventDefault();
+              onStop();
+              return;
+            }
+            if (
+              composerSubmitKey(
+                {
+                  key: event.key,
+                  shiftKey: event.shiftKey,
+                  ctrlKey: event.ctrlKey,
+                  metaKey: event.metaKey,
+                  keyCode: event.keyCode,
+                  isComposing: event.nativeEvent.isComposing,
+                },
+                window.matchMedia("(pointer: coarse)").matches,
+              )
+            ) {
               event.preventDefault();
               fire();
             }
           }}
         />
-        {onSticker && !imageMode?<button type="button" className="press mb-0.5 grid size-11 shrink-0 place-items-center rounded-full text-muted" aria-label="Стикеры" aria-pressed={stickers} disabled={disabled||streaming} onClick={()=>setStickers(v=>!v)}><Smile className="size-5"/></button>:null}
-        <div className="mb-0.5 shrink-0">
-          {streaming ? (
-            <button type="button" className="press inline-flex size-11 items-center justify-center rounded-full bg-fg text-bg lg:hidden" onClick={onStop} aria-label={ui(lang, "stop")} title="Стоп · Esc">
-              <Square className="size-3.5 fill-current" />
-            </button>
-          ) : empty ? (
-            <span className="lg:hidden">
-              <MicButton
-                value={value}
-                onChange={onChange}
-                disabled={disabled || streaming}
-                onVoice={(file) => {
-                  if (files.length >= CHAT_FILE_COUNT) {
-                    toast.error(ui(lang, "tooManyFiles"));
-                    return;
-                  }
-                  onFiles([...files, file]);
-                }}
-              />
-            </span>
-          ) : (
-            <button
-              type="submit"
-              disabled={disabled || upload !== null || empty}
-              className="press inline-flex size-11 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-40 lg:hidden"
-              aria-label={ui(lang, "send")}
-              onClick={(event) => {
-                event.preventDefault();
-                fire();
-              }}
-            >
-              <ArrowUp className="size-5" />
-            </button>
-          )}
-        </div>
+        {onSticker && !imageMode ? (
+          <button
+            type="button"
+            className={cn(
+              toolClass,
+              "mb-1 rounded-xl",
+              stickers && "border-accent/30 bg-accent/10 text-accent",
+            )}
+            aria-label="Стикеры"
+            aria-pressed={stickers}
+            disabled={locked}
+            onClick={() => setStickers((v) => !v)}
+          >
+            <Smile className="size-5" />
+          </button>
+        ) : null}
       </div>
-      <div className="mt-1 hidden min-w-0 items-center gap-1 px-0.5 lg:flex">
-        <div data-composer-tools className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
-          {imageMode ? null : (
-            <HoldHint text={ui(lang, "filesHint")}>
-              <button
-                type="button"
-                className="press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border border-line text-muted"
-                aria-label={ui(lang, "attach")}
-                title={ui(lang, "attach")}
-                disabled={disabled || files.length >= CHAT_FILE_COUNT || upload !== null}
-                onClick={() => fileRef.current?.click()}
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            className={cn(toolClass, "lg:hidden", more && "bg-accent/10 text-accent")}
+            aria-label="Ещё"
+            aria-expanded={more}
+            onClick={() => {
+              setRoles(false);
+              setMore((v) => !v);
+            }}
+          >
+            <Plus className="size-5" strokeWidth={1.8} />
+          </button>
+          {!imageMode && captureFiles ? (
+            <button
+              type="button"
+              className={cn(toolClass, "hidden lg:inline-flex")}
+              aria-label={ui(lang, "attach")}
+              title={ui(lang, "attach")}
+              disabled={attachLocked || files.length >= CHAT_FILE_COUNT}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Paperclip className="size-5" strokeWidth={1.8} />
+            </button>
+          ) : null}
+          <MicButton
+            className="composer-tool rounded-xl"
+            value={value}
+            onChange={onChange}
+            disabled={locked}
+            onVoice={voice}
+          />
+          <div data-composer-tools className="hidden items-center gap-0.5 lg:flex">
+            <ModeButton
+              pressed={imageMode}
+              disabled={locked}
+              label={ui(lang, "image")}
+              onClick={() => onImageMode(!imageMode)}
+            >
+              <ImageIcon className="size-5" strokeWidth={1.8} />
+            </ModeButton>
+            <ModeButton
+              pressed={webMode}
+              disabled={locked}
+              label={ui(lang, "webSearch")}
+              onClick={() => onWebMode(!webMode)}
+            >
+              <Globe className="size-5" strokeWidth={1.8} />
+            </ModeButton>
+            {onReasoning ? (
+              <ModeButton
+                pressed={reasoningMode !== "never" && Boolean(reasoning)}
+                disabled={locked || reasoningMode === "never"}
+                label={deepLabel}
+                onClick={() => onReasoning(!reasoning)}
               >
-                <Paperclip className="size-4" />
-              </button>
-            </HoldHint>
-          )}
-          <HoldHint text={ui(lang, "voiceHint")}>
-            <MicButton
-              value={value}
-              onChange={onChange}
-              disabled={disabled || streaming}
-              onVoice={(file) => {
-                if (files.length >= CHAT_FILE_COUNT) {
-                  toast.error(ui(lang, "tooManyFiles"));
-                  return;
-                }
-                onFiles([...files, file]);
-              }}
-            />
-          </HoldHint>
-          <HoldHint text={ui(lang, "imageHint")}>
-            <ModeButton pressed={imageMode} label={ui(lang, "image")} onClick={() => onImageMode(!imageMode)}>
-              <ImageIcon className="size-4" />
-            </ModeButton>
-          </HoldHint>
-          <HoldHint text={ui(lang, "webHint")}>
-            <ModeButton pressed={webMode} label={ui(lang, "webSearch")} onClick={() => onWebMode(!webMode)}>
-              <Globe className="size-4" />
-            </ModeButton>
-          </HoldHint>
-          {onReasoning ? (
-            <button
-              type="button"
-              aria-pressed={reasoningMode !== "never" && Boolean(reasoning)}
-              aria-disabled={reasoningMode === "never"}
-              disabled={reasoningMode === "never"}
-              aria-label={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
-              title={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
-              className={cn(
-                "press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border",
-                reasoningMode === "never"
-                  ? "cursor-not-allowed border-line text-faint opacity-40"
-                  : reasoning
-                    ? "border-accent bg-subtle text-fg"
-                    : "border-line text-faint",
-              )}
-              onClick={() => {
-                if (reasoningMode === "never") return;
-                onReasoning(!reasoning);
-              }}
-            >
-              <Brain className="size-4" />
-            </button>
-          ) : null}
-          {onAsk ? (
-            <button
-              type="button"
-              aria-pressed={Boolean(ask)}
-              aria-label={ask ? ui(lang, "askOn") : ui(lang, "askOff")}
-              title={ask ? ui(lang, "askOn") : ui(lang, "askOff")}
-              className={cn("press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border", ask ? "border-accent bg-accent text-accent-fg" : "border-line text-faint")}
-              onClick={() => onAsk(!ask)}
-            >
-              <MessageCircleQuestion className="size-4" />
-            </button>
-          ) : null}
+                <Brain className="size-5" strokeWidth={1.8} />
+              </ModeButton>
+            ) : null}
+            {onAsk ? (
+              <ModeButton
+                pressed={Boolean(ask)}
+                disabled={locked}
+                label={ui(lang, ask ? "askOn" : "askOff")}
+                onClick={() => onAsk(!ask)}
+              >
+                <MessageCircleQuestion className="size-5" strokeWidth={1.8} />
+              </ModeButton>
+            ) : null}
+          </div>
         </div>
-        {roleSlot ? <button type="button" aria-label="Роли" aria-expanded={roles} onClick={() => setRoles((value) => !value)} className="press hidden h-10 max-w-36 shrink-0 items-center gap-1 truncate rounded-2xl border border-line px-2.5 text-sm lg:inline-flex"><Plus className="size-4 shrink-0"/><span className="truncate">{roleLabel || "Роль"}</span></button> : null}
-        {endSlot ? <div className="w-[9.75rem] shrink-0">{endSlot}</div> : null}
-        <div className="shrink-0">
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1.5">
+          {roleSlot ? (
+            <button
+              type="button"
+              disabled={locked}
+              aria-label="Роли"
+              aria-expanded={roles}
+              onClick={() => {
+                setMore(false);
+                setRoles((v) => !v);
+              }}
+              className={cn(
+                toolClass,
+                "hidden w-auto max-w-36 gap-1.5 px-2.5 text-sm lg:inline-flex",
+                roleLabel && "bg-accent/10 text-accent",
+              )}
+            >
+              <UserRound className="size-[18px] shrink-0" />
+              <span className="truncate">{roleLabel || "Роль"}</span>
+            </button>
+          ) : null}
+          {endSlot ? <div className="min-w-0 flex-1 lg:max-w-[14rem]">{endSlot}</div> : null}
           {streaming ? (
-            <button type="button" className="press inline-flex size-10 items-center justify-center rounded-2xl bg-fg text-bg" onClick={onStop} aria-label={ui(lang, "stop")} title="Стоп · Esc">
-              <Square className="size-3.5 fill-current" />
+            <button
+              type="button"
+              className="press grid size-11 shrink-0 place-items-center rounded-2xl bg-fg text-bg"
+              onClick={onStop}
+              aria-label={ui(lang, "stop")}
+              title={`${ui(lang, "stop")} · Esc`}
+            >
+              <Square className="size-4 fill-current" />
             </button>
           ) : (
             <button
               type="submit"
-              disabled={disabled || upload !== null || empty}
-              className="press inline-flex size-10 items-center justify-center rounded-2xl bg-accent text-accent-fg disabled:opacity-40"
+              disabled={disabled || processing || empty}
+              className="press grid size-11 shrink-0 place-items-center rounded-2xl bg-accent text-accent-fg transition-opacity disabled:opacity-35"
               aria-label={ui(lang, "send")}
               title={ui(lang, "send")}
-              onClick={(event) => {
-                event.preventDefault();
-                fire();
-              }}
             >
-              <ArrowUp className="size-4" />
+              <ArrowUp className="size-5" strokeWidth={2.2} />
             </button>
           )}
         </div>
       </div>
       {captureFiles ? (
-      <input
-        ref={fileRef}
-        id="chat-file"
-        type="file"
-        className="hidden"
-        multiple
-        onChange={(event) => {
-          const list = event.target.files;
-          if (!list?.length) return;
-          void takeFiles([...list]);
-          event.target.value = "";
-        }}
-      />
+        <input
+          ref={fileRef}
+          id="chat-file"
+          type="file"
+          className="hidden"
+          multiple
+          onChange={(event) => {
+            const list = event.target.files;
+            if (!list?.length) return;
+            void takeFiles([...list]);
+            event.target.value = "";
+          }}
+        />
       ) : null}
       {more ? (
         <MoreSheet onClose={() => setMore(false)}>
@@ -440,6 +568,7 @@ export function Composer({
               icon={<Paperclip className="size-4" />}
               title="Файл"
               hint="В сообщение"
+              disabled={attachLocked || !captureFiles || files.length >= CHAT_FILE_COUNT}
               onClick={() => {
                 setMore(false);
                 fileRef.current?.click();
@@ -451,6 +580,7 @@ export function Composer({
             title="Картинка"
             hint="Ответ будет изображением"
             pressed={imageMode}
+            disabled={locked}
             onClick={() => onImageMode(!imageMode)}
           />
           <ToolRow
@@ -458,6 +588,7 @@ export function Composer({
             title="Поиск в сети"
             hint="Ответ со ссылками"
             pressed={webMode}
+            disabled={locked}
             onClick={() => onWebMode(!webMode)}
           />
           {onReasoning ? (
@@ -466,6 +597,7 @@ export function Composer({
               title="Ход мысли"
               hint={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
               pressed={reasoningMode !== "never" && Boolean(reasoning)}
+              disabled={locked || reasoningMode === "never"}
               onClick={() => {
                 if (reasoningMode === "never") return;
                 onReasoning(!reasoning);
@@ -478,16 +610,19 @@ export function Composer({
               title="Уточняющие вопросы"
               hint={ask ? "Включены" : "Выключены"}
               pressed={Boolean(ask)}
+              disabled={locked}
               onClick={() => onAsk(!ask)}
             />
           ) : null}
           {modelSlot ? (
             <div className="mt-1 border-t border-line pt-1">
-              <p className="px-2 pt-2 text-[11px] font-medium tracking-[0.14em] text-faint uppercase">Модель</p>
+              <p className="px-2 pt-2 text-[11px] font-medium tracking-[0.14em] text-faint uppercase">
+                Модель
+              </p>
               {modelSlot}
             </div>
           ) : null}
-          {typeof roleSlot === "function" ? roleSlot(()=>setMore(false)) : roleSlot}
+          {typeof roleSlot === "function" ? roleSlot(() => setMore(false)) : roleSlot}
         </MoreSheet>
       ) : null}
     </form>
@@ -495,12 +630,14 @@ export function Composer({
 }
 
 function ToolRow({
+  disabled,
   icon,
   title,
   hint,
   pressed,
   onClick,
 }: {
+  disabled?: boolean;
   icon: ReactNode;
   title: string;
   hint?: string;
@@ -511,17 +648,36 @@ function ToolRow({
     <button
       type="button"
       aria-pressed={pressed}
-      className="flex min-h-[3.25rem] w-full items-center gap-3 rounded-2xl px-1.5 text-left hover:bg-subtle"
+      disabled={disabled}
+      className="disabled:opacity-40 flex min-h-[3.25rem] w-full items-center gap-3 rounded-2xl px-1.5 text-left hover:bg-subtle"
       onClick={onClick}
     >
-      <span className={cn("grid size-10 shrink-0 place-items-center rounded-2xl border", pressed ? "border-accent bg-accent text-accent-fg" : "border-line bg-bg text-muted")}>{icon}</span>
+      <span
+        className={cn(
+          "grid size-10 shrink-0 place-items-center rounded-2xl border",
+          pressed ? "border-accent bg-accent text-accent-fg" : "border-line bg-bg text-muted",
+        )}
+      >
+        {icon}
+      </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{title}</span>
         {hint ? <span className="block truncate text-xs text-faint">{hint}</span> : null}
       </span>
       {pressed == null ? null : (
-        <span className={cn("relative h-6 w-10 shrink-0 rounded-full p-0.5", pressed ? "bg-accent" : "bg-line")} aria-hidden="true">
-          <span className={cn("block size-5 rounded-full bg-elev shadow-sm", pressed ? "translate-x-4" : "translate-x-0")} />
+        <span
+          className={cn(
+            "relative h-6 w-10 shrink-0 rounded-full p-0.5",
+            pressed ? "bg-accent" : "bg-line",
+          )}
+          aria-hidden="true"
+        >
+          <span
+            className={cn(
+              "block size-5 rounded-full bg-elev shadow-sm",
+              pressed ? "translate-x-4" : "translate-x-0",
+            )}
+          />
         </span>
       )}
     </button>
@@ -551,7 +707,10 @@ function MoreSheet({ onClose, children }: { onClose: () => void; children: React
   }, [onClose]);
   if (!node) return null;
   return createPortal(
-    <div className="fixed inset-0 z-[80] flex items-end bg-black/50 lg:justify-end lg:p-5" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[80] flex items-end bg-black/50 lg:justify-end lg:p-5"
+      onClick={onClose}
+    >
       <div
         ref={sheetRef}
         role="dialog"
@@ -591,7 +750,12 @@ function MoreSheet({ onClose, children }: { onClose: () => void; children: React
         </div>
         <div className="mb-1 flex items-center justify-between px-1.5">
           <p className="text-[11px] font-medium tracking-[0.16em] text-faint uppercase">Ещё</p>
-          <button type="button" className="press grid size-9 place-items-center rounded-xl text-muted" aria-label="Закрыть" onClick={onClose}>
+          <button
+            type="button"
+            className="press grid size-9 place-items-center rounded-xl text-muted"
+            aria-label="Закрыть"
+            onClick={onClose}
+          >
             <X className="size-4" />
           </button>
         </div>
@@ -603,11 +767,13 @@ function MoreSheet({ onClose, children }: { onClose: () => void; children: React
 }
 
 function ModeButton({
+  disabled,
   pressed,
   label,
   onClick,
   children,
 }: {
+  disabled?: boolean;
   pressed: boolean;
   label: string;
   onClick: () => void;
@@ -619,9 +785,12 @@ function ModeButton({
       aria-pressed={pressed}
       aria-label={label}
       title={label}
+      disabled={disabled}
       className={cn(
-        "press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border",
-        pressed ? "border-accent bg-accent text-accent-fg" : "border-line bg-transparent text-muted",
+        "composer-tool press inline-flex size-11 shrink-0 items-center justify-center rounded-xl border transition-colors disabled:opacity-35",
+        pressed
+          ? "border-accent/30 bg-accent/10 text-accent"
+          : "border-transparent bg-transparent text-muted hover:bg-subtle hover:text-fg",
       )}
       onClick={onClick}
     >

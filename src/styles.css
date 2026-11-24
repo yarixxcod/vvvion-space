@@ -488,3 +488,8 @@ html.light .image-plate{background:#e7e1d8}
 [data-sonner-toast] [data-description] { color: var(--muted); }
 [data-sonner-toast] [data-close-button] { background: var(--bg); border-color: var(--line); color: var(--muted); }
 
+
+/* The composer is shared by the website and embedded desktop/mobile clients. */
+.composer-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.composer-surface button[aria-haspopup="listbox"] { height: 44px; min-height: 44px; }
+.composer-surface textarea { scrollbar-width: thin; }

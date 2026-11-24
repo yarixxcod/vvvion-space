@@ -629,7 +629,7 @@ export function App({
             </Suspense>
           )}
           <div className="composer-dock relative z-10 border-t border-line bg-bg px-3 pt-2 sm:px-4">
-            <div className="mx-auto w-full max-w-xl lg:max-w-2xl">
+            <div className="mx-auto w-full max-w-xl lg:max-w-3xl">
               {builtinLocked ? (
                 <p className="mb-2 rounded-2xl border border-line bg-elev px-3 py-2 text-sm text-danger">
                   {ui(lang, "bannedBuiltin")}
