@@ -6,7 +6,7 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { langOf, normalizeLang, placeCopy, ui, type Lang } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 import { PLACES, absoluteUrl, placeBySlug, placePath } from "@/lib/places";
-import { seoHead } from "@/lib/seo";
+import { appsJsonLd, seoHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/c/$section")({
   validateSearch: (search: Record<string, unknown>): { lang?: Lang } => {
@@ -61,6 +61,7 @@ function SectionPage() {
     >
       <p className="mb-4 text-sm leading-relaxed text-fg">{copy.lead}</p>
       <ShareLink path={placePath(place.slug)} title={copy.title} text={copy.description} />
+      {place.slug === "apps" ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(appsJsonLd(lang)) }} /> : null}
       <Link to="/login" search={lang === "ru" ? {} : { lang }} className="press mb-6 inline-flex h-11 items-center rounded-2xl border border-line px-3 text-sm">
         {ui(lang, "signInOpen")}
       </Link>
