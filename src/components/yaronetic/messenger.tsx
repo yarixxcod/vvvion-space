@@ -788,9 +788,9 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
             return (
               <article key={message.id} className={cn("flex items-end gap-2", message.mine ? "justify-end" : "justify-start")}>
                 {message.mine ? null : <PersonFace name={message.name} image={message.image} size={28} userId={message.userId} />}
-                <div className={cn("relative max-w-[min(85%,32rem)]", photoOnly && "max-w-[16rem]")}>
+                <div className={cn("flex max-w-[min(85%,32rem)] flex-col", photoOnly && "max-w-[16rem]", message.mine ? "items-start" : "items-end")}>
                   {!message.id.startsWith("local-") ? (
-                    <PinLike liked={message.liked} busy={likeBusy.includes(message.id)} mine={message.mine} onClick={() => void like(message)} />
+                    <PinLike liked={message.liked} busy={likeBusy.includes(message.id)} onClick={() => void like(message)} />
                   ) : null}
                   {sticker ? (
                     <Holdable text={sticker} onReport={!message.mine && !message.id.startsWith("local-") ? () => setReportId(message.id) : undefined} className="max-w-[9.5rem]">
@@ -957,20 +957,20 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
   );
 }
 
-function PinLike({ liked, busy, mine, onClick }: { liked?: boolean; busy: boolean; mine?: boolean; onClick: () => void }) {
+function PinLike({ liked, busy, onClick }: { liked?: boolean; busy: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       aria-label={liked ? "Убрать лайк" : "Нравится сообщение"}
       aria-pressed={liked}
       disabled={busy}
-      className={cn("press absolute -top-2.5 z-10 grid size-6 place-items-center rounded-full bg-elev text-[#e11d48] shadow-sm", mine ? "-left-2.5" : "-right-2.5")}
+      className="press mb-0.5 inline-flex size-6 shrink-0 items-center justify-center text-[#ff2d55]"
       onClick={(event) => {
         event.stopPropagation();
         onClick();
       }}
     >
-      <Heart className="size-3.5" fill={liked ? "currentColor" : "none"} strokeWidth={2.4} />
+      <Heart className="size-4" fill={liked ? "currentColor" : "none"} strokeWidth={2.25} />
     </button>
   );
 }
