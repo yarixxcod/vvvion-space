@@ -302,7 +302,10 @@ export function App({
       }
       let shown = true;
       try {
-        shown = localStorage.getItem("vv.sidebar") !== "0";
+        const stored = localStorage.getItem("vv.sidebar");
+        if (stored === "0") shown = false;
+        else if (stored === "1") shown = true;
+        else shown = !document.documentElement.classList.contains("vv-desktop");
       } catch {
         shown = true;
       }
@@ -497,7 +500,7 @@ export function App({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <span className="circle-glow">
+            <span className="circle-glow" data-site-nav="circle">
               <button
                 ref={circleBtn}
                 type="button"
@@ -692,7 +695,7 @@ export function App({
       {studio.needAccount ? <AccountGate /> : null}
       {circle ? (
         <>
-          <button type="button" className="fixed inset-0 z-30 bg-black/45 xl:hidden" aria-label={ui(lang, "closeCircle")} onClick={closeCircle} />
+          <button type="button" className="fixed inset-0 z-30 bg-black/45 xl:hidden" aria-label={ui(lang, "closeCircle")} data-site-nav="circle-scrim" onClick={closeCircle} />
           <aside role="dialog" aria-modal="true" aria-label={ui(lang, "circle")} data-circle className="fixed inset-0 z-40 flex w-full flex-col bg-elev md:inset-y-0 md:right-0 md:left-auto md:w-[min(100%,52rem)] md:border-l md:border-line md:shadow-[var(--shadow)] xl:inset-0 xl:w-full xl:border-0">
             <Suspense fallback={<div className="grid flex-1 place-items-center"><span className="vv-loader" /></div>}>
               <Circle onClose={closeCircle} tab={place} onTab={openPlace} theme={studio.theme} onTheme={studio.setTheme} roomId={openRoom} />

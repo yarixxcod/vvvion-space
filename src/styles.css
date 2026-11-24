@@ -228,7 +228,20 @@ html.circle-open .circle-glow,
 html.circle-open .circle-glow::before {
   animation-play-state: paused !important;
 }
+html.vv-desktop [data-site-nav] { display: none !important; }
+.desktop-only-nav { display: none; }
+html.vv-desktop .desktop-only-nav { display: inline-flex; }
+html.vv-desktop aside[data-circle] {
+  inset: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html.vv-desktop .app-root { width: 100%; max-width: 100%; }
+html.vv-desktop .chat-paper { min-width: 0; }
 aside[data-circle] { overscroll-behavior: contain; }
+
 html.vv-app aside[data-circle],
 html.vv-standalone aside[data-circle] { overscroll-behavior-x: none; }
 html.vv-kb-open .circle-nav { display: none; }

@@ -277,7 +277,7 @@ function Home({
 
   return (
     <div className="flex h-full min-h-0 bg-elev">
-      <nav className="hidden w-60 shrink-0 flex-col border-r border-line xl:flex" aria-label={ui(lang, "circle")}>
+      <nav className="hidden w-60 shrink-0 flex-col border-r border-line xl:flex" aria-label={ui(lang, "circle")} data-site-nav="sections">
         <div className="p-3">
           {onClose ? <ToChat onClick={onClose} wide /> : null}
         </div>
@@ -294,12 +294,20 @@ function Home({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-14 items-center gap-2 border-b border-line px-2 pt-[env(safe-area-inset-top)]">
           {onClose ? (
-            <button type="button" className="press inline-flex size-11 items-center justify-center rounded-2xl text-fg xl:hidden" aria-label={ui(lang, "toChat")} onClick={onClose}>
+            <button type="button" className="press inline-flex size-11 items-center justify-center rounded-2xl text-fg xl:hidden" aria-label={ui(lang, "toChat")} data-site-nav="home" onClick={onClose}>
               <ChevronLeft className="size-5" strokeWidth={2.25} aria-hidden="true" />
             </button>
           ) : null}
           <h1 className="min-w-0 flex-1 truncate font-serif text-xl leading-tight">{title}</h1>
-          {onClose ? <button type="button" className="press min-h-10 rounded-xl border border-line px-3 text-xs xl:hidden" onClick={onClose}>ИИ-чат</button> : null}
+          <button type="button" className="desktop-only-nav press h-9 items-center rounded-xl border border-line px-2.5 text-xs" onClick={() => pick("apps", true)}>
+            {ui(lang, "apps")}
+          </button>
+          {admin ? (
+            <button type="button" className="desktop-only-nav press h-9 items-center rounded-xl border border-line px-2.5 text-xs" onClick={() => pick("admin", true)}>
+              {ui(lang, "admin")}
+            </button>
+          ) : null}
+          {onClose ? <button type="button" className="press min-h-10 rounded-xl border border-line px-3 text-xs xl:hidden" data-site-nav="home" onClick={onClose}>ИИ-чат</button> : null}
           {onTheme ? (
             <button
               type="button"
@@ -314,7 +322,7 @@ function Home({
             <UserButton compact onTheme={onTheme ? () => onTheme(theme === "dark" ? "light" : "dark") : undefined} theme={theme} />
           </span>
         </header>
-        <div ref={tabsRef} role="tablist" aria-label={ui(lang, "circle")} className="snap-row hidden gap-1 px-3 py-2 md:flex xl:hidden" onKeyDown={(event) => onTabKey(event, order, tab, (id) => pick(id, true))}>
+        <div ref={tabsRef} role="tablist" aria-label={ui(lang, "circle")} data-site-nav="sections" className="snap-row hidden gap-1 px-3 py-2 md:flex xl:hidden" onKeyDown={(event) => onTabKey(event, order, tab, (id) => pick(id, true))}>
           {order.map((id) => (
             <TabButton key={id} tour={`place-${id}`} active={tab === id} onClick={() => { if (tab === id) scrollTop(); else pick(id, true); }}>
               <TabIcon id={id} />
@@ -353,7 +361,7 @@ function Home({
             )}
           </div>
         </SectionSwipe>
-        <nav ref={mobileNavRef} className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
+        <nav ref={mobileNavRef} data-site-nav="sections" className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
           <span
             className="circle-drop"
             style={{ "--tab-index": mainTabs.indexOf(tab) >= 0 ? mainTabs.indexOf(tab) : 4 } as import("react").CSSProperties}
@@ -434,7 +442,7 @@ function RailTab({ id, active, label, onClick }: { id: CircleTab; active: boolea
 function ToChat({ onClick, wide = false }: { onClick: () => void; wide?: boolean }) {
   const lang = useLang();
   return (
-    <button type="button" className={cn("press inline-flex h-11 items-center gap-1.5 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg", wide && "w-full")} aria-label={ui(lang, "toChat")} onClick={onClick}>
+    <button type="button" className={cn("press inline-flex h-11 items-center gap-1.5 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg", wide && "w-full")} aria-label={ui(lang, "toChat")} data-site-nav="home" onClick={onClick}>
       <ChevronLeft className="size-4 shrink-0" strokeWidth={2.25} aria-hidden="true" />
       <span className="leading-none">{ui(lang, "toChat")}</span>
     </button>
