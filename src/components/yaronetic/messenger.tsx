@@ -3,7 +3,7 @@ import {setRoomMessageLike} from "@/lib/social/messenger";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { SourcePicker } from "@/components/yaronetic/source-picker";
 import { sizeLabel, UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
-import { ArrowLeft, BookOpen, Check, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
+import { ArrowLeft, AudioLines, BookOpen, Check, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
 import { LikePin } from "@/components/yaronetic/message-like";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { PersonFace } from "@/components/yaronetic/person-face";
@@ -1306,6 +1306,8 @@ function VoiceNote({ file, mine }: { file: FileMeta; mine: boolean }) {
   const [playing, setPlaying] = useState(false);
   const [at, setAt] = useState(0);
   const [dur, setDur] = useState(0);
+  const [text, setText] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
   const local = file.id.startsWith("local-");
 
@@ -1336,8 +1338,26 @@ function VoiceNote({ file, mine }: { file: FileMeta; mine: boolean }) {
   const clock = `${Math.floor(shown / 60)}:${String(Math.floor(shown % 60)).padStart(2, "0")}`;
   const progress = dur > 0 ? Math.min(1, at / dur) : 0;
 
+  async function decode() {
+    if (!url || reading || text !== null) return;
+    setReading(true);
+    try {
+      const blob = await fetch(url).then((res) => res.blob());
+      const body = new FormData();
+      body.set("file", new File([blob], file.name || "voice.webm", { type: blob.type || file.mime }));
+      const res = await fetch("/api/transcribe", { method: "POST", body, credentials: "same-origin" });
+      const json = (await res.json().catch(() => ({}))) as { text?: string; message?: string };
+      setText(res.ok && json.text?.trim() ? json.text.trim() : json.message || "Не разобрать");
+    } catch {
+      setText("Не разобрать");
+    } finally {
+      setReading(false);
+    }
+  }
+
   return (
-    <div className="flex min-w-[12.5rem] items-center gap-2 py-1">
+    <div className="min-w-[12.5rem] py-1">
+    <div className="flex items-center gap-2">
       <button
         type="button"
         className={cn(
@@ -1377,6 +1397,10 @@ function VoiceNote({ file, mine }: { file: FileMeta; mine: boolean }) {
         />
       ) : null}
     </div>
+    <button type="button" className="press mt-1 max-w-full text-left text-xs leading-snug opacity-80" disabled={!url || reading || text !== null} onClick={() => void decode()}>
+      {reading ? "Расшифровка…" : text === null ? "Расшифровать" : text}
+    </button>
+    </div>
   );
 }
 
@@ -1399,6 +1423,7 @@ function VoiceHold({
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const tickRef = useRef(0);
+  const want = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -1432,17 +1457,7 @@ function VoiceHold({
       const type = raw === "video/webm" || raw === "audio/webm" ? "audio/webm" : raw.includes("mp4") ? "audio/mp4" : "audio/webm";
       const ext = type.includes("mp4") ? "m4a" : "webm";
       const data = await blobToBase64(blob);
-      let transcript = "";
-      try {
-        const body = new FormData();
-        body.set("file", new File([blob], `voice.${ext}`, { type }));
-        const res = await fetch("/api/transcribe", { method: "POST", body, credentials: "same-origin" });
-        const json = (await res.json().catch(() => ({}))) as { text?: string };
-        if (res.ok && typeof json.text === "string") transcript = json.text.trim().slice(0, 4000);
-      } catch {
-        transcript = "";
-      }
-      onSend({ name: `voice.${ext}`, mime: type, data }, transcript);
+      onSend({ name: `voice.${ext}`, mime: type, data }, "");
     } finally {
       setPhase("idle");
       setSeconds(0);
@@ -1450,8 +1465,10 @@ function VoiceHold({
   }
 
   async function start() {
-    if (disabled || phase !== "idle") return;
+    if (disabled || phase !== "idle" || want.current) return;
+    want.current = true;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      want.current = false;
       toast.error("В этом браузере нет микрофона");
       return;
     }
@@ -1460,7 +1477,12 @@ function VoiceHold({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
+      want.current = false;
       toast.error("Нет доступа к микрофону");
+      return;
+    }
+    if (!want.current) {
+      stream.getTracks().forEach((track) => track.stop());
       return;
     }
     streamRef.current = stream;
@@ -1491,6 +1513,7 @@ function VoiceHold({
   }
 
   function stop() {
+    want.current = false;
     window.clearInterval(tickRef.current);
     const rec = recRef.current;
     if (rec && rec.state !== "inactive") rec.stop();
@@ -1503,27 +1526,20 @@ function VoiceHold({
   if (phase === "work") {
     return <span className="grid size-11 shrink-0 place-items-center text-xs text-faint">…</span>;
   }
-  if (phase === "rec") {
-    return (
-      <button
-        type="button"
-        className="press inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-danger px-3 text-sm text-white"
-        onClick={stop}
-      >
-        <span className="size-2 rounded-full bg-white" />
-        {seconds}с
-      </button>
-    );
-  }
   return (
     <button
       type="button"
       disabled={disabled}
       className="press inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg disabled:opacity-40"
-      aria-label="Голосовое"
-      onClick={() => void start()}
+      aria-label={phase === "rec" ? `Отпустить, чтобы отправить, ${seconds} с` : "Удержите для голосового"}
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        void start();
+      }}
+      onPointerUp={stop}
+      onPointerCancel={stop}
     >
-      <Mic className="size-4" />
+      {phase === "rec" ? <AudioLines className="size-5" /> : <Mic className="size-4" />}
     </button>
   );
 }

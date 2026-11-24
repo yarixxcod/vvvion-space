@@ -5,12 +5,12 @@ import { createPortal } from "react-dom";
 import {
   Smile,
   ArrowUp,
+  AudioLines,
   Brain,
   Globe,
   ImageIcon,
   MessageCircleQuestion,
   Paperclip,
-  Phone,
   Plus,
   Square,
   UserRound,
@@ -98,28 +98,6 @@ export function Composer({
   const cancelled = useRef(0);
   const alive = useRef(true);
   const [processing, setProcessing] = useState(false);
-  const [callMode, setCallMode] = useState(false);
-  useEffect(() => {
-    try {
-      setCallMode(localStorage.getItem("vvvion.voice.mode") === "call");
-    } catch {
-      /* optional preference */
-    }
-  }, []);
-  function switchVoiceMode() {
-    const next = !callMode;
-    setCallMode(next);
-    try {
-      localStorage.setItem("vvvion.voice.mode", next ? "call" : "dictation");
-    } catch {
-      /* optional preference */
-    }
-    toast(
-      next
-        ? "Режим звонка. Нажмите трубку, чтобы начать."
-        : "Режим диктофона. Нажмите микрофон для записи.",
-    );
-  }
   useEffect(() => {
     const cancellation = cancelled;
     alive.current = true;
@@ -252,20 +230,13 @@ export function Composer({
   const toolClass =
     "composer-tool press inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-transparent text-muted transition-colors hover:bg-subtle hover:text-fg disabled:opacity-40";
   const deepLabel = `${lang === "ru" ? "Рассуждение" : lang === "kk" ? "Ойлау" : "Reasoning"} · ${reasonLabel(lang, reasoningMode, Boolean(reasoning))}`;
-  const voice = (file: ChatFile) => {
-    if (filesRef.current.length >= CHAT_FILE_COUNT) {
-      toast.error(ui(lang, "tooManyFiles"));
-      return;
-    }
-    changeFiles([...filesRef.current, file]);
-  };
 
   return (
     <form
       ref={formRef}
       data-vv-upload=""
       data-tour="composer"
-      className="composer-surface relative min-w-0 rounded-3xl border border-line bg-elev p-2 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent/70"
+      className="composer-surface relative min-w-0 rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent/70 lg:rounded-3xl lg:p-2"
       onDragOver={(event) => {
         if (captureFiles && event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
@@ -379,6 +350,18 @@ export function Composer({
         </div>
       ) : null}
       <div className="flex items-end gap-1">
+        <button
+          type="button"
+          className="press mb-0.5 inline-flex size-11 shrink-0 items-center justify-center rounded-2xl border border-line text-muted lg:hidden"
+          aria-label="Ещё"
+          aria-expanded={more}
+          onClick={() => {
+            setRoles(false);
+            setMore((v) => !v);
+          }}
+        >
+          <Plus className="size-5" strokeWidth={1.8} />
+        </button>
         <textarea
           ref={ref}
           id="composer"
@@ -387,7 +370,7 @@ export function Composer({
           disabled={disabled}
           aria-label={ui(lang, "messageAria")}
           placeholder={placeholder}
-          className="max-h-[min(200px,30dvh)] min-h-14 min-w-0 w-full flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-base shadow-none outline-none ring-0 placeholder:text-faint focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60"
+          className="max-h-[min(200px,30dvh)] min-h-11 w-full min-w-0 flex-1 resize-none rounded-2xl border-0 bg-transparent px-3 py-2.5 text-base shadow-none outline-none ring-0 placeholder:text-faint focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:opacity-60 lg:min-h-14"
           onChange={(event) => onChange(event.target.value)}
           onPaste={(event) => {
             const data = event.clipboardData;
@@ -442,7 +425,7 @@ export function Composer({
             type="button"
             className={cn(
               toolClass,
-              "mb-1 rounded-xl",
+              "mb-0.5 rounded-full border-transparent bg-transparent lg:mb-1 lg:rounded-xl",
               stickers && "border-accent/30 bg-accent/10 text-accent",
             )}
             aria-label="Стикеры"
@@ -453,21 +436,31 @@ export function Composer({
             <Smile className="size-5" />
           </button>
         ) : null}
+        <div className="mb-0.5 shrink-0 lg:hidden">
+          {streaming ? (
+            <button type="button" className="press grid size-11 place-items-center rounded-full bg-fg text-bg" onClick={onStop} aria-label={ui(lang, "stop")}>
+              <Square className="size-3.5 fill-current" />
+            </button>
+          ) : empty ? (
+            <MicButton circle value={value} onChange={onChange} disabled={locked} onCall={onCall} />
+          ) : (
+            <button
+              type="submit"
+              disabled={disabled || processing || empty}
+              className="press grid size-11 place-items-center rounded-full bg-accent text-accent-fg disabled:opacity-40"
+              aria-label={ui(lang, "send")}
+              onClick={(event) => {
+                event.preventDefault();
+                fire();
+              }}
+            >
+              <ArrowUp className="size-5" />
+            </button>
+          )}
+        </div>
       </div>
-      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+      <div className="mt-1 hidden min-w-0 flex-wrap items-center gap-1.5 lg:flex">
         <div className="flex shrink-0 items-center gap-0.5">
-          <button
-            type="button"
-            className={cn(toolClass, "lg:hidden", more && "bg-accent/10 text-accent")}
-            aria-label="Ещё"
-            aria-expanded={more}
-            onClick={() => {
-              setRoles(false);
-              setMore((v) => !v);
-            }}
-          >
-            <Plus className="size-5" strokeWidth={1.8} />
-          </button>
           {!imageMode && captureFiles ? (
             <button
               type="button"
@@ -485,10 +478,7 @@ export function Composer({
             value={value}
             onChange={onChange}
             disabled={locked}
-            onVoice={voice}
-            callMode={Boolean(onCall && callMode)}
             onCall={onCall}
-            onMode={onCall ? switchVoiceMode : undefined}
           />
           <div data-composer-tools className="hidden items-center gap-0.5 lg:flex">
             <ModeButton
@@ -593,7 +583,7 @@ export function Composer({
         <MoreSheet onClose={() => setMore(false)}>
           {onCall ? (
             <ToolRow
-              icon={<Phone className="size-4" />}
+              icon={<AudioLines className="size-4" />}
               title="Голосовой звонок"
               hint="Разговор с выбранной моделью"
               disabled={locked}

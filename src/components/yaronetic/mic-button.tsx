@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Mic, Phone } from "lucide-react";
+import { AudioLines, Mic } from "lucide-react";
 import { toast } from "sonner";
 import type { ChatFile } from "@/lib/ai/types";
 import { useLang } from "@/lib/lang";
@@ -51,22 +51,21 @@ export function MicButton({
   onVoice,
   disabled,
   className,
-  callMode,
+  circle,
   onCall,
-  onMode,
 }: {
   value: string;
   onChange: (value: string) => void;
   onVoice?: (file: ChatFile) => void;
   disabled?: boolean;
   className?: string;
-  callMode?: boolean;
+  circle?: boolean;
   onCall?: () => void;
-  onMode?: () => void;
 }) {
   const hold = useRef(0);
   const held = useRef(false);
-  const origin = useRef({ x: 0, y: 0 });
+  const skipClick = useRef(false);
+  const [armed, setArmed] = useState(false);
   const lang = useLang();
   const [phase, setPhase] = useState<"idle" | "rec" | "work">("idle");
   const [seconds, setSeconds] = useState(0);
@@ -199,6 +198,7 @@ export function MicButton({
       }
       const type = blob.type || "audio/webm";
       const file = new File([blob], "voice.webm", { type });
+      if (onVoice) {
       const saved = await fetch("/api/disk", {
         method: "POST",
         body: (() => {
@@ -214,7 +214,7 @@ export function MicButton({
         mime?: string;
         message?: string;
       };
-      if (saved.ok && info.url && onVoice) {
+      if (saved.ok && info.url) {
         onVoice({
           id: crypto.randomUUID(),
           name: info.name || "voice.webm",
@@ -224,6 +224,7 @@ export function MicButton({
         });
       } else if (saved.status === 409) {
         toast.error(info.message || "На диске нет места, голос не сохранился");
+      }
       }
       if (engineRef.current === "speech" && saidRef.current.trim()) return;
       const text = await transcribe(file, false);
@@ -367,78 +368,78 @@ export function MicButton({
     }, MAX_MS);
   }
 
-  const label =
-    phase === "rec"
+  const label = armed
+    ? "Голосовой разговор"
+    : phase === "rec"
       ? "Остановить и оставить текст"
       : phase === "work"
         ? "Дописываю текст"
-        : callMode
-          ? "Звонок с ИИ"
-          : "Голосовой ввод";
+        : "Голосовой ввод. Удержите для разговора";
   const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
   return (
     <button
       type="button"
       className={cn(
-        "mic-btn press relative inline-flex h-11 items-center justify-center rounded-2xl border",
+        "mic-btn press relative inline-flex items-center justify-center",
+        circle ? "size-11 rounded-full border text-muted" : "h-11 rounded-2xl border",
         phase === "rec"
-          ? "mic-live w-[4.5rem] gap-1.5 border-accent bg-accent/15 text-accent"
-          : "size-11 border-transparent text-muted hover:bg-subtle",
+          ? circle
+            ? "border-accent text-accent"
+            : "mic-live w-[4.5rem] gap-1.5 border-accent bg-accent/15 text-accent"
+          : circle
+            ? "border-line"
+            : "size-11 border-transparent text-muted hover:bg-subtle",
         phase === "work" && "mic-wait",
+        armed && "border-accent text-accent",
         className,
       )}
       aria-label={label}
-      title={`${label}${onMode ? " · удерживайте для смены режима" : ""}`}
+      title={label}
       style={{ touchAction: "manipulation" }}
+      aria-pressed={phase === "rec" || armed}
+      disabled={disabled || phase === "work"}
       onPointerDown={(event) => {
-        if (!onMode || disabled || phase !== "idle" || event.button !== 0) return;
-        origin.current = { x: event.clientX, y: event.clientY };
+        if (!onCall || disabled || phase !== "idle" || event.button !== 0) return;
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          /* click still works */
+        }
         held.current = false;
         window.clearTimeout(hold.current);
         hold.current = window.setTimeout(() => {
           held.current = true;
-          onMode();
-        }, 520);
+          setArmed(true);
+        }, 380);
       }}
-      onPointerMove={(event) => {
-        if (Math.hypot(event.clientX - origin.current.x, event.clientY - origin.current.y) > 12)
-          window.clearTimeout(hold.current);
+      onPointerUp={() => {
+        window.clearTimeout(hold.current);
+        if (!held.current) return;
+        held.current = false;
+        skipClick.current = true;
+        setArmed(false);
+        onCall?.();
       }}
-      onPointerUp={() => window.clearTimeout(hold.current)}
-      onPointerCancel={() => window.clearTimeout(hold.current)}
-      onPointerLeave={() => window.clearTimeout(hold.current)}
-      onContextMenu={(event) => {
-        if (onMode && phase === "idle") {
-          event.preventDefault();
-          window.clearTimeout(hold.current);
-          if (!held.current) onMode();
-          held.current = true;
-        }
+      onPointerCancel={() => {
+        window.clearTimeout(hold.current);
+        held.current = false;
+        setArmed(false);
       }}
-      onKeyDown={(event) => {
-        if (event.altKey && event.key === "ArrowDown" && onMode && phase === "idle") {
-          event.preventDefault();
-          onMode();
-        }
-      }}
-      aria-pressed={phase === "rec"}
-      disabled={disabled || phase === "work"}
-      onClick={(event) => {
-        if (held.current) {
-          held.current = false;
-          if (event.detail !== 0) return;
-        }
-        if (callMode && onCall) {
-          onCall();
+      onClick={() => {
+        if (skipClick.current) {
+          skipClick.current = false;
           return;
         }
+        if (held.current || armed) return;
         if (phase === "rec") stop();
         else void start();
       }}
     >
-      {phase === "rec" ? <span className="mic-ring" aria-hidden /> : null}
-      {phase === "rec" ? (
+      {phase === "rec" && !circle ? <span className="mic-ring" aria-hidden /> : null}
+      {armed ? (
+        <AudioLines className="size-5" strokeWidth={1.8} />
+      ) : phase === "rec" ? (
         <>
           <span className="mic-bars" aria-hidden>
             <span />
@@ -446,10 +447,8 @@ export function MicButton({
             <span />
             <span />
           </span>
-          <span className="text-xs tabular-nums">{clock}</span>
+          {circle ? null : <span className="text-xs tabular-nums">{clock}</span>}
         </>
-      ) : callMode ? (
-        <Phone className="size-5" strokeWidth={1.8} />
       ) : (
         <Mic className="size-5" strokeWidth={1.8} />
       )}

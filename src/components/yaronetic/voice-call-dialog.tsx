@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Mic, MicOff, Phone, PhoneOff, Play, Send, Square, X } from "lucide-react";
+import { AudioLines, MicOff, Play, Square, X } from "lucide-react";
 import { VoiceCall, EMPTY_CALL, type CallPhase, type VoiceReply } from "@/lib/ai/voice-call";
 import { pushBackLayer } from "@/lib/app-back";
 import { ModelFace, type FaceVariant } from "./model-face";
@@ -60,7 +60,9 @@ export function VoiceCallDialog({
       callbacks.current.onClose();
     };
     window.addEventListener("pagehide", onPageHide);
+    const boot = window.setTimeout(() => start(), 0);
     return () => {
+      window.clearTimeout(boot);
       engine.current?.close();
       engine.current = null;
       unback();
@@ -127,16 +129,17 @@ export function VoiceCallDialog({
       }}
     >
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-5 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-8">
-        <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          {userImage ? <img src={userImage} alt="" className="size-8 shrink-0 rounded-full object-cover" /> : null}
+          <div className="min-w-0">
           <h2 id="voice-call-title" className="truncate font-medium">
             {name}
           </h2>
           <p className="truncate text-sm text-muted">
-            {model} ·{" "}
-            {active
-              ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
-              : "VVVion Voice"}
+            {model} · {userName || "Вы"}
+            {active ? ` · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}` : ""}
           </p>
+          </div>
         </div>
         <button
           type="button"
@@ -252,89 +255,42 @@ export function VoiceCallDialog({
           </div>
         ) : null}
       </main>
-      <footer className="shrink-0 border-t border-line bg-elev/60 px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pt-5">
-        <div className="mx-auto mb-4 flex max-w-xl items-center justify-center gap-2 text-sm text-muted">
-          {userImage ? (
-            <img src={userImage} alt="" className="size-6 rounded-full object-cover" />
-          ) : null}
-          <span className="truncate">{userName || "Вы"}</span>
-          <span aria-hidden>·</span>
-          <span>{state.muted ? "Микрофон выключен" : "Аудио не сохраняется на Диск"}</span>
-        </div>
-        <div className="flex flex-wrap items-start justify-center gap-5 sm:gap-8">
-          {canStart ? (
+      <footer className="shrink-0 px-6 pt-2 pb-[max(1.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center justify-center gap-16">
+          {busy ? (
             <button
               type="button"
-              className="press flex min-h-12 items-center gap-2 rounded-full bg-accent px-6 font-medium text-accent-fg"
-              onClick={start}
+              className="press grid size-20 shrink-0 place-items-center rounded-full border border-line bg-elev text-fg outline-none focus-visible:outline-none"
+              aria-label="Прервать ответ"
+              onClick={() => engine.current?.interrupt()}
             >
-              <Phone className="size-5" />
-              {state.phase === "error" ? "Подключиться снова" : "Начать разговор"}
+              <Square className="size-6" />
             </button>
           ) : (
-            <>
-              <CallControl
-                label={state.muted ? "Включить микрофон" : "Выключить микрофон"}
-                pressed={state.muted}
-                onClick={() => engine.current?.toggleMute()}
-              >
-                {state.muted ? <MicOff /> : <Mic />}
-              </CallControl>
-              {busy ? (
-                <CallControl label="Прервать ответ" onClick={() => engine.current?.interrupt()}>
-                  <Square />
-                </CallControl>
-              ) : (
-                <CallControl
-                  label="Отправить реплику"
-                  disabled={state.phase !== "listening"}
-                  onClick={() => engine.current?.finishPhrase()}
-                >
-                  <Send />
-                </CallControl>
-              )}
-            </>
+            <button
+              type="button"
+              className="press grid size-20 shrink-0 place-items-center rounded-full border border-line bg-elev text-fg outline-none focus-visible:outline-none"
+              aria-pressed={state.muted}
+              aria-label={canStart ? "Подключиться снова" : state.muted ? "Включить микрофон" : "Выключить микрофон"}
+              onClick={() => {
+                if (canStart) start();
+                else engine.current?.toggleMute();
+              }}
+            >
+              {state.muted ? <MicOff className="size-7" /> : <AudioLines className="size-7" />}
+            </button>
           )}
-          <CallControl danger label="Завершить звонок" onClick={onClose}>
-            <PhoneOff />
-          </CallControl>
+          <button
+            type="button"
+            className="press grid size-20 shrink-0 place-items-center rounded-full border border-[#e11d48] bg-[#e11d48] text-white outline-none focus-visible:outline-none"
+            aria-label="Завершить звонок"
+            onClick={onClose}
+          >
+            <X className="size-7" />
+          </button>
         </div>
       </footer>
     </div>,
     document.body,
-  );
-}
-function CallControl({
-  children,
-  label,
-  onClick,
-  disabled,
-  pressed,
-  danger,
-}: {
-  children: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  pressed?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      aria-pressed={pressed}
-      disabled={disabled}
-      onClick={onClick}
-      className="press flex max-w-24 flex-col items-center gap-2 disabled:opacity-35"
-    >
-      <span
-        className={`grid size-14 place-items-center rounded-full border [&>svg]:size-5 ${danger ? "border-danger bg-danger text-bg" : pressed ? "border-accent bg-accent/10 text-accent" : "border-line bg-bg text-fg"}`}
-      >
-        {children}
-      </span>
-      <span className="text-center text-xs text-muted">{label}</span>
-    </button>
   );
 }
