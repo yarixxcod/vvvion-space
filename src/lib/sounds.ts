@@ -55,9 +55,9 @@ let lastMessage = 0;
 
 export function soundsEnabled(): boolean {
   try {
-    return localStorage.getItem(KEY) !== "off";
+    return localStorage.getItem(KEY) === "on";
   } catch {
-    return true;
+    return false;
   }
 }
 

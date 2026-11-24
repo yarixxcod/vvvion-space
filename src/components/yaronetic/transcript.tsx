@@ -203,7 +203,7 @@ export function Transcript({
   return (
     <div className="relative min-h-0 flex-1">
       <div ref={scroller} className="h-full overflow-y-auto">
-        <div ref={content} className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
+        <div ref={content} className="mx-auto flex w-full max-w-xl flex-col gap-6 px-4 py-6 lg:max-w-2xl">
           <AnimatePresence initial={false}>
             {messages.map((message, index) => {
               const body = peelQuestionLike(message.content);

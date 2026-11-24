@@ -399,8 +399,9 @@ export function Bank() {
   if (!bank) return <PageLoader />;
 
   return (
-    <div className="h-full overflow-y-auto px-3 pt-3 pb-6">
-      <section className="rounded-[1.7rem] border border-line bg-elev px-4 pt-4 pb-16">
+    <div className="h-full overflow-y-auto px-3 py-4 lg:px-6 lg:py-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 lg:grid lg:grid-cols-[minmax(16.5rem,22rem)_minmax(0,1fr)] lg:items-start lg:gap-x-8 lg:gap-y-4">
+      <section className="order-1 rounded-[1.7rem] border border-line bg-elev px-4 py-4 lg:order-none lg:col-start-2 lg:row-start-1 lg:px-5 lg:py-5">
         <p className="text-xs tracking-[0.22em] text-faint uppercase">Вубли</p>
         <p className="mt-1 font-serif text-5xl leading-none tabular-nums">{bank.balance.toLocaleString("ru-RU")}</p>
         <p className="mt-2 text-xs text-muted">
@@ -448,13 +449,26 @@ export function Bank() {
         <p className="mt-1 text-xs text-faint">{fmtVub(bank.balance)} · {fmtRubApprox(bank.balance)}</p>
       </section>
 
-      <div className="relative z-10 mt-4 px-1">
+      <div className="order-2 space-y-3 lg:sticky lg:top-4 lg:order-none lg:col-start-1 lg:row-start-1 lg:row-span-2">
         <WoobliCard card={bank.card} />
-        <p className="mt-2 text-center text-sm text-muted">Нажмите карту — код на обороте</p>
+        <p className="text-center text-sm text-muted">Нажмите карту — код на обороте</p>
+        <div className="flex justify-center gap-6 lg:justify-between">
+          <RoundButton label="Перевести" pressed={desk === "pay"} onClick={() => setDesk((value) => (value === "pay" ? null : "pay"))}>
+            <ArrowUpRight className="size-5" />
+          </RoundButton>
+          <RoundButton label="Кредит" pressed={desk === "loan"} onClick={() => setDesk((value) => (value === "loan" ? null : "loan"))}>
+            <Banknote className="size-4" />
+          </RoundButton>
+          <RoundButton label="Номер" onClick={() => void copyPan()}>
+            <Copy className="size-4" />
+          </RoundButton>
+        </div>
       </div>
 
+      <div className="order-3 flex min-w-0 flex-col gap-4 lg:order-none lg:col-start-2">
+
       {history.length ? (
-        <section className="mt-4 rounded-3xl border border-line bg-bg px-4 py-4">
+        <section className="rounded-3xl border border-line bg-bg px-4 py-4">
           <p className="text-xs tracking-[0.22em] text-faint">История пополнений</p>
           <ul className="mt-2 space-y-2 text-sm">
             {history.map((item) => (
@@ -478,20 +492,8 @@ export function Bank() {
         onPaid={() => void load(span)}
       />
 
-      <div className="mt-4 flex justify-center gap-6">
-        <RoundButton label="Перевести" pressed={desk === "pay"} onClick={() => setDesk((value) => (value === "pay" ? null : "pay"))}>
-          <ArrowUpRight className="size-5" />
-        </RoundButton>
-        <RoundButton label="Кредит" pressed={desk === "loan"} onClick={() => setDesk((value) => (value === "loan" ? null : "loan"))}>
-          <Banknote className="size-4" />
-        </RoundButton>
-        <RoundButton label="Номер" onClick={() => void copyPan()}>
-          <Copy className="size-4" />
-        </RoundButton>
-      </div>
-
       {desk === "pay" ? (
-        <section className="mt-4 rounded-3xl border border-line bg-bg p-3">
+        <section className="rounded-3xl border border-line bg-bg p-3">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-medium">Перевод</h3>
             <div className="flex rounded-xl bg-subtle p-0.5 text-xs">
@@ -590,7 +592,7 @@ export function Bank() {
       ) : null}
 
       {desk === "loan" ? (
-        <section className="mt-4 rounded-3xl border border-line bg-bg p-3">
+        <section className="rounded-3xl border border-line bg-bg p-3">
           <h3 className="text-sm font-medium">Кредит</h3>
           <p className="mt-1 text-[13px] text-muted">500, 1000 или 2000 на 7 дней. Частями или целиком.</p>
           {bank.loan ? (
@@ -628,7 +630,7 @@ export function Bank() {
         </section>
       ) : null}
 
-      <section className="mt-5 rounded-3xl border border-line bg-bg p-3">
+      <section className="rounded-3xl border border-line bg-bg p-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-sm font-medium">Приглашения</h3>
@@ -657,7 +659,7 @@ export function Bank() {
         )}
       </section>
 
-      <section className="mt-5">
+      <section>
         <div className="flex items-center justify-between gap-2 px-1">
           <h3 className="text-sm font-medium">{tx({ ru: "Операции", en: "Activity", kk: "Операциялар" })}</h3>
           <div className="flex gap-1">
@@ -715,6 +717,8 @@ export function Bank() {
           </ul>
         )}
       </section>
+      </div>
+      </div>
     </div>
   );
 }

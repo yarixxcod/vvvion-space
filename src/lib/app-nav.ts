@@ -1,7 +1,7 @@
 export type AppSearch = { place?: CircleTab; chat?: string; room?: string; lang?: "ru" | "en" | "kk" };
 
 const ID = /^[A-Za-z0-9_-]{8,80}$/;
-const TABS = ["chat", "feed", "play", "services", "disk", "bank", "shop", "admin"] as const;
+const TABS = ["chat", "feed", "play", "services", "disk", "bank", "shop", "apps", "admin"] as const;
 type CircleTab = (typeof TABS)[number];
 
 function isTab(value: string): value is CircleTab {

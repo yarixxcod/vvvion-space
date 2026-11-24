@@ -25,7 +25,7 @@ export function HoldHint({ text, children }: { text: string; children: ReactNode
 
   return (
     <span
-      className="relative inline-flex"
+      className="relative inline-flex shrink-0"
       onPointerDown={arm}
       onPointerUp={release}
       onPointerLeave={() => {

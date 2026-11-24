@@ -181,17 +181,17 @@ function ProfileSheet({
     event.preventDefault();
     const next = name.trim().slice(0, 48);
     if (next.length < 1) {
-      toast.error("Напишите имя");
+      toast.error("Напишите логин");
       return;
     }
     setBusy(true);
     try {
       const { error } = await authClient.updateUser({ name: next });
-      if (error) throw new Error(authText(error, "Не удалось сохранить имя"));
+      if (error) throw new Error(authText(error, "Не удалось сохранить логин"));
       setName(next);
-      toast("Имя сохранено");
+      toast("Логин сохранён");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Не удалось сохранить имя");
+      toast.error(err instanceof Error ? err.message : "Не удалось сохранить логин");
     } finally {
       setBusy(false);
     }
@@ -311,13 +311,13 @@ function ProfileSheet({
 
           <form className="mt-6 space-y-2 rounded-3xl border border-line bg-elev p-4" onSubmit={(event) => void saveName(event)}>
             <p className="text-sm font-medium">Как вас видят</p>
-            <p className="text-xs text-faint">Это имя в круге, в сообщениях и в заявках.</p>
+            <p className="text-xs text-faint">Логин виден в круге, в сообщениях и в заявках. Почта — отдельно, для входа.</p>
             <label className="block text-xs text-faint">
-              Имя
+              Логин
               <input className="field mt-1" value={name} maxLength={48} onChange={(event) => setName(event.target.value)} />
             </label>
             <button type="submit" disabled={busy} className="press h-11 w-full rounded-2xl border border-line px-3 text-sm disabled:opacity-40">
-              Сохранить имя
+              Сохранить логин
             </button>
           </form>
           <HandleCard />

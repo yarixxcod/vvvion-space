@@ -138,6 +138,7 @@ const UI = {
   disk: { ru: "Диск", en: "Disk", kk: "Диск" },
   bank: { ru: "Банк", en: "Bank", kk: "Банк" },
   shop: { ru: "Магазин", en: "Shop", kk: "Дүкен" },
+  apps: { ru: "Приложения", en: "Apps", kk: "Қолданбалар" },
   admin: { ru: "Админ", en: "Admin", kk: "Әкімші" },
   closedAccess: { ru: "Доступ закрыт", en: "Access closed", kk: "Қолжетім жабық" },
   subAdmin: { ru: "Модели, лимиты и участники", en: "Models, limits and members", kk: "Модельдер, лимит және қатысушылар" },
@@ -147,6 +148,7 @@ const UI = {
   subDisk: { ru: "Картинки и голосовые", en: "Pictures and voice", kk: "Сурет пен дауыс" },
   subBank: { ru: "Вубли и переводы", en: "Vubles and transfers", kk: "Вубль және аударым" },
   subShop: { ru: "Подписка, место и персонажи", en: "Plan, space and characters", kk: "Жазылым, орын және кейіпкер" },
+  subApps: { ru: "Windows, Android и этот браузер", en: "Windows, Android and this browser", kk: "Windows, Android және осы браузер" },
   subChat: { ru: "Друзья, диалоги и файлы", en: "Friends, chats and files", kk: "Достар, диалог және файл" },
   banned: {
     ru: "Аккаунт заблокирован. Сообщения, лента и встроенный чат для этого входа закрыты.",
@@ -168,12 +170,12 @@ const UI = {
     kk: "Тіркелмей үш сұрақ қоюға болады, суретпен қоса. Аккаунт ашыңыз немесе кіріңіз — диалог тарихы сізде қалады.",
   },
   authLead: {
-    ru: "Логин — это почта. Пароль и имя остаются в аккаунте и не пропадают после перезапуска.",
-    en: "The login is your email. The password and name stay in the account after a reload.",
-    kk: "Логин — пошта. Құпия сөз бен есім аккаунтта қалады, бет жаңарса да жоғалмайды.",
+    ru: "Логин — имя, которое видят в круге. Почта нужна, чтобы войти и восстановить пароль. Оба остаются в аккаунте.",
+    en: "Login is the name people see in the circle. Email is how you sign in and recover the password. Both stay in the account.",
+    kk: "Логин — шеңберде көрінетін есім. Пошта кіру және құпия сөзді қалпына келтіру үшін. Екеуі де аккаунтта қалады.",
   },
-  nameInCircle: { ru: "Имя в круге", en: "Name in the circle", kk: "Шеңбердегі есім" },
-  login: { ru: "Логин", en: "Email", kk: "Логин" },
+  nameInCircle: { ru: "Логин", en: "Login", kk: "Логин" },
+  login: { ru: "Почта", en: "Email", kk: "Пошта" },
   password: { ru: "Пароль", en: "Password", kk: "Құпия сөз" },
   wait: { ru: "Секунду…", en: "One moment…", kk: "Сәт…" },
   createAccount: { ru: "Создать аккаунт", en: "Create account", kk: "Аккаунт ашу" },
@@ -643,6 +645,11 @@ const PLACES: Record<string, Record<Lang, PlaceCopy>> = {
     ru: { name: "Магазин", title: "Магазин — vvvion.space", description: "Подписка, место на диске и персонажи для чата с ИИ.", lead: "Подписка на 30 дней, место на диске и персонажи. Вубли — внутренняя мелочь, не деньги." },
     en: { name: "Shop", title: "Shop — vvvion.space", description: "A plan, disk space and characters for the AI chat.", lead: "A 30-day plan, disk space and characters. Vubles are internal change, not money." },
     kk: { name: "Дүкен", title: "Дүкен — vvvion.space", description: "Жазылым, дискідегі орын және ЖИ чатына арналған кейіпкер.", lead: "30 күндік жазылым, дискідегі орын және кейіпкер. Вубль — ішкі ұсақ бірлік, ақша емес." },
+  },
+  apps: {
+    ru: { name: "Приложения", title: "Приложения — vvvion.space", description: "Свежие приложения VVVion Space для Windows и Android и сайт в браузере.", lead: "Скачайте программу для Windows или Android. В браузере тот же аккаунт и те же разделы." },
+    en: { name: "Apps", title: "Apps — vvvion.space", description: "The latest VVVion Space apps for Windows and Android, and the site in a browser.", lead: "Download the Windows or Android app. The browser uses the same account and the same sections." },
+    kk: { name: "Қолданбалар", title: "Қолданбалар — vvvion.space", description: "Windows пен Android үшін жаңа VVVion Space қолданбасы және браузердегі сайт.", lead: "Windows немесе Android қолданбасын жүктеңіз. Браузерде сол аккаунт және сол бөлімдер." },
   },
 };
 

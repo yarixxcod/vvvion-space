@@ -176,7 +176,7 @@ export function ModelMenu({
   );
 
   return (
-    <div ref={root} className={cn("relative min-w-0", plain ? "w-full" : "max-w-full md:max-w-[70%]")}>
+    <div ref={root} className="relative w-full min-w-0">
       <button
         id={id}
         type="button"
@@ -185,7 +185,7 @@ export function ModelMenu({
         className={cn(
           "press inline-flex w-full min-w-0 items-center gap-1.5 text-left text-sm",
           plain ? "h-12 rounded-2xl px-2 hover:bg-subtle" : "rounded-xl border border-line bg-elev px-3",
-          !plain && (narrow ? "min-h-14" : "h-9"),
+          !plain && (narrow ? "min-h-14" : "h-10"),
         )}
         onClick={() => setOpen((value) => !value)}
         onKeyDown={(event) => {

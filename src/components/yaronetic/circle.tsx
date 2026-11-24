@@ -1,7 +1,7 @@
 import { useSectionScroll } from "@/lib/section-scroll";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BookOpen, Compass, HardDrive, Landmark, MessageCircle, MessageSquare, Moon, MoreHorizontal, Newspaper, Shield, ShoppingBag, Sun } from "lucide-react";
+import { BookOpen, Compass, HardDrive, Landmark, MessageCircle, MessageSquare, MonitorSmartphone, Moon, MoreHorizontal, Newspaper, Shield, ShoppingBag, Sun } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { AuthForm } from "@/components/yaronetic/auth-form";
 import { Bank } from "@/components/yaronetic/bank";
@@ -12,6 +12,7 @@ import { Feed } from "@/components/yaronetic/feed";
 import { Library } from "@/components/yaronetic/library";
 import { Messenger } from "@/components/yaronetic/messenger";
 import { Services } from "@/components/yaronetic/services";
+import { AppsDesk } from "@/components/yaronetic/apps-desk";
 import { UserButton } from "@/lib/auth/gates";
 import { Wordmark } from "@/components/yaronetic/wordmark";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -165,8 +166,8 @@ function Home({
   }, [tab]);
 
   useEffect(() => {
-    const order: CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop"];
-    const jump: Record<string, CircleTab> = { m: "chat", f: "feed", p: "play", s: "services", d: "disk", b: "bank", h: "shop" };
+    const order: CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop", "apps"];
+    const jump: Record<string, CircleTab> = { m: "chat", f: "feed", p: "play", s: "services", d: "disk", b: "bank", h: "shop", a: "apps" };
     const onKey = (event: KeyboardEvent) => {
       if (event.isComposing) return;
       const target = event.target as HTMLElement | null;
@@ -262,13 +263,13 @@ function Home({
   const admin = access?.role === "admin";
   const banned = access?.banned === true;
   const titleKey: UiKey =
-    tab === "admin" ? "admin" : tab === "feed" ? "feed" : tab === "play" ? "play" : tab === "services" ? "services" : tab === "disk" ? "disk" : tab === "bank" ? "bank" : tab === "shop" ? "shop" : "messages";
+    tab === "admin" ? "admin" : tab === "feed" ? "feed" : tab === "play" ? "play" : tab === "services" ? "services" : tab === "disk" ? "disk" : tab === "bank" ? "bank" : tab === "shop" ? "shop" : tab === "apps" ? "apps" : "messages";
   const title = ui(lang, titleKey);
-  const order: CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop"];
+  const order: CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop", "apps"];
   const column =
-    tab === "feed" ? "max-w-[42rem]" : tab === "disk" || tab === "shop" || tab === "bank" ? "max-w-[45rem]" : tab === "services" || tab === "play" ? "max-w-[60rem]" : "max-w-none";
+    tab === "feed" ? "max-w-[42rem]" : tab === "bank" || tab === "apps" ? "max-w-6xl" : tab === "disk" || tab === "shop" ? "max-w-[45rem]" : tab === "services" || tab === "play" ? "max-w-[60rem]" : "max-w-none";
   const mainTabs: CircleTab[] = ["chat", "feed", "play", "services"];
-  const moreTabs: CircleTab[] = admin ? ["disk", "bank", "shop", "admin"] : ["disk", "bank", "shop"];
+  const moreTabs: CircleTab[] = admin ? ["disk", "bank", "shop", "apps", "admin"] : ["disk", "bank", "shop", "apps"];
 
   function scrollTop() {
     document.querySelector("[data-circle-pane] .overflow-y-auto")?.scrollTo({ top: 0 });
@@ -346,6 +347,8 @@ function Home({
               <Bank />
             ) : tab === "shop" ? (
               <Shop />
+            ) : tab === "apps" ? (
+              <AppsDesk />
             ) : (
               <Messenger openRoom={tab === "chat" ? roomId : null} />
             )}
@@ -397,7 +400,7 @@ function Home({
         ))}
       </MoreSheet> : null}
       {keys ? <MoreSheet title="Клавиши" onClose={() => setKeys(false)}>
-        <p className="px-3 py-2 text-sm text-muted">Esc — закрыть. [ ] — раздел. g, затем m f p s d b h — перейти. / — поиск. n — новая запись. j k — записи.</p>
+        <p className="px-3 py-2 text-sm text-muted">Esc — закрыть. [ ] — раздел. g, затем m f p s d b h a — перейти. / — поиск. n — новая запись. j k — записи.</p>
       </MoreSheet> : null}
     </div>
   );
@@ -411,6 +414,7 @@ const ICONS = {
   disk: HardDrive,
   bank: Landmark,
   shop: ShoppingBag,
+  apps: MonitorSmartphone,
   admin: Shield,
 } as const;
 

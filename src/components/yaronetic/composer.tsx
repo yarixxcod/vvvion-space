@@ -280,13 +280,13 @@ export function Composer({
           )}
         </div>
       </div>
-      <div className="mt-1 hidden items-center gap-1 px-1 lg:flex">
-        <div data-composer-tools className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+      <div className="mt-1 hidden min-w-0 items-center gap-1 px-0.5 lg:flex">
+        <div data-composer-tools className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
           {imageMode ? null : (
             <HoldHint text={ui(lang, "filesHint")}>
               <button
                 type="button"
-                className="press inline-flex size-10 items-center justify-center rounded-2xl border border-line text-muted"
+                className="press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border border-line text-muted"
                 aria-label={ui(lang, "attach")}
                 title={ui(lang, "attach")}
                 disabled={disabled || files.length >= CHAT_FILE_COUNT || upload !== null}
@@ -313,13 +313,11 @@ export function Composer({
           <HoldHint text={ui(lang, "imageHint")}>
             <ModeButton pressed={imageMode} label={ui(lang, "image")} onClick={() => onImageMode(!imageMode)}>
               <ImageIcon className="size-4" />
-              <span className="hidden sm:inline">{ui(lang, "image")}</span>
             </ModeButton>
           </HoldHint>
           <HoldHint text={ui(lang, "webHint")}>
             <ModeButton pressed={webMode} label={ui(lang, "webSearch")} onClick={() => onWebMode(!webMode)}>
               <Globe className="size-4" />
-              <span className="hidden sm:inline">{ui(lang, "web")}</span>
             </ModeButton>
           </HoldHint>
           {onReasoning ? (
@@ -331,7 +329,7 @@ export function Composer({
               aria-label={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
               title={reasonLabel(lang, reasoningMode, Boolean(reasoning))}
               className={cn(
-                "press inline-flex size-10 items-center justify-center rounded-2xl border",
+                "press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border",
                 reasoningMode === "never"
                   ? "cursor-not-allowed border-line text-faint opacity-40"
                   : reasoning
@@ -352,34 +350,33 @@ export function Composer({
               aria-pressed={Boolean(ask)}
               aria-label={ask ? ui(lang, "askOn") : ui(lang, "askOff")}
               title={ask ? ui(lang, "askOn") : ui(lang, "askOff")}
-              className={cn("press inline-flex size-10 items-center justify-center rounded-2xl border", ask ? "border-accent bg-accent text-accent-fg" : "border-line text-faint")}
+              className={cn("press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border", ask ? "border-accent bg-accent text-accent-fg" : "border-line text-faint")}
               onClick={() => onAsk(!ask)}
             >
               <MessageCircleQuestion className="size-4" />
             </button>
           ) : null}
         </div>
-        {roleSlot ? <button type="button" aria-label="Роли и инструменты" aria-expanded={more} onClick={()=>setMore(value=>!value)} className="press hidden min-h-11 max-w-36 items-center gap-1.5 truncate rounded-2xl border border-line px-3 text-sm lg:inline-flex"><Plus className="size-4 shrink-0"/><span className="truncate">{roleLabel || "Роль"}</span></button> : null}
-        {endSlot ? <div className="min-w-0 max-w-[16rem] shrink">{endSlot}</div> : null}
+        {roleSlot ? <button type="button" aria-label="Роли и инструменты" aria-expanded={more} onClick={()=>setMore(value=>!value)} className="press hidden h-10 max-w-28 shrink-0 items-center gap-1 truncate rounded-2xl border border-line px-2.5 text-sm lg:inline-flex"><Plus className="size-4 shrink-0"/><span className="truncate">{roleLabel || "Роль"}</span></button> : null}
+        {endSlot ? <div className="w-[9.75rem] shrink-0">{endSlot}</div> : null}
         <div className="shrink-0">
           {streaming ? (
-            <button type="button" className="press inline-flex h-11 items-center gap-1 rounded-2xl bg-fg px-3 text-sm font-medium text-bg" onClick={onStop} aria-label={ui(lang, "stop")} title="Стоп · Esc">
+            <button type="button" className="press inline-flex size-10 items-center justify-center rounded-2xl bg-fg text-bg" onClick={onStop} aria-label={ui(lang, "stop")} title="Стоп · Esc">
               <Square className="size-3.5 fill-current" />
-              {ui(lang, "stopShort")}
             </button>
           ) : (
             <button
               type="submit"
               disabled={disabled || upload !== null || empty}
-              className="press inline-flex h-11 items-center gap-1 rounded-2xl bg-accent px-3 text-sm font-medium text-accent-fg disabled:opacity-40"
+              className="press inline-flex size-10 items-center justify-center rounded-2xl bg-accent text-accent-fg disabled:opacity-40"
               aria-label={ui(lang, "send")}
+              title={ui(lang, "send")}
               onClick={(event) => {
                 event.preventDefault();
                 fire();
               }}
             >
               <ArrowUp className="size-4" />
-              {ui(lang, "send")}
             </button>
           )}
         </div>
@@ -586,7 +583,7 @@ function ModeButton({
       aria-label={label}
       title={label}
       className={cn(
-        "press inline-flex h-10 items-center gap-1.5 rounded-2xl border px-2.5 text-sm",
+        "press inline-flex size-10 shrink-0 items-center justify-center rounded-2xl border",
         pressed ? "border-accent bg-accent text-accent-fg" : "border-line bg-transparent text-muted",
       )}
       onClick={onClick}

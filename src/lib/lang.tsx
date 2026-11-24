@@ -1,8 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Check, ChevronDown } from "lucide-react";
 import { LANGS, explicitLangFromSearch, ui, type Lang } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "vvvion.lang";
 
@@ -104,137 +103,68 @@ export function txNow(copy: Record<Lang, string>): string {
 }
 
 const NAMES: Record<Lang, string> = { ru: "Русский", en: "English", kk: "Қазақша" };
-const FLAGS: Record<Lang, string> = { ru: "🇷🇺", en: "🇬🇧", kk: "🇰🇿" };
-const SHORT: Record<Lang, string> = { ru: "РУ", en: "EN", kk: "ҚАЗ" };
+
+function Flag({ code }: { code: Lang }) {
+  if (code === "ru") {
+    return (
+      <svg viewBox="0 0 24 16" className="h-3.5 w-5 overflow-hidden rounded-[3px] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]" aria-hidden="true">
+        <rect width="24" height="16" fill="#fff" />
+        <rect y="5.34" width="24" height="5.33" fill="#0039a6" />
+        <rect y="10.67" width="24" height="5.33" fill="#d52b1e" />
+      </svg>
+    );
+  }
+  if (code === "en") {
+    return (
+      <svg viewBox="0 0 60 30" className="h-3.5 w-5 overflow-hidden rounded-[3px] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]" aria-hidden="true">
+        <rect width="60" height="30" fill="#012169" />
+        <path d="M0 0 L60 30 M60 0 L0 30" stroke="#fff" strokeWidth="8" />
+        <path d="M0 0 L60 30 M60 0 L0 30" stroke="#C8102E" strokeWidth="4" />
+        <path d="M30 0 V30 M0 15 H60" stroke="#fff" strokeWidth="12" />
+        <path d="M30 0 V30 M0 15 H60" stroke="#C8102E" strokeWidth="6" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 16" className="h-3.5 w-5 overflow-hidden rounded-[3px] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.18)]" aria-hidden="true">
+      <rect width="24" height="16" fill="#00afca" />
+      <circle cx="12" cy="8" r="3.1" fill="#fec50c" />
+      <circle cx="12" cy="8" r="1.35" fill="#00afca" />
+      <path d="M12 3.2 l.45 1.15 h1.2 l-.95.75.35 1.2 L12 5.6 l-1.05.7.35-1.2-.95-.75 h1.2 z" fill="#fec50c" />
+    </svg>
+  );
+}
 
 export function LangSwitch({ compact = false }: { compact?: boolean }) {
   const lang = useLang();
   const setLang = useSetLang();
   const label = ui(lang, "language");
-  if (compact) return <LangCompact label={label} />;
   return (
-    <div className="px-1 py-1" role="group" aria-label={label}>
-      <p className="px-2 pb-1 text-xs text-faint">{label}</p>
-      <div className="grid grid-cols-3 gap-1">
-        {LANGS.map((code) => (
-          <button
-            key={code}
-            type="button"
-            role="menuitemradio"
-            aria-checked={lang === code}
-            className={`press h-10 rounded-xl text-xs ${lang === code ? "bg-accent font-medium text-accent-fg" : "text-muted"}`}
-            onClick={() => setLang(code)}
-          >
-            {FLAGS[code]} {NAMES[code]}
-          </button>
-        ))}
+    <div className={cn(compact ? "inline-flex" : "block w-full px-1 py-1")} role="group" aria-label={label}>
+      {compact ? null : <p className="px-1 pb-1 text-xs text-faint">{label}</p>}
+      <div className={cn("grid grid-cols-3 gap-1", compact ? "" : "w-full")}>
+        {LANGS.map((code) => {
+          const on = lang === code;
+          return (
+            <button
+              key={code}
+              type="button"
+              aria-pressed={on}
+              aria-label={NAMES[code]}
+              title={NAMES[code]}
+              className={cn(
+                "press inline-flex items-center justify-center gap-1.5 border text-xs",
+                compact ? "h-10 rounded-xl px-1.5" : "h-11 rounded-xl px-2",
+                on ? "border-accent bg-accent font-medium text-accent-fg" : "border-line bg-elev text-muted",
+              )}
+              onClick={() => setLang(code)}
+            >
+              <Flag code={code} />
+              {compact ? null : <span className="truncate">{NAMES[code]}</span>}
+            </button>
+          );
+        })}
       </div>
-    </div>
-  );
-}
-
-function LangCompact({ label }: { label: string }) {
-  const lang = useLang();
-  const setLang = useSetLang();
-  const [open, setOpen] = useState(false);
-  const [narrow, setNarrow] = useState(false);
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => setNode(document.body), []);
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 767px)");
-    const apply = () => setNarrow(media.matches);
-    apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, []);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-  useEffect(() => {
-    if (!open || narrow) return;
-    const onDoc = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", onDoc);
-    return () => document.removeEventListener("pointerdown", onDoc);
-  }, [open, narrow]);
-
-  function choose(code: Lang) {
-    setLang(code);
-    setOpen(false);
-  }
-
-  const list = (
-    <div role="listbox" aria-label={label}>
-      {LANGS.map((code) => {
-        const on = code === lang;
-        return (
-          <button
-            key={code}
-            type="button"
-            role="option"
-            aria-selected={on}
-            className={`press flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 text-left ${on ? "border border-accent bg-subtle text-fg" : "border border-transparent text-muted"}`}
-            onClick={() => choose(code)}
-          >
-            <span className="grid size-10 shrink-0 place-items-center rounded-2xl border border-line bg-bg text-lg" aria-hidden="true">
-              {FLAGS[code]}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm">{NAMES[code]}</span>
-              <span className="block text-xs text-faint">{SHORT[code]}</span>
-            </span>
-            {on ? <Check className="size-4 shrink-0" /> : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  return (
-    <div ref={root} className="relative">
-      <button
-        type="button"
-        className="press inline-flex h-11 items-center gap-1.5 rounded-2xl border border-line bg-elev px-2.5 text-sm text-fg"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={label}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <span aria-hidden="true">{FLAGS[lang]}</span>
-        <span>{SHORT[lang]}</span>
-        <ChevronDown className={`size-3.5 text-muted transition ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && !narrow ? (
-        <div className="absolute top-full right-0 z-40 mt-1 w-60 rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
-          {list}
-        </div>
-      ) : null}
-      {open && narrow && node
-        ? createPortal(
-            <div className="fixed inset-0 z-[80] flex items-end bg-black/50" onClick={() => setOpen(false)}>
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label={label}
-                className="w-full rounded-t-3xl border border-line bg-elev px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-line" />
-                <p className="px-3 pb-1 text-xs font-medium tracking-wide text-faint uppercase">{label}</p>
-                {list}
-              </div>
-            </div>,
-            node,
-          )
-        : null}
     </div>
   );
 }

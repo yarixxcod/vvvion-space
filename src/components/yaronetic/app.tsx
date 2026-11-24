@@ -626,7 +626,7 @@ export function App({
             </Suspense>
           )}
           <div className="composer-dock relative z-10 border-t border-line bg-bg px-3 pt-2 sm:px-4">
-            <div className="mx-auto w-full max-w-3xl">
+            <div className="mx-auto w-full max-w-xl lg:max-w-2xl">
               {builtinLocked ? (
                 <p className="mb-2 rounded-2xl border border-line bg-elev px-3 py-2 text-sm text-danger">
                   {ui(lang, "bannedBuiltin")}
@@ -664,7 +664,9 @@ export function App({
 
                 endSlot={
                   <span className="flex min-w-0 items-center gap-1">
-                    <MobileModel studio={studio} fieldId="model" />
+                    <span className="min-w-0 flex-1">
+                      <MobileModel studio={studio} fieldId="model" />
+                    </span>
                     <SignalPing
                       kind={studio.activeProvider.kind}
                       baseUrl={studio.activeProvider.baseUrl}
@@ -771,7 +773,17 @@ export function App({
           setAskInterests(false);
         }}
       />
-      <Toaster theme={studio.theme === "light" ? "light" : "dark"} position="top-center" offset={16} />
+      <Toaster
+        theme={studio.theme === "light" ? "light" : "dark"}
+        position="top-center"
+        offset={16}
+        gap={8}
+        visibleToasts={3}
+        toastOptions={{
+          duration: 3200,
+          className: "vv-toast",
+        }}
+      />
       <MusicDock />
       <SoundBridge />
       {shareUrl ? <ShareSheet url={shareUrl} onClose={() => setShareUrl(null)} /> : null}
@@ -989,7 +1001,7 @@ function EmptyChat({
   const title = name ? `${greet}, ${name}` : greet;
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4">
-      <div className="m-auto flex w-full max-w-3xl flex-col items-center py-8">
+      <div className="m-auto flex w-full max-w-xl flex-col items-center py-8 lg:max-w-2xl">
         <Mark size={72} />
         <h1 className="mt-5 text-center font-serif text-4xl tracking-tight" suppressHydrationWarning>{title}</h1>
         <p className="mt-2 max-w-md text-center text-sm text-pretty text-muted lg:hidden">{ui(lang, "emptyRoles")}</p>

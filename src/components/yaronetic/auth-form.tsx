@@ -15,15 +15,15 @@ function explain(error: { message?: string; code?: string; status?: number } | n
   const code = error?.code ?? "";
   const message = error?.message ?? "";
   if (code === "USER_ALREADY_EXISTS" || /already exists/i.test(message)) {
-    return txNow({ ru: "Такой логин уже есть. Войдите.", en: "That login already exists. Sign in.", kk: "Мұндай логин бар. Кіріңіз." });
+    return txNow({ ru: "Такая почта уже есть. Войдите.", en: "That email already exists. Sign in.", kk: "Мұндай пошта бар. Кіріңіз." });
   }
   if (code === "INVALID_EMAIL_OR_PASSWORD" || error?.status === 401 || /invalid email or password/i.test(message)) {
-    return txNow({ ru: "Неверный логин или пароль.", en: "Wrong login or password.", kk: "Логин немесе құпия сөз қате." });
+    return txNow({ ru: "Неверная почта или пароль.", en: "Wrong email or password.", kk: "Пошта немесе құпия сөз қате." });
   }
   if (/password/i.test(message) && /(short|least|8)/i.test(message)) {
     return txNow({ ru: "Пароль не короче 8 символов.", en: "The password must be at least 8 characters.", kk: "Құпия сөз 8 таңбадан кем болмасын." });
   }
-  if (/invalid email/i.test(message)) return txNow({ ru: "Логин — это адрес почты.", en: "The login is an email address.", kk: "Логин — пошта мекенжайы." });
+  if (/invalid email/i.test(message)) return txNow({ ru: "Нужен адрес почты.", en: "Enter an email address.", kk: "Пошта мекенжайы керек." });
   if (/invalid origin/i.test(message)) return txNow({ ru: "Не удалось войти с этой страницы.", en: "Could not sign in from this page.", kk: "Бұл беттен кіру болмады." });
   if (/email.*verif|не подтверж/i.test(`${code} ${message}`)) {
     return txNow({ ru: "Сначала подтвердите почту.", en: "Verify your email first.", kk: "Алдымен поштаны растаңыз." });
@@ -89,7 +89,7 @@ export function AuthForm({
     if (busy) return;
     const login = email.trim().toLowerCase();
     if (!login.includes("@")) {
-      toast.error(txNow({ ru: "Логин — это адрес почты.", en: "The login is an email address.", kk: "Логин — пошта мекенжайы." }));
+      toast.error(txNow({ ru: "Нужен адрес почты.", en: "Enter an email address.", kk: "Пошта мекенжайы керек." }));
       return;
     }
     if (password.length < 8) {
@@ -105,7 +105,7 @@ export function AuthForm({
       if (mode === "up") {
         const display = name.trim();
         if (display.length < 1 || display.length > 40) {
-          toast.error(txNow({ ru: "Имя — от 1 до 40 символов.", en: "The name must be 1 to 40 characters.", kk: "Есім 1-ден 40 таңбаға дейін." }));
+          toast.error(txNow({ ru: "Логин — от 1 до 40 символов.", en: "The login must be 1 to 40 characters.", kk: "Логин 1-ден 40 таңбаға дейін." }));
           setBusy(false);
           return;
         }
@@ -337,7 +337,7 @@ export function AuthForm({
             <input
               className="field"
               value={name}
-              autoComplete="name"
+              autoComplete="nickname"
               maxLength={40}
               onChange={(event) => setName(event.target.value)}
             />

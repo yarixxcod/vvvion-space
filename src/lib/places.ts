@@ -1,8 +1,8 @@
 import { SITE } from "@/lib/release";
 
-export type CircleTab = "chat" | "feed" | "play" | "services" | "disk" | "bank" | "shop" | "admin";
+export type CircleTab = "chat" | "feed" | "play" | "services" | "disk" | "bank" | "shop" | "apps" | "admin";
 
-const CIRCLE_TABS: readonly CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop", "admin"];
+const CIRCLE_TABS: readonly CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop", "apps", "admin"];
 
 export function isCircleTab(value: unknown): value is CircleTab {
   return typeof value === "string" && (CIRCLE_TABS as readonly string[]).includes(value);
@@ -73,6 +73,14 @@ export const PLACES: Place[] = [
     title: "Магазин — vvvion.space",
     description: "Подписка VVVION PREMIUM, место на диске, дополнительные запросы и персонажи для чата.",
     lead: "Подписка на 30 дней, место на диске и персонажи. Вубли — внутренняя мелочь, не деньги.",
+  },
+  {
+    slug: "apps",
+    tab: "apps",
+    name: "Приложения",
+    title: "Приложения — vvvion.space",
+    description: "Свежие приложения VVVion Space для Windows и Android.",
+    lead: "Скачайте программу для Windows или Android. В браузере тот же аккаунт.",
   },
 ];
 
