@@ -41,7 +41,7 @@ function SectionPage() {
     lead: place.lead,
   };
   useEffect(() => setReady(true), []);
-  if (ready && !isPending && user) {
+  if (place.slug === "apps" || (ready && !isPending && user)) {
     return (
       <div className="h-dvh">
         <Circle tab={place.tab} />

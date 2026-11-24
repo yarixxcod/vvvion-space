@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { isApp, isDesktop } from "@/lib/app-bridge";
 import { ui } from "@/lib/i18n";
 import { useLang, useTx } from "@/lib/lang";
-import { absoluteUrl, placePath } from "@/lib/places";
+import { absoluteUrl } from "@/lib/places";
 
 type WindowsRelease = { version: string; notes: string; href: string };
 type AndroidRelease = { versionName: string; apkUrl: string; changelog: string };
@@ -23,7 +23,7 @@ export function AppsDesk() {
   const [ios, setIos] = useState(false);
   const [standalone, setStandalone] = useState(false);
   const here = isDesktop();
-  const pageUrl = absoluteUrl(placePath("apps"));
+  const pageUrl = absoluteUrl("/?place=apps");
 
   async function sharePage() {
     try {

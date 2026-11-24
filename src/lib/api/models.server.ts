@@ -63,7 +63,7 @@ export async function listApiModels(): Promise<ApiModel[]> {
   `;
   for (const row of images) {
     if (!MODEL_RE.test(row.name)) continue;
-    if (!usable(row.base_url, row.api_key, xaiReady)) continue;
+    if (!(row.api_key || "").trim()) continue;
     visible.push({ id: row.name, created: Number(row.created) || 0, type: "image", displayName: row.display_name || row.name });
   }
   return visible;
