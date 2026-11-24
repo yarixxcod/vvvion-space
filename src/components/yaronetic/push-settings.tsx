@@ -5,6 +5,7 @@ import {
   appNotificationsEnabled,
   appOpenNotificationSettings,
   isApp,
+  isDesktop,
   rememberPreview,
 } from "@/lib/app-bridge";
 import { getBearerToken } from "@/lib/auth/client";
@@ -95,6 +96,7 @@ export function PushSettingsCard() {
   const [economy, setEconomy] = useState(false);
   const asked = useRef(false);
   const inApp = isApp();
+  const desktop = isDesktop();
 
   useEffect(() => {
     let dead = false;
@@ -229,7 +231,15 @@ export function PushSettingsCard() {
           kk: "Хабарламалар, жауаптар және жазылым мерзімі. Хат мәтіні құлыптаулы экранда әдепкіде жасырын.",
         })}
       </p>
-      {inApp ? (
+      {desktop ? (
+        <p className="mt-3 text-sm text-muted">
+          {tx({
+            ru: "Уведомления показывает Windows. Отключить можно в Параметры → Система → Уведомления → VVVion Space.",
+            en: "Windows shows the notifications. Turn them off in Settings → System → Notifications → VVVion Space.",
+            kk: "Хабарламаларды Windows көрсетеді. Өшіру: Параметрлер → Жүйе → Хабарламалар → VVVion Space.",
+          })}
+        </p>
+      ) : inApp ? (
         <div className="mt-3">
           {denials >= 2 && !enabled ? (
             <button type="button" className="press h-11 w-full rounded-2xl border border-line px-3 text-sm" onClick={() => appOpenNotificationSettings()}>

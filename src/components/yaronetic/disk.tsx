@@ -350,7 +350,7 @@ function OwnDisk() {
   }
 
   return (
-    <div className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-4 pb-10">
+    <div className="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-4 pb-10" data-vv-upload="">
       <section className="rounded-[1.7rem] border border-line bg-elev px-4 py-4">
         <p className="text-xs tracking-[0.22em] text-faint uppercase">{tx({ ru: "Диск", en: "Disk", kk: "Диск" })}</p>
         <p className="mt-1 font-serif text-4xl leading-none">

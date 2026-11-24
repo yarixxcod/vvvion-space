@@ -10,7 +10,7 @@ import { PersonFace } from "@/components/yaronetic/person-face";
 import { toast } from "sonner";
 import { LoaderMark, PageLoader } from "@/components/yaronetic/page-loader";
 import { playSound } from "@/lib/sounds";
-import { appBadge, appNotify, cancelAppNotification, isApp, messagePreviewOn } from "@/lib/app-bridge";
+import { appBadge, appNotify, cancelAppNotification, messagePreviewOn, nativeShell } from "@/lib/app-bridge";
 import { publicNotifyIcon } from "@/lib/social/push-policy";
 import { haptic } from "@/lib/haptic";
 import { loadError } from "@/lib/load-error";
@@ -117,7 +117,7 @@ export function useCircleUnread(enabled: boolean) {
     }
     let dead = false;
     const pull = () => {
-      if (document.hidden && !isApp()) return;
+      if (document.hidden && !nativeShell()) return;
       void countUnread()
         .then((row) => {
           if (dead) return;
@@ -130,7 +130,7 @@ export function useCircleUnread(enabled: boolean) {
           }
         })
         .catch(() => undefined);
-      if (!isApp()) return;
+      if (!nativeShell()) return;
       void listRooms()
         .then((rooms) => {
           if (dead) return;

@@ -82,11 +82,35 @@ type VvvionApp = {
 declare global {
   interface Window {
     VvvionApp?: VvvionApp;
+    VvvionDesktop?: VvvionDesktop;
     __vvvionNavigate?: (path: string) => void;
   }
 }
 
+type VvvionDesktop = {
+  isDesktop: true;
+  platform: "windows";
+  version: string;
+  apiVersion: number;
+  features: readonly string[];
+  has(feature: string): boolean;
+  notify(payload: { id: string; title: string; body?: string; onlyWhenBackground?: boolean }): Promise<boolean>;
+  openTorrent(magnet: string): Promise<boolean>;
+};
+
 export const isApp = () => typeof navigator !== "undefined" && /vvvionApp\//.test(navigator.userAgent);
+
+export const isDesktop = () => typeof window !== "undefined" && window.VvvionDesktop?.isDesktop === true;
+
+export function desktopHas(feature: string): boolean {
+  try {
+    return isDesktop() && window.VvvionDesktop?.has(feature) === true;
+  } catch {
+    return false;
+  }
+}
+
+export const nativeShell = () => isApp() || isDesktop();
 
 export function appHas(feature: string): boolean {
   if (typeof window === "undefined") return false;
@@ -189,6 +213,19 @@ export function appNotify(payload: {
   actions?: NotifyAction[];
   kind?: NotifyKind;
 }) {
+  if (isDesktop() && desktopHas("notify")) {
+    try {
+      void window.VvvionDesktop?.notify({
+        id: payload.id.slice(0, 80),
+        title: payload.title.slice(0, 80),
+        body: payload.body?.slice(0, 180),
+        onlyWhenBackground: payload.onlyWhenBackground ?? true,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if (!isApp()) return false;
   try {
     const icon = payload.icon ? publicNotifyIcon(payload.icon) : undefined;
@@ -382,6 +419,10 @@ function tryRegister() {
 
 export function initAppBridge(isLoggedIn: () => boolean) {
   loggedIn = isLoggedIn;
+  if (isDesktop()) {
+    if (loggedIn()) void loadPushSettings();
+    return;
+  }
   if (!isApp()) return;
   if (!bridgeReady && typeof window !== "undefined") {
     bridgeReady = true;

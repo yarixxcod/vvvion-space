@@ -9,7 +9,7 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { pushBackLayer } from "@/lib/app-back";
-import { appCheckUpdates, appHas, appOpenSettings, appCopy, isApp } from "@/lib/app-bridge";
+import { appCheckUpdates, appHas, appOpenSettings, appCopy, isApp, isDesktop } from "@/lib/app-bridge";
 import { FACE_VARIANTS, ModelFace, type FaceVariant, type FaceMood } from "@/components/yaronetic/model-face";
 import { PAPERS, type PaperId } from "@/lib/ai/paper";
 import { SEARCH_ENGINES, type SearchEngine } from "@/lib/ai/search-engine";
@@ -262,6 +262,16 @@ function AppAbout() {
       /* the shell has gone */
     }
   }, []);
+  if (isDesktop()) {
+    const version = window.VvvionDesktop?.version || "—";
+    return (
+      <div className="mt-8 border-t border-line pt-4">
+        <p className="text-sm">{tx({ ru: "О приложении", en: "About the app", kk: "Қолданба туралы" })}</p>
+        <p className="mt-1 text-sm text-muted">{version}</p>
+        <p className="mt-0.5 text-[13px] text-faint">Windows</p>
+      </div>
+    );
+  }
   if (!isApp()) return null;
   const version = info?.version || "—";
   const code = info?.versionCode ? ` · ${info.versionCode}` : "";

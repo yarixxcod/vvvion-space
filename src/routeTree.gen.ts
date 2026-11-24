@@ -78,6 +78,7 @@ import { Route as ApiPostShareTokenIdRouteImport } from './routes/api/post-share
 import { Route as ApiVubliTopupIdRouteImport } from './routes/api/vubli/topup/$id'
 import { Route as ApiWebhooksCryptopaySecretRouteImport } from './routes/api/webhooks/cryptopay/$secret'
 import { Route as ApiVubliTopupIdCancelRouteImport } from './routes/api/vubli/topup/$id/cancel'
+import { Route as ApiAppDesktopUpdateTargetArchVersionRouteImport } from './routes/api/app/desktop/update/$target/$arch/$version'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -426,6 +427,12 @@ const ApiVubliTopupIdCancelRoute = ApiVubliTopupIdCancelRouteImport.update({
   path: '/cancel',
   getParentRoute: () => ApiVubliTopupIdRoute,
 } as any)
+const ApiAppDesktopUpdateTargetArchVersionRoute =
+  ApiAppDesktopUpdateTargetArchVersionRouteImport.update({
+    id: '/api/app/desktop/update/$target/$arch/$version',
+    path: '/api/app/desktop/update/$target/$arch/$version',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -497,6 +504,7 @@ export interface FileRoutesByFullPath {
   '/api/vubli/topup/$id': typeof ApiVubliTopupIdRouteWithChildren
   '/api/webhooks/cryptopay/$secret': typeof ApiWebhooksCryptopaySecretRoute
   '/api/vubli/topup/$id/cancel': typeof ApiVubliTopupIdCancelRoute
+  '/api/app/desktop/update/$target/$arch/$version': typeof ApiAppDesktopUpdateTargetArchVersionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -568,6 +576,7 @@ export interface FileRoutesByTo {
   '/api/vubli/topup/$id': typeof ApiVubliTopupIdRouteWithChildren
   '/api/webhooks/cryptopay/$secret': typeof ApiWebhooksCryptopaySecretRoute
   '/api/vubli/topup/$id/cancel': typeof ApiVubliTopupIdCancelRoute
+  '/api/app/desktop/update/$target/$arch/$version': typeof ApiAppDesktopUpdateTargetArchVersionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -640,6 +649,7 @@ export interface FileRoutesById {
   '/api/vubli/topup/$id': typeof ApiVubliTopupIdRouteWithChildren
   '/api/webhooks/cryptopay/$secret': typeof ApiWebhooksCryptopaySecretRoute
   '/api/vubli/topup/$id/cancel': typeof ApiVubliTopupIdCancelRoute
+  '/api/app/desktop/update/$target/$arch/$version': typeof ApiAppDesktopUpdateTargetArchVersionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -713,6 +723,7 @@ export interface FileRouteTypes {
     | '/api/vubli/topup/$id'
     | '/api/webhooks/cryptopay/$secret'
     | '/api/vubli/topup/$id/cancel'
+    | '/api/app/desktop/update/$target/$arch/$version'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -784,6 +795,7 @@ export interface FileRouteTypes {
     | '/api/vubli/topup/$id'
     | '/api/webhooks/cryptopay/$secret'
     | '/api/vubli/topup/$id/cancel'
+    | '/api/app/desktop/update/$target/$arch/$version'
   id:
     | '__root__'
     | '/'
@@ -855,6 +867,7 @@ export interface FileRouteTypes {
     | '/api/vubli/topup/$id'
     | '/api/webhooks/cryptopay/$secret'
     | '/api/vubli/topup/$id/cancel'
+    | '/api/app/desktop/update/$target/$arch/$version'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -917,6 +930,7 @@ export interface RootRouteChildren {
   ApiDTokenIdRoute: typeof ApiDTokenIdRoute
   ApiPostShareTokenIdRoute: typeof ApiPostShareTokenIdRoute
   ApiWebhooksCryptopaySecretRoute: typeof ApiWebhooksCryptopaySecretRoute
+  ApiAppDesktopUpdateTargetArchVersionRoute: typeof ApiAppDesktopUpdateTargetArchVersionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1404,6 +1418,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVubliTopupIdCancelRouteImport
       parentRoute: typeof ApiVubliTopupIdRoute
     }
+    '/api/app/desktop/update/$target/$arch/$version': {
+      id: '/api/app/desktop/update/$target/$arch/$version'
+      path: '/api/app/desktop/update/$target/$arch/$version'
+      fullPath: '/api/app/desktop/update/$target/$arch/$version'
+      preLoaderRoute: typeof ApiAppDesktopUpdateTargetArchVersionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1565,6 +1586,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDTokenIdRoute: ApiDTokenIdRoute,
   ApiPostShareTokenIdRoute: ApiPostShareTokenIdRoute,
   ApiWebhooksCryptopaySecretRoute: ApiWebhooksCryptopaySecretRoute,
+  ApiAppDesktopUpdateTargetArchVersionRoute:
+    ApiAppDesktopUpdateTargetArchVersionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -149,6 +149,7 @@ export function Composer({
 
   return (
     <form
+      data-vv-upload=""
       className="rounded-[1.75rem] border border-line bg-elev p-1.5 shadow-[var(--shadow)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent"
       onSubmit={(event) => {
         event.preventDefault();

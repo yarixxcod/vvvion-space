@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { appHas, appNotify, initAppBridge, isApp } from "@/lib/app-bridge";
+import { appHas, appNotify, initAppBridge, isApp, nativeShell } from "@/lib/app-bridge";
 import { destinationFor, parseSitePath, type AppSearch } from "@/lib/app-nav";
 import { getBearerToken } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -92,7 +92,7 @@ export function AppBridgeHost() {
   useEffect(() => {
     initAppBridge(() => Boolean(userId));
     if (!userId || isPending) return;
-    if (isApp() && reminded.current !== userId) {
+    if (nativeShell() && reminded.current !== userId) {
       reminded.current = userId;
       void Promise.all([getPremium().catch(() => null), getMegaOffer().catch(() => null)]).then(([premium, mega]) => {
         const note = (id: string, title: string, until: string | null, url: string) => {

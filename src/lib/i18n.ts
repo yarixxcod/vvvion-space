@@ -150,6 +150,16 @@ const UI = {
     en: "The browser menu has Install app or Add to Home Screen.",
     kk: "Браузер мәзірінде «Қолданбаны орнату» немесе «Үй экранына қосу» бар.",
   },
+  desktopOpen: {
+    ru: "Вы в приложении VVVion Space для Windows (версия {version}).",
+    en: "You are in the VVVion Space app for Windows (version {version}).",
+    kk: "Сіз VVVion Space Windows қолданбасындасыз (нұсқа {version}).",
+  },
+  windowsDownload: {
+    ru: "Скачать для Windows",
+    en: "Download for Windows",
+    kk: "Windows үшін жүктеу",
+  },
   updatesTitle: { ru: "Что менялось", en: "What changed", kk: "Не өзгерді" },
   updatesLead: {
     ru: "Сейчас версия {version}. Ниже — журнал выпусков.",

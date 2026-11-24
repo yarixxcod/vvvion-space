@@ -4,6 +4,7 @@ import { NOTES, RELEASE, markReleaseRead, updatesUnread, type NoteKind } from "@
 import { PLACES, absoluteUrl, placePath } from "@/lib/places";
 import { ShareLink } from "@/components/yaronetic/public-page";
 import { aboutCopy, fill, placeCopy, ui, type Lang, type UiKey } from "@/lib/i18n";
+import { isApp, isDesktop } from "@/lib/app-bridge";
 import { useLang } from "@/lib/lang";
 import { faqJsonLd } from "@/lib/seo";
 
@@ -122,6 +123,7 @@ function InstallHint() {
   const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [ios, setIos] = useState(false);
   const [standalone, setStandalone] = useState(false);
+  const [windows, setWindows] = useState(false);
 
   useEffect(() => {
     const nav = navigator as Navigator & { standalone?: boolean };
@@ -134,6 +136,23 @@ function InstallHint() {
     window.addEventListener("beforeinstallprompt", onPrompt);
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
+
+  useEffect(() => {
+    if (isDesktop() || isApp()) return;
+    let dead = false;
+    void fetch("/api/app/desktop/update/windows/x86_64/0.0.0", { method: "GET" })
+      .then((res) => {
+        if (!dead && res.status === 200) setWindows(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, []);
+
+  if (isDesktop()) {
+    return <p>{fill(ui(lang, "desktopOpen"), { version: window.VvvionDesktop?.version || "—" })}</p>;
+  }
 
   if (standalone) {
     return <p>{ui(lang, "installed")}</p>;
@@ -165,6 +184,11 @@ function InstallHint() {
       ) : (
         <p>{ui(lang, "installBrowser")}</p>
       )}
+      {windows && !isApp() ? (
+        <a className="press mt-3 inline-flex h-11 items-center rounded-2xl bg-accent px-4 text-sm font-medium text-accent-fg" href="/app/desktop/latest">
+          {ui(lang, "windowsDownload")}
+        </a>
+      ) : null}
     </>
   );
 }

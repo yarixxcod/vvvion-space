@@ -305,6 +305,7 @@ function Shelf({
   return (
     <div
       className="flex h-full min-h-0 flex-col"
+      data-vv-upload=""
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();

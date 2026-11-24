@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import { auth, authConfigured } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
 import { assertAdmin } from "@/lib/social/access";
+import { releasePrefix, releaseStore, removeRelease, streamObject, streamStoredApk } from "@/lib/social/release-blob.server";
+import { handleDesktopRelease, desktopBytes, desktopLatest } from "@/lib/social/desktop-release.server";
+import { versionDocument } from "@/lib/social/release-rules";
+
+export { versionDocument };
 
 const CHUNK_MAX = 512 * 1024;
 const MAX_BYTES = 80 * 1024 * 1024;
@@ -35,6 +40,7 @@ type LiveRow = {
   received: number;
   next_idx: number;
   ready: boolean;
+  storage: string;
 };
 
 let bundledCache: Uint8Array | null | undefined;
@@ -95,7 +101,7 @@ async function liveRow(): Promise<LiveRow | null> {
   if (flag.slot !== 1 && flag.slot !== 2) return null;
   const sql = await getSql();
   const rows = await sql<LiveRow>`
-    select slot, version_code, version_name, file_name, changelog, force_update, size, received, next_idx, ready
+    select slot, version_code, version_name, file_name, changelog, force_update, size, received, next_idx, ready, storage
     from app_release where slot = ${flag.slot} and ready
   `;
   const row = rows[0];
@@ -108,7 +114,7 @@ async function draftRow(): Promise<LiveRow | null> {
   const slot = flag.slot === 1 ? 2 : 1;
   const sql = await getSql();
   const rows = await sql<LiveRow>`
-    select slot, version_code, version_name, file_name, changelog, force_update, size, received, next_idx, ready
+    select slot, version_code, version_name, file_name, changelog, force_update, size, received, next_idx, ready, storage
     from app_release where slot = ${slot} and not ready
   `;
   const row = rows[0];
@@ -148,16 +154,6 @@ export async function releaseStatus(): Promise<{ current: ReleaseView | null; ne
     };
   }
   return { current: null, nextCode: Math.max(floor, 0) + 1 };
-}
-
-function versionDocument(origin: string, view: ReleaseView) {
-  return {
-    versionCode: view.versionCode,
-    versionName: view.versionName,
-    apkUrl: `${origin}/app/${view.fileName}`,
-    changelog: view.changelog,
-    force: view.force,
-  };
 }
 
 export async function versionDocumentResponse(request: Request): Promise<Response> {
@@ -219,42 +215,12 @@ function bytesResponse(request: Request, name: string, bytes: Uint8Array): Respo
 }
 
 async function streamLive(request: Request, live: LiveRow): Promise<Response> {
-  const sql = await getSql();
-  const listed = await sql<{ idx: number; bytes: number }>`
-    select idx, bytes from app_release_chunks where slot = ${live.slot} order by idx
-  `;
-  const spans: { idx: number; bytes: number; start: number }[] = [];
-  let cursor = 0;
-  for (const row of listed) {
-    const bytes = Number(row.bytes);
-    spans.push({ idx: Number(row.idx), bytes, start: cursor });
-    cursor += bytes;
+  if (live.storage === "s3") {
+    const store = releaseStore();
+    if (!store) return new Response("Не найдено", { status: 404 });
+    return streamObject(store, releasePrefix("android", live.slot), live.file_name, live.size, request, "application/vnd.android.package-archive");
   }
-  const size = cursor || live.size;
-  const range = byteRange(request.headers.get("range"), size);
-  if (range === "bad") return new Response(null, { status: 416, headers: fileHeaders(live.file_name, size) });
-  const headers = fileHeaders(live.file_name, size, range || undefined);
-  if (request.method === "HEAD") return new Response(null, { status: range ? 206 : 200, headers });
-  const start = range ? range.start : 0;
-  const end = range ? range.end : size - 1;
-  const needed = spans.filter((span) => span.start + span.bytes > start && span.start <= end);
-  let index = 0;
-  const stream = new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const span = needed[index];
-      if (!span) {
-        controller.close();
-        return;
-      }
-      index += 1;
-      const rows = await sql<{ data: string }>`select data from app_release_chunks where slot = ${live.slot} and idx = ${span.idx}`;
-      const raw = Buffer.from(rows[0]?.data || "", "base64");
-      const from = Math.max(0, start - span.start);
-      const to = Math.min(raw.length, end - span.start + 1);
-      controller.enqueue(new Uint8Array(raw.subarray(from, to)));
-    },
-  });
-  return new Response(stream, { status: range ? 206 : 200, headers });
+  return streamStoredApk(await getSql(), request, live);
 }
 
 async function requireAdmin(request: Request): Promise<string | Response> {
@@ -303,14 +269,18 @@ async function begin(body: Record<string, unknown>): Promise<Response> {
   if (versionCode <= floor) throw new Error("Номер должен быть больше текущего, иначе телефон не предложит обновление");
   if (!Number.isInteger(size) || size < 1000 || size > MAX_BYTES) throw new Error("Файл пустой или больше 80 МБ");
   const fileName = `vvvion-space-${versionName}.apk`;
+  const store = releaseStore();
+  if (!store) throw new Error("Хранилище файлов не настроено");
   const flag = await pref();
   const slot = flag.slot === 1 ? 2 : 1;
   const sql = await getSql();
+  const previous = await sql<{ size: number; storage: string }>`select size, storage from app_release where slot = ${slot}`;
+  if (previous[0]?.storage === "s3") await removeRelease(store, releasePrefix("android", slot), Number(previous[0].size));
   await sql`delete from app_release_chunks where slot = ${slot}`;
   await sql`delete from app_release where slot = ${slot}`;
   await sql`
-    insert into app_release (slot, version_code, version_name, file_name, changelog, force_update, size)
-    values (${slot}, ${versionCode}, ${versionName}, ${fileName}, ${notes}, ${force}, ${size})
+    insert into app_release (slot, version_code, version_name, file_name, changelog, force_update, size, storage)
+    values (${slot}, ${versionCode}, ${versionName}, ${fileName}, ${notes}, ${force}, ${size}, 's3')
   `;
   return json(200, { received: 0 });
 }
@@ -329,6 +299,16 @@ async function takeChunk(body: Record<string, unknown>): Promise<Response> {
   if (draft.received + bytes.length > draft.size) throw new Error("Файл больше заявленного размера");
   if (index === 0 && (bytes[0] !== 0x50 || bytes[1] !== 0x4b)) throw new Error("Это не установщик");
   const sql = await getSql();
+  if (draft.storage === "s3") {
+    const store = releaseStore();
+    if (!store) throw new Error("Хранилище файлов не настроено");
+    await store.put(`${releasePrefix("android", draft.slot)}/${index}`, bytes);
+    await sql`
+      update app_release set received = received + ${bytes.length}, next_idx = next_idx + 1
+      where slot = ${draft.slot} and not ready and next_idx = ${index}
+    `;
+    return json(200, { received: draft.received + bytes.length });
+  }
   await sql`
     with inserted as (
       insert into app_release_chunks (slot, idx, data, bytes)
@@ -361,6 +341,11 @@ async function finish(): Promise<Response> {
   `;
   if (!flipped.length) throw new Error("Файл отправился не целиком");
   const other = draft.slot === 1 ? 2 : 1;
+  const old = await sql<{ size: number; storage: string }>`select size, storage from app_release where slot = ${other}`;
+  if (old[0]?.storage === "s3") {
+    const store = releaseStore();
+    if (store) await removeRelease(store, releasePrefix("android", other), Number(old[0].size));
+  }
   await sql`delete from app_release_chunks where slot = ${other}`;
   await sql`delete from app_release where slot = ${other}`;
   return json(200, await releaseStatus());
@@ -371,6 +356,13 @@ async function drop(): Promise<Response> {
   const flag = await pref();
   const last = Math.max(flag.last, live?.version_code ?? 0, flag.hide ? 0 : BUNDLED_CODE);
   const sql = await getSql();
+  const rows = await sql<{ slot: number; size: number; storage: string }>`select slot, size, storage from app_release`;
+  const store = releaseStore();
+  if (store) {
+    for (const row of rows) {
+      if (row.storage === "s3") await removeRelease(store, releasePrefix("android", Number(row.slot)), Number(row.size));
+    }
+  }
   await sql`
     with cleared_chunks as (
       delete from app_release_chunks
@@ -387,10 +379,15 @@ async function drop(): Promise<Response> {
 export async function handleAppRelease(request: Request): Promise<Response> {
   const admin = await requireAdmin(request);
   if (admin instanceof Response) return admin;
-  if (request.method === "GET") return json(200, await releaseStatus());
+  if (request.method === "GET") {
+    const platform = new URL(request.url).searchParams.get("platform");
+    if (platform === "windows") return handleDesktopRelease(request);
+    return json(200, await releaseStatus());
+  }
   if (request.method !== "POST") return json(405, { message: "Нельзя" });
   try {
     const body = (await request.json()) as Record<string, unknown>;
+    if (body.platform === "windows") return await handleDesktopRelease(request, body);
     const op = body.op;
     if (op === "begin") return await begin(body);
     if (op === "chunk") return await takeChunk(body);
@@ -412,6 +409,12 @@ export async function handlePublicApp(request: Request): Promise<Response> {
     const path = decodeURIComponent(new URL(request.url).pathname);
     if (path === "/app/version.json") return await versionDocumentResponse(request);
     if (path === "/app/assets.json") return appAssetsResponse(request);
+    if (path === "/app/desktop/latest") return desktopLatest(await getSql(), request);
+    if (path.startsWith("/app/desktop/") && path.toLowerCase().endsWith(".exe")) {
+      const store = releaseStore();
+      if (!store) return new Response("Не найдено", { status: 404 });
+      return desktopBytes(await getSql(), store, request, path.slice("/app/desktop/".length));
+    }
     if (path.startsWith("/app/")) return await apkFileResponse(request, path.slice("/app/".length));
     return new Response("Не найдено", { status: 404 });
   } catch {
