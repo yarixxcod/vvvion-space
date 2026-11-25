@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as UpdatesRouteImport } from './routes/updates'
 import { Route as ApiAppReleaseRouteImport } from './routes/api/app-release'
 import { Route as ApiBooksRouteImport } from './routes/api/books'
+import { Route as ApiCalendarRouteRouteImport } from './routes/api/calendar/route'
 import { Route as ApiCaptchaRouteImport } from './routes/api/captcha'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiCircleFileRouteImport } from './routes/api/circle-file'
@@ -50,6 +51,14 @@ import { Route as ApiAvatarUserIdRouteImport } from './routes/api/avatar/$userId
 import { Route as ApiBackupManifestRouteImport } from './routes/api/backup/manifest'
 import { Route as ApiBackupReportRouteImport } from './routes/api/backup/report'
 import { Route as ApiBooksIdRouteImport } from './routes/api/books/$id'
+import { Route as ApiCalendarIdRouteImport } from './routes/api/calendar/$id'
+import { Route as ApiCalendarCronRouteImport } from './routes/api/calendar/cron'
+import { Route as ApiCalendarDueRouteImport } from './routes/api/calendar/due'
+import { Route as ApiCalendarEventsRouteRouteImport } from './routes/api/calendar/events/route'
+import { Route as ApiCalendarFreeRouteImport } from './routes/api/calendar/free'
+import { Route as ApiCalendarParseRouteImport } from './routes/api/calendar/parse'
+import { Route as ApiCalendarPrefsRouteImport } from './routes/api/calendar/prefs'
+import { Route as ApiCalendarSearchRouteImport } from './routes/api/calendar/search'
 import { Route as ApiCircleFileIdRouteImport } from './routes/api/circle-file/$id'
 import { Route as ApiCronCryptopayReconcileRouteImport } from './routes/api/cron/cryptopay-reconcile'
 import { Route as ApiDiskIdRouteImport } from './routes/api/disk/$id'
@@ -73,6 +82,7 @@ import { Route as V1ImagesGenerationsRouteImport } from './routes/v1/images/gene
 import { Route as V1MessagesCount_tokensRouteImport } from './routes/v1/messages/count_tokens'
 import { Route as V1ResponsesIdRouteImport } from './routes/v1/responses/$id'
 import { Route as ApiBooksSharedTokenRouteImport } from './routes/api/books/shared/$token'
+import { Route as ApiCalendarEventsIdRouteImport } from './routes/api/calendar/events/$id'
 import { Route as ApiDTokenIdRouteImport } from './routes/api/d/$token/$id'
 import { Route as ApiPostShareTokenIdRouteImport } from './routes/api/post-share/$token/$id'
 import { Route as ApiVubliTopupIdRouteImport } from './routes/api/vubli/topup/$id'
@@ -113,6 +123,11 @@ const ApiAppReleaseRoute = ApiAppReleaseRouteImport.update({
 const ApiBooksRoute = ApiBooksRouteImport.update({
   id: '/api/books',
   path: '/api/books',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCalendarRouteRoute = ApiCalendarRouteRouteImport.update({
+  id: '/api/calendar',
+  path: '/api/calendar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCaptchaRoute = ApiCaptchaRouteImport.update({
@@ -285,6 +300,46 @@ const ApiBooksIdRoute = ApiBooksIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => ApiBooksRoute,
 } as any)
+const ApiCalendarIdRoute = ApiCalendarIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
+const ApiCalendarCronRoute = ApiCalendarCronRouteImport.update({
+  id: '/cron',
+  path: '/cron',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
+const ApiCalendarDueRoute = ApiCalendarDueRouteImport.update({
+  id: '/due',
+  path: '/due',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
+const ApiCalendarEventsRouteRoute = ApiCalendarEventsRouteRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
+const ApiCalendarFreeRoute = ApiCalendarFreeRouteImport.update({
+  id: '/free',
+  path: '/free',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
+const ApiCalendarParseRoute = ApiCalendarParseRouteImport.update({
+  id: '/parse',
+  path: '/parse',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
+const ApiCalendarPrefsRoute = ApiCalendarPrefsRouteImport.update({
+  id: '/prefs',
+  path: '/prefs',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
+const ApiCalendarSearchRoute = ApiCalendarSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => ApiCalendarRouteRoute,
+} as any)
 const ApiCircleFileIdRoute = ApiCircleFileIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -401,6 +456,11 @@ const ApiBooksSharedTokenRoute = ApiBooksSharedTokenRouteImport.update({
   path: '/shared/$token',
   getParentRoute: () => ApiBooksRoute,
 } as any)
+const ApiCalendarEventsIdRoute = ApiCalendarEventsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiCalendarEventsRouteRoute,
+} as any)
 const ApiDTokenIdRoute = ApiDTokenIdRouteImport.update({
   id: '/api/d/$token/$id',
   path: '/api/d/$token/$id',
@@ -440,6 +500,7 @@ export interface FileRoutesByFullPath {
   '/disk': typeof DiskRoute
   '/login': typeof LoginRoute
   '/updates': typeof UpdatesRoute
+  '/api/calendar': typeof ApiCalendarRouteRouteWithChildren
   '/api/app-release': typeof ApiAppReleaseRoute
   '/api/books': typeof ApiBooksRouteWithChildren
   '/api/captcha': typeof ApiCaptchaRoute
@@ -470,12 +531,20 @@ export interface FileRoutesByFullPath {
   '/v1/messages': typeof V1MessagesRouteWithChildren
   '/v1/models': typeof V1ModelsRoute
   '/v1/responses': typeof V1ResponsesRouteWithChildren
+  '/api/calendar/events': typeof ApiCalendarEventsRouteRouteWithChildren
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
   '/api/backup/manifest': typeof ApiBackupManifestRoute
   '/api/backup/report': typeof ApiBackupReportRoute
   '/api/books/$id': typeof ApiBooksIdRoute
+  '/api/calendar/$id': typeof ApiCalendarIdRoute
+  '/api/calendar/cron': typeof ApiCalendarCronRoute
+  '/api/calendar/due': typeof ApiCalendarDueRoute
+  '/api/calendar/free': typeof ApiCalendarFreeRoute
+  '/api/calendar/parse': typeof ApiCalendarParseRoute
+  '/api/calendar/prefs': typeof ApiCalendarPrefsRoute
+  '/api/calendar/search': typeof ApiCalendarSearchRoute
   '/api/circle-file/$id': typeof ApiCircleFileIdRoute
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
   '/api/disk/$id': typeof ApiDiskIdRoute
@@ -499,6 +568,7 @@ export interface FileRoutesByFullPath {
   '/v1/messages/count_tokens': typeof V1MessagesCount_tokensRoute
   '/v1/responses/$id': typeof V1ResponsesIdRoute
   '/api/books/shared/$token': typeof ApiBooksSharedTokenRoute
+  '/api/calendar/events/$id': typeof ApiCalendarEventsIdRoute
   '/api/d/$token/$id': typeof ApiDTokenIdRoute
   '/api/post-share/$token/$id': typeof ApiPostShareTokenIdRoute
   '/api/vubli/topup/$id': typeof ApiVubliTopupIdRouteWithChildren
@@ -512,6 +582,7 @@ export interface FileRoutesByTo {
   '/disk': typeof DiskRoute
   '/login': typeof LoginRoute
   '/updates': typeof UpdatesRoute
+  '/api/calendar': typeof ApiCalendarRouteRouteWithChildren
   '/api/app-release': typeof ApiAppReleaseRoute
   '/api/books': typeof ApiBooksRouteWithChildren
   '/api/captcha': typeof ApiCaptchaRoute
@@ -542,12 +613,20 @@ export interface FileRoutesByTo {
   '/v1/messages': typeof V1MessagesRouteWithChildren
   '/v1/models': typeof V1ModelsRoute
   '/v1/responses': typeof V1ResponsesRouteWithChildren
+  '/api/calendar/events': typeof ApiCalendarEventsRouteRouteWithChildren
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
   '/api/backup/manifest': typeof ApiBackupManifestRoute
   '/api/backup/report': typeof ApiBackupReportRoute
   '/api/books/$id': typeof ApiBooksIdRoute
+  '/api/calendar/$id': typeof ApiCalendarIdRoute
+  '/api/calendar/cron': typeof ApiCalendarCronRoute
+  '/api/calendar/due': typeof ApiCalendarDueRoute
+  '/api/calendar/free': typeof ApiCalendarFreeRoute
+  '/api/calendar/parse': typeof ApiCalendarParseRoute
+  '/api/calendar/prefs': typeof ApiCalendarPrefsRoute
+  '/api/calendar/search': typeof ApiCalendarSearchRoute
   '/api/circle-file/$id': typeof ApiCircleFileIdRoute
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
   '/api/disk/$id': typeof ApiDiskIdRoute
@@ -571,6 +650,7 @@ export interface FileRoutesByTo {
   '/v1/messages/count_tokens': typeof V1MessagesCount_tokensRoute
   '/v1/responses/$id': typeof V1ResponsesIdRoute
   '/api/books/shared/$token': typeof ApiBooksSharedTokenRoute
+  '/api/calendar/events/$id': typeof ApiCalendarEventsIdRoute
   '/api/d/$token/$id': typeof ApiDTokenIdRoute
   '/api/post-share/$token/$id': typeof ApiPostShareTokenIdRoute
   '/api/vubli/topup/$id': typeof ApiVubliTopupIdRouteWithChildren
@@ -585,6 +665,7 @@ export interface FileRoutesById {
   '/disk': typeof DiskRoute
   '/login': typeof LoginRoute
   '/updates': typeof UpdatesRoute
+  '/api/calendar': typeof ApiCalendarRouteRouteWithChildren
   '/api/app-release': typeof ApiAppReleaseRoute
   '/api/books': typeof ApiBooksRouteWithChildren
   '/api/captcha': typeof ApiCaptchaRoute
@@ -615,12 +696,20 @@ export interface FileRoutesById {
   '/v1/messages': typeof V1MessagesRouteWithChildren
   '/v1/models': typeof V1ModelsRoute
   '/v1/responses': typeof V1ResponsesRouteWithChildren
+  '/api/calendar/events': typeof ApiCalendarEventsRouteRouteWithChildren
   '/api/app/widgets': typeof ApiAppWidgetsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/avatar/$userId': typeof ApiAvatarUserIdRoute
   '/api/backup/manifest': typeof ApiBackupManifestRoute
   '/api/backup/report': typeof ApiBackupReportRoute
   '/api/books/$id': typeof ApiBooksIdRoute
+  '/api/calendar/$id': typeof ApiCalendarIdRoute
+  '/api/calendar/cron': typeof ApiCalendarCronRoute
+  '/api/calendar/due': typeof ApiCalendarDueRoute
+  '/api/calendar/free': typeof ApiCalendarFreeRoute
+  '/api/calendar/parse': typeof ApiCalendarParseRoute
+  '/api/calendar/prefs': typeof ApiCalendarPrefsRoute
+  '/api/calendar/search': typeof ApiCalendarSearchRoute
   '/api/circle-file/$id': typeof ApiCircleFileIdRoute
   '/api/cron/cryptopay-reconcile': typeof ApiCronCryptopayReconcileRoute
   '/api/disk/$id': typeof ApiDiskIdRoute
@@ -644,6 +733,7 @@ export interface FileRoutesById {
   '/v1/messages/count_tokens': typeof V1MessagesCount_tokensRoute
   '/v1/responses/$id': typeof V1ResponsesIdRoute
   '/api/books/shared/$token': typeof ApiBooksSharedTokenRoute
+  '/api/calendar/events/$id': typeof ApiCalendarEventsIdRoute
   '/api/d/$token/$id': typeof ApiDTokenIdRoute
   '/api/post-share/$token/$id': typeof ApiPostShareTokenIdRoute
   '/api/vubli/topup/$id': typeof ApiVubliTopupIdRouteWithChildren
@@ -659,6 +749,7 @@ export interface FileRouteTypes {
     | '/disk'
     | '/login'
     | '/updates'
+    | '/api/calendar'
     | '/api/app-release'
     | '/api/books'
     | '/api/captcha'
@@ -689,12 +780,20 @@ export interface FileRouteTypes {
     | '/v1/messages'
     | '/v1/models'
     | '/v1/responses'
+    | '/api/calendar/events'
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
     | '/api/backup/manifest'
     | '/api/backup/report'
     | '/api/books/$id'
+    | '/api/calendar/$id'
+    | '/api/calendar/cron'
+    | '/api/calendar/due'
+    | '/api/calendar/free'
+    | '/api/calendar/parse'
+    | '/api/calendar/prefs'
+    | '/api/calendar/search'
     | '/api/circle-file/$id'
     | '/api/cron/cryptopay-reconcile'
     | '/api/disk/$id'
@@ -718,6 +817,7 @@ export interface FileRouteTypes {
     | '/v1/messages/count_tokens'
     | '/v1/responses/$id'
     | '/api/books/shared/$token'
+    | '/api/calendar/events/$id'
     | '/api/d/$token/$id'
     | '/api/post-share/$token/$id'
     | '/api/vubli/topup/$id'
@@ -731,6 +831,7 @@ export interface FileRouteTypes {
     | '/disk'
     | '/login'
     | '/updates'
+    | '/api/calendar'
     | '/api/app-release'
     | '/api/books'
     | '/api/captcha'
@@ -761,12 +862,20 @@ export interface FileRouteTypes {
     | '/v1/messages'
     | '/v1/models'
     | '/v1/responses'
+    | '/api/calendar/events'
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
     | '/api/backup/manifest'
     | '/api/backup/report'
     | '/api/books/$id'
+    | '/api/calendar/$id'
+    | '/api/calendar/cron'
+    | '/api/calendar/due'
+    | '/api/calendar/free'
+    | '/api/calendar/parse'
+    | '/api/calendar/prefs'
+    | '/api/calendar/search'
     | '/api/circle-file/$id'
     | '/api/cron/cryptopay-reconcile'
     | '/api/disk/$id'
@@ -790,6 +899,7 @@ export interface FileRouteTypes {
     | '/v1/messages/count_tokens'
     | '/v1/responses/$id'
     | '/api/books/shared/$token'
+    | '/api/calendar/events/$id'
     | '/api/d/$token/$id'
     | '/api/post-share/$token/$id'
     | '/api/vubli/topup/$id'
@@ -803,6 +913,7 @@ export interface FileRouteTypes {
     | '/disk'
     | '/login'
     | '/updates'
+    | '/api/calendar'
     | '/api/app-release'
     | '/api/books'
     | '/api/captcha'
@@ -833,12 +944,20 @@ export interface FileRouteTypes {
     | '/v1/messages'
     | '/v1/models'
     | '/v1/responses'
+    | '/api/calendar/events'
     | '/api/app/widgets'
     | '/api/auth/$'
     | '/api/avatar/$userId'
     | '/api/backup/manifest'
     | '/api/backup/report'
     | '/api/books/$id'
+    | '/api/calendar/$id'
+    | '/api/calendar/cron'
+    | '/api/calendar/due'
+    | '/api/calendar/free'
+    | '/api/calendar/parse'
+    | '/api/calendar/prefs'
+    | '/api/calendar/search'
     | '/api/circle-file/$id'
     | '/api/cron/cryptopay-reconcile'
     | '/api/disk/$id'
@@ -862,6 +981,7 @@ export interface FileRouteTypes {
     | '/v1/messages/count_tokens'
     | '/v1/responses/$id'
     | '/api/books/shared/$token'
+    | '/api/calendar/events/$id'
     | '/api/d/$token/$id'
     | '/api/post-share/$token/$id'
     | '/api/vubli/topup/$id'
@@ -876,6 +996,7 @@ export interface RootRouteChildren {
   DiskRoute: typeof DiskRoute
   LoginRoute: typeof LoginRoute
   UpdatesRoute: typeof UpdatesRoute
+  ApiCalendarRouteRoute: typeof ApiCalendarRouteRouteWithChildren
   ApiAppReleaseRoute: typeof ApiAppReleaseRoute
   ApiBooksRoute: typeof ApiBooksRouteWithChildren
   ApiCaptchaRoute: typeof ApiCaptchaRoute
@@ -982,6 +1103,13 @@ declare module '@tanstack/react-router' {
       path: '/api/books'
       fullPath: '/api/books'
       preLoaderRoute: typeof ApiBooksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/calendar': {
+      id: '/api/calendar'
+      path: '/api/calendar'
+      fullPath: '/api/calendar'
+      preLoaderRoute: typeof ApiCalendarRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/captcha': {
@@ -1222,6 +1350,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBooksIdRouteImport
       parentRoute: typeof ApiBooksRoute
     }
+    '/api/calendar/$id': {
+      id: '/api/calendar/$id'
+      path: '/$id'
+      fullPath: '/api/calendar/$id'
+      preLoaderRoute: typeof ApiCalendarIdRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
+    '/api/calendar/cron': {
+      id: '/api/calendar/cron'
+      path: '/cron'
+      fullPath: '/api/calendar/cron'
+      preLoaderRoute: typeof ApiCalendarCronRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
+    '/api/calendar/due': {
+      id: '/api/calendar/due'
+      path: '/due'
+      fullPath: '/api/calendar/due'
+      preLoaderRoute: typeof ApiCalendarDueRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
+    '/api/calendar/events': {
+      id: '/api/calendar/events'
+      path: '/events'
+      fullPath: '/api/calendar/events'
+      preLoaderRoute: typeof ApiCalendarEventsRouteRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
+    '/api/calendar/free': {
+      id: '/api/calendar/free'
+      path: '/free'
+      fullPath: '/api/calendar/free'
+      preLoaderRoute: typeof ApiCalendarFreeRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
+    '/api/calendar/parse': {
+      id: '/api/calendar/parse'
+      path: '/parse'
+      fullPath: '/api/calendar/parse'
+      preLoaderRoute: typeof ApiCalendarParseRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
+    '/api/calendar/prefs': {
+      id: '/api/calendar/prefs'
+      path: '/prefs'
+      fullPath: '/api/calendar/prefs'
+      preLoaderRoute: typeof ApiCalendarPrefsRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
+    '/api/calendar/search': {
+      id: '/api/calendar/search'
+      path: '/search'
+      fullPath: '/api/calendar/search'
+      preLoaderRoute: typeof ApiCalendarSearchRouteImport
+      parentRoute: typeof ApiCalendarRouteRoute
+    }
     '/api/circle-file/$id': {
       id: '/api/circle-file/$id'
       path: '/$id'
@@ -1383,6 +1567,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBooksSharedTokenRouteImport
       parentRoute: typeof ApiBooksRoute
     }
+    '/api/calendar/events/$id': {
+      id: '/api/calendar/events/$id'
+      path: '/$id'
+      fullPath: '/api/calendar/events/$id'
+      preLoaderRoute: typeof ApiCalendarEventsIdRouteImport
+      parentRoute: typeof ApiCalendarEventsRouteRoute
+    }
     '/api/d/$token/$id': {
       id: '/api/d/$token/$id'
       path: '/api/d/$token/$id'
@@ -1427,6 +1618,45 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface ApiCalendarEventsRouteRouteChildren {
+  ApiCalendarEventsIdRoute: typeof ApiCalendarEventsIdRoute
+}
+
+const ApiCalendarEventsRouteRouteChildren: ApiCalendarEventsRouteRouteChildren =
+  {
+    ApiCalendarEventsIdRoute: ApiCalendarEventsIdRoute,
+  }
+
+const ApiCalendarEventsRouteRouteWithChildren =
+  ApiCalendarEventsRouteRoute._addFileChildren(
+    ApiCalendarEventsRouteRouteChildren,
+  )
+
+interface ApiCalendarRouteRouteChildren {
+  ApiCalendarEventsRouteRoute: typeof ApiCalendarEventsRouteRouteWithChildren
+  ApiCalendarIdRoute: typeof ApiCalendarIdRoute
+  ApiCalendarCronRoute: typeof ApiCalendarCronRoute
+  ApiCalendarDueRoute: typeof ApiCalendarDueRoute
+  ApiCalendarFreeRoute: typeof ApiCalendarFreeRoute
+  ApiCalendarParseRoute: typeof ApiCalendarParseRoute
+  ApiCalendarPrefsRoute: typeof ApiCalendarPrefsRoute
+  ApiCalendarSearchRoute: typeof ApiCalendarSearchRoute
+}
+
+const ApiCalendarRouteRouteChildren: ApiCalendarRouteRouteChildren = {
+  ApiCalendarEventsRouteRoute: ApiCalendarEventsRouteRouteWithChildren,
+  ApiCalendarIdRoute: ApiCalendarIdRoute,
+  ApiCalendarCronRoute: ApiCalendarCronRoute,
+  ApiCalendarDueRoute: ApiCalendarDueRoute,
+  ApiCalendarFreeRoute: ApiCalendarFreeRoute,
+  ApiCalendarParseRoute: ApiCalendarParseRoute,
+  ApiCalendarPrefsRoute: ApiCalendarPrefsRoute,
+  ApiCalendarSearchRoute: ApiCalendarSearchRoute,
+}
+
+const ApiCalendarRouteRouteWithChildren =
+  ApiCalendarRouteRoute._addFileChildren(ApiCalendarRouteRouteChildren)
 
 interface ApiBooksRouteChildren {
   ApiBooksIdRoute: typeof ApiBooksIdRoute
@@ -1532,6 +1762,7 @@ const rootRouteChildren: RootRouteChildren = {
   DiskRoute: DiskRoute,
   LoginRoute: LoginRoute,
   UpdatesRoute: UpdatesRoute,
+  ApiCalendarRouteRoute: ApiCalendarRouteRouteWithChildren,
   ApiAppReleaseRoute: ApiAppReleaseRoute,
   ApiBooksRoute: ApiBooksRouteWithChildren,
   ApiCaptchaRoute: ApiCaptchaRoute,
@@ -1594,7 +1825,9 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
+
 import type { createStart } from '@tanstack/react-start'
+
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true

@@ -56,12 +56,16 @@ export function App({
   openChat,
   openRoom,
   startNew,
+  svc,
+  eventId,
 }: {
   initialModels?: { name: string; displayName: string; icon?: string }[];
   place?: CircleTab;
   openChat?: string;
   openRoom?: string;
   startNew?: boolean;
+  svc?: string;
+  eventId?: string;
 }) {
   const navigate = useNavigate();
   const lang = useLang();
@@ -715,7 +719,7 @@ export function App({
           <button type="button" className="fixed inset-0 z-30 bg-black/45 xl:hidden" aria-label={ui(lang, "closeCircle")} data-site-nav="circle-scrim" onClick={closeCircle} />
           <aside role="dialog" aria-modal="true" aria-label={ui(lang, "circle")} data-circle className="fixed inset-0 z-40 flex w-full flex-col bg-elev md:inset-y-0 md:right-0 md:left-auto md:w-[min(100%,52rem)] md:border-l md:border-line md:shadow-[var(--shadow)] xl:inset-0 xl:w-full xl:border-0">
             <Suspense fallback={<div className="grid flex-1 place-items-center"><span className="vv-loader" /></div>}>
-              <Circle onClose={closeCircle} tab={place} onTab={openPlace} theme={studio.theme} onTheme={studio.setTheme} roomId={openRoom} />
+              <Circle onClose={closeCircle} tab={place} onTab={openPlace} theme={studio.theme} onTheme={studio.setTheme} roomId={openRoom} svc={svc} eventId={eventId} />
             </Suspense>
           </aside>
         </>

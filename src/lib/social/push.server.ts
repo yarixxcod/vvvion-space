@@ -147,7 +147,7 @@ async function deleteToken(token: string) {
 export async function getPushSettings(userId: string): Promise<PushSettings> {
   const sql = await getSql();
   const rows = await sql<PushSettings>`
-    select messages, ai, subs, money, security, system, preview,
+    select messages, ai, subs, money, security, system, calendar, preview,
            quiet_from as "quietFrom", quiet_to as "quietTo"
     from push_settings where user_id = ${userId}
   `;
@@ -158,9 +158,9 @@ export async function savePushSettings(userId: string, next: PushSettings) {
   const sql = await getSql();
   const saved = settingsFrom(next);
   await sql`
-    insert into push_settings (user_id, messages, ai, subs, money, security, system, preview, quiet_from, quiet_to)
+    insert into push_settings (user_id, messages, ai, subs, money, security, system, calendar, preview, quiet_from, quiet_to)
     values (
-      ${userId}, ${saved.messages}, ${saved.ai}, ${saved.subs}, ${saved.money}, true, ${saved.system}, ${saved.preview},
+      ${userId}, ${saved.messages}, ${saved.ai}, ${saved.subs}, ${saved.money}, true, ${saved.system}, ${saved.calendar}, ${saved.preview},
       ${saved.quietFrom}, ${saved.quietTo}
     )
     on conflict (user_id) do update
@@ -170,6 +170,7 @@ export async function savePushSettings(userId: string, next: PushSettings) {
           money = ${saved.money},
           security = true,
           system = ${saved.system},
+          calendar = ${saved.calendar},
           preview = ${saved.preview},
           quiet_from = ${saved.quietFrom},
           quiet_to = ${saved.quietTo}
@@ -269,11 +270,12 @@ export async function sendPush(
     kind?: string;
     actions?: { title: string; url: string }[];
   },
+  options?: { ignoreQuiet?: boolean },
 ) {
   if (!validPushPath(payload.url)) return;
   const settings = await getPushSettings(userId);
   if (kind !== "security" && !settings[kind]) return;
-  if (kind !== "security" && inQuietHours(settings)) return;
+  if (kind !== "security" && !options?.ignoreQuiet && inQuietHours(settings)) return;
   const account = await serviceAccount();
   const project = process.env.FIREBASE_PROJECT_ID?.trim() || account?.project_id || "";
   if (!account || !project) {

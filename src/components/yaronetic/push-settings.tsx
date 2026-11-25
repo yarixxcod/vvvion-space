@@ -19,6 +19,7 @@ type PushSettings = {
   money: boolean;
   security: boolean;
   system: boolean;
+  calendar: boolean;
   preview: boolean;
   quietFrom: number;
   quietTo: number;
@@ -31,6 +32,7 @@ const DEFAULTS: PushSettings = {
   money: true,
   security: true,
   system: false,
+  calendar: true,
   preview: false,
   quietFrom: 23,
   quietTo: 8,
@@ -50,6 +52,7 @@ function readSettings(data: Partial<PushSettings>): PushSettings {
     money: data.money !== false,
     security: true,
     system: data.system === true,
+    calendar: data.calendar !== false,
     preview: data.preview === true,
     quietFrom: hour(data.quietFrom, 23),
     quietTo: hour(data.quietTo, 8),
@@ -184,7 +187,7 @@ export function PushSettingsCard() {
     appAskNotifications();
   }
 
-  const rows: { key: "messages" | "ai" | "subs" | "money" | "system" | "preview"; label: string; hint: string }[] = [
+  const rows: { key: "messages" | "ai" | "subs" | "money" | "calendar" | "system" | "preview"; label: string; hint: string }[] = [
     {
       key: "messages",
       label: tx({ ru: "Сообщения", en: "Messages", kk: "Хабарламалар" }),
@@ -204,6 +207,11 @@ export function PushSettingsCard() {
       key: "money",
       label: tx({ ru: "Вубли и платежи", en: "Vubles and payments", kk: "Вубли және төлемдер" }),
       hint: tx({ ru: "Переводы и покупки", en: "Transfers and purchases", kk: "Аударымдар мен сатып алулар" }),
+    },
+    {
+      key: "calendar",
+      label: tx({ ru: "Календарь", en: "Calendar", kk: "Күнтізбе" }),
+      hint: tx({ ru: "Напоминания о встречах", en: "Event reminders", kk: "Кездесу еске салулары" }),
     },
     {
       key: "system",

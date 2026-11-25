@@ -8,6 +8,8 @@ import { modelProfile } from "@/lib/ai/model-profile";
 import type { SearchSummary } from "@/lib/ai/search-types";
 import { isAboutUser, memoryNote } from "@/lib/ai/memory";
 import { prepareDiskTools } from "@/lib/ai/disk-tools.server";
+import { calendarToolSchemas } from "@/lib/calendar/tools";
+import { invokeCalendarTool } from "@/lib/calendar/http.server";
 import { mcpUrlsOf, prepareMcp } from "@/lib/ai/mcp.server";
 import { isBlockedHost, publicFetch } from "@/lib/security/net-guard";
 import { ownedPersonaPrompt } from "@/lib/social/personas";
@@ -1166,6 +1168,7 @@ export async function handleChat(request: Request): Promise<Response> {
           actorUser && agent.image && !aboutUser ? "list_image_models, generate_image" : "",
           actorUser && agent.files && !aboutUser ? "my_files, read_my_file, save_files, create_my_folder, write_my_file" : "",
           memoryOn ? "memory_list, memory_save, memory_forget" : "",
+          actorUser && !aboutUser ? "calendar_list, calendar_search, calendar_create, calendar_update, calendar_delete, calendar_free" : "",
           mcpUrlsOf(body.mcp).length ? "mcp" : "",
         ].filter(Boolean).join("; ") || "нет";
         const builtPrompt = buildSystemPrompt({
@@ -1184,7 +1187,8 @@ export async function handleChat(request: Request): Promise<Response> {
         const wantDisk = Boolean(actorUser && agent.files) && !aboutUser;
         const wantWebTools = agent.web && !aboutUser;
         const wantImageTool = Boolean(actorUser && agent.image) && !aboutUser;
-		if (mcpUrls.length || wantDisk || wantWebTools || wantImageTool || memoryOn) {
+        const wantCalendar = Boolean(actorUser) && !aboutUser;
+		if (mcpUrls.length || wantDisk || wantWebTools || wantImageTool || memoryOn || wantCalendar) {
 			try {
 				const pendingImages: ChatPart[] = [];
                 const userText = contentToText([...messages].reverse().find(item => item.role === "user")?.content);
@@ -1244,7 +1248,15 @@ export async function handleChat(request: Request): Promise<Response> {
                     }
                   },
                 } : null;
-                const packs = [remote, local, web, imageTool, memoryTool].filter(Boolean) as Array<{ tools: Array<{ function: { name: string } }>; invoke: (name: string, args: unknown) => Promise<string> }>;
+                const calendarPack = (() => {
+                  if (!wantCalendar || !actorUser) return null;
+                  const userId = actorUser;
+                  return {
+                    tools: calendarToolSchemas(),
+                    invoke: (name: string, args: unknown) => invokeCalendarTool(userId, name, args),
+                  };
+                })();
+                const packs = [remote, local, web, imageTool, memoryTool, calendarPack].filter(Boolean) as Array<{ tools: Array<{ function: { name: string } }>; invoke: (name: string, args: unknown) => Promise<string> }>;
                 const pack = packs.length ? {
                   tools: packs.flatMap(item => item.tools),
                   invoke: (name: string, args: unknown) => {

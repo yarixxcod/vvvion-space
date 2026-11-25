@@ -22,13 +22,14 @@ function topupId(value: unknown) {
 }
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): { place?: CircleTab; lang?: Lang; chat?: string; room?: string; new?: boolean; topup?: string; s?: string; book?: string; view?: "read" | "watch" | "mega" } => {
+  validateSearch: (search: Record<string, unknown>): { place?: CircleTab; lang?: Lang; chat?: string; room?: string; new?: boolean; topup?: string; s?: string; book?: string; view?: "read" | "watch" | "mega"; svc?: "calendar"; event?: string } => {
     const lang = normalizeLang(search.lang);
     const chat = cleanId(search.chat);
     const room = cleanId(search.room);
     const fresh = search.new === 1 || search.new === "1" || search.new === true || search.new === "true";
     const topup = topupId(search.topup);
     const section = typeof search.s === "string" && SHOP_SECTIONS.has(search.s) ? search.s : undefined;
+    const event = cleanId(search.event);
     return {
       place: isCircleTab(search.place) ? search.place : undefined,
       ...(lang ? { lang } : {}),
@@ -39,6 +40,8 @@ export const Route = createFileRoute("/")({
       ...(section ? { s: section } : {}),
       ...(cleanId(search.book) ? { book: cleanId(search.book) } : {}),
       ...(search.view === "read" || search.view === "watch" || search.view === "mega" ? { view: search.view } : {}),
+      ...(search.svc === "calendar" ? { svc: "calendar" as const } : {}),
+      ...(event ? { event } : {}),
     };
   },
   loaderDeps: () => ({}),
@@ -62,13 +65,13 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const models = Route.useLoaderData();
-  const { place, chat, room, new: startNew } = Route.useSearch();
+  const { place, chat, room, new: startNew, svc, event } = Route.useSearch();
   const lang = useLang();
   const seo = homeSeo(lang);
   const graph = place === "apps" ? appsJsonLd(lang) : websiteJsonLd(seo.description);
   return (
     <>
-      <App initialModels={models} place={place} openChat={chat} openRoom={room} startNew={startNew} />
+      <App initialModels={models} place={place} openChat={chat} openRoom={room} startNew={startNew} svc={svc} eventId={event} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }} />
     </>
   );

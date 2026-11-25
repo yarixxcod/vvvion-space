@@ -1,4 +1,4 @@
-export type PushKind = "messages" | "ai" | "subs" | "money" | "security" | "system";
+export type PushKind = "messages" | "ai" | "subs" | "money" | "security" | "system" | "calendar";
 export type PushSettings = {
   messages: boolean;
   ai: boolean;
@@ -6,6 +6,7 @@ export type PushSettings = {
   money: boolean;
   security: boolean;
   system: boolean;
+  calendar: boolean;
   preview: boolean;
   quietFrom: number;
   quietTo: number;
@@ -20,6 +21,7 @@ export const PUSH_DEFAULTS: PushSettings = {
   money: true,
   security: true,
   system: false,
+  calendar: true,
   preview: false,
   quietFrom: 23,
   quietTo: 8,
@@ -69,6 +71,7 @@ export function settingsFrom(row: Partial<PushSettings> | null | undefined): Pus
     money: flag(row?.money, true),
     security: true,
     system: flag(row?.system, false),
+    calendar: flag(row?.calendar, true),
     preview: flag(row?.preview, false),
     quietFrom: hour(row?.quietFrom, 23),
     quietTo: hour(row?.quietTo, 8),
@@ -87,11 +90,11 @@ export function inQuietHours(settings: Pick<PushSettings, "quietFrom" | "quietTo
 }
 
 export function pushTtl(kind: PushKind) {
-  return kind === "messages" || kind === "ai" ? "3600s" : "86400s";
+  return kind === "messages" || kind === "ai" || kind === "calendar" ? "3600s" : "86400s";
 }
 
 export function pushPriority(kind: PushKind) {
-  return kind === "messages" || kind === "security" || kind === "money" ? "HIGH" : "NORMAL";
+  return kind === "messages" || kind === "security" || kind === "money" || kind === "calendar" ? "HIGH" : "NORMAL";
 }
 
 /** 3-day window is (now+2d, now+3d]; 1-day window is (now, now+1d]. */

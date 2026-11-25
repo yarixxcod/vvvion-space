@@ -54,6 +54,8 @@ export function Circle({
   theme = "dark",
   onTheme,
   roomId = null,
+  svc = null,
+  eventId = null,
 }: {
   onClose?: () => void;
   tab?: CircleTab;
@@ -61,6 +63,8 @@ export function Circle({
   theme?: "dark" | "light";
   onTheme?: (theme: "dark" | "light") => void;
   roomId?: string | null;
+  svc?: string | null;
+  eventId?: string | null;
 }) {
   const { user, isPending } = useCurrentUserState();
   const [ready, setReady] = useState(false);
@@ -80,7 +84,7 @@ export function Circle({
     return <CircleGate onClose={onClose} />;
   }
 
-  return <Home onClose={onClose} initialTab={initialTab} onTab={onTab} theme={theme} onTheme={onTheme} roomId={roomId} />;
+  return <Home onClose={onClose} initialTab={initialTab} onTab={onTab} theme={theme} onTheme={onTheme} roomId={roomId} svc={svc} eventId={eventId} />;
 }
 
 function Home({
@@ -90,6 +94,8 @@ function Home({
   theme,
   onTheme,
   roomId,
+  svc,
+  eventId,
 }: {
   onClose?: () => void;
   initialTab: CircleTab;
@@ -97,6 +103,8 @@ function Home({
   theme: "dark" | "light";
   onTheme?: (theme: "dark" | "light") => void;
   roomId?: string | null;
+  svc?: string | null;
+  eventId?: string | null;
 }) {
   const lang = useLang();
   const guest = !useCurrentUserState().user;
@@ -108,6 +116,7 @@ function Home({
   const [askAuth, setAskAuth] = useState(false);
   const [keys, setKeys] = useState(false);
   const [nested, setNested] = useState(false);
+  const [calendarWide, setCalendarWide] = useState(false);
   const armed = useRef(0);
   const tabsRef = useRef<HTMLDivElement>(null);
   const mobileNavRef = useRef<HTMLElement>(null);
@@ -277,7 +286,7 @@ function Home({
   const title = ui(lang, titleKey);
   const order: CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop", "apps"];
   const column =
-    tab === "feed" ? "max-w-[42rem]" : tab === "bank" || tab === "apps" ? "max-w-6xl" : tab === "disk" || tab === "shop" ? "max-w-[45rem]" : tab === "services" || tab === "play" ? "max-w-[60rem]" : "max-w-none";
+    tab === "feed" ? "max-w-[42rem]" : tab === "bank" || tab === "apps" ? "max-w-6xl" : tab === "disk" || tab === "shop" ? "max-w-[45rem]" : tab === "services" ? (calendarWide ? "max-w-[80rem]" : "max-w-[60rem]") : tab === "play" ? "max-w-[60rem]" : "max-w-none";
   const mainTabs: CircleTab[] = ["chat", "feed", "play", "services"];
   const moreTabs: CircleTab[] = admin ? ["disk", "bank", "shop", "apps", "admin"] : ["disk", "bank", "shop", "apps"];
 
@@ -362,7 +371,7 @@ function Home({
             ) : tab === "play" ? (
               <Library />
             ) : tab === "services" ? (
-              <Services />
+              <Services initial={svc === "calendar" ? "calendar" : null} eventId={eventId || undefined} onWide={setCalendarWide} />
             ) : tab === "disk" ? (
               <Disk />
             ) : tab === "bank" ? (

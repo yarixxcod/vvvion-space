@@ -15,6 +15,7 @@ import { ApiService } from "@/components/yaronetic/api-service";
 import { getApiEntry } from "@/lib/api/desk";
 import { SpeedTest } from "@/components/yaronetic/speed-test";
 import { Grabber } from "@/components/yaronetic/grabber";
+import { CalendarDesk } from "@/components/yaronetic/calendar";
 import { useTx } from "@/lib/lang";
 import { loadError } from "@/lib/load-error";
 
@@ -59,12 +60,27 @@ const FX_COIN: Record<FxCode, { paper: string; ink: string }> = {
   BYN: { paper: "#f3e4e1", ink: "#1c1b19" },
 };
 
-export function Services() {
+type ServiceView = "weather" | "news" | "fx" | "vpn" | "grab" | "speed" | "api" | "calendar";
+
+export function Services({
+  initial = null,
+  eventId,
+  onWide,
+}: {
+  initial?: ServiceView | null;
+  eventId?: string;
+  onWide?: (wide: boolean) => void;
+}) {
   const tx = useTx();
-  const [view, setView] = useState<"weather" | "news" | "fx" | "vpn" | "grab" | "speed" | "api" | null>(
-    null,
-  );
+  const [view, setView] = useState<ServiceView | null>(initial);
   const [apiOn, setApiOn] = useState(false);
+  useEffect(() => {
+    if (initial === "calendar") setView("calendar");
+  }, [initial]);
+  useEffect(() => {
+    onWide?.(view === "calendar");
+    return () => onWide?.(false);
+  }, [onWide, view]);
   useEffect(() => {
     void getApiEntry().then((row) => setApiOn(row.visible)).catch(() => setApiOn(false));
   }, []);
@@ -82,7 +98,13 @@ export function Services() {
   if (view === "speed") return <SpeedTest onBack={() => setView(null)} />;
   if (view === "grab") return <Grabber onBack={() => setView(null)} />;
   if (view === "api") return <ApiService onBack={() => setView(null)} />;
+  if (view === "calendar") return <CalendarDesk eventId={eventId} />;
   const tiles = [
+    {
+      id: "calendar",
+      title: tx({ ru: "Календарь", en: "Calendar", kk: "Күнтізбе" }),
+      desc: tx({ ru: "Встречи и напоминания", en: "Events and reminders", kk: "Кездесу мен еске салу" }),
+    },
     {
       id: "weather",
       title: tx({ ru: "Погода", en: "Weather", kk: "Ауа райы" }),
@@ -166,7 +188,7 @@ export function Services() {
               draggable={false}
             />
             <span className="service-tile-shade absolute inset-0" />
-            {tile.id === "speed" ? (
+            {tile.id === "speed" || tile.id === "calendar" ? (
               <span className="absolute top-2.5 left-2.5 rounded-full bg-[#d6f4e9] px-2 py-0.5 text-[10px] font-semibold text-[#153b2e]">
                 {tx({ ru: "НОВОЕ", en: "NEW", kk: "ЖАҢА" })}
               </span>

@@ -633,9 +633,9 @@ const PLACES: Record<string, Record<Lang, PlaceCopy>> = {
     kk: { name: "Ойын-сауық", title: "Кітап, бейне және ойын — vvvion.space", description: "vvvion.space ішіндегі кітап, бейне және ойын.", lead: "Сөреде EPUB, FB2, TXT және PDF. Ойнатқыш сілтемедегі бейнені көрсетеді. Ойында тапсырыс вубльге өтеді." },
   },
   services: {
-    ru: { name: "Сервисы", title: "Погода, новости, курсы и VPN — vvvion.space", description: "Погода, новости, курсы и подписка VPN внутри vvvion.space.", lead: "Погода, новости, курсы и VPN." },
-    en: { name: "Services", title: "Weather, news, rates and VPN — vvvion.space", description: "Weather, news, rates and a VPN plan inside vvvion.space.", lead: "Weather, news, rates and VPN." },
-    kk: { name: "Қызметтер", title: "Ауа райы, жаңалық, бағам және VPN — vvvion.space", description: "vvvion.space ішіндегі ауа райы, жаңалық, бағам және VPN жазылымы.", lead: "Ауа райы, жаңалық, бағам және VPN." },
+    ru: { name: "Сервисы", title: "Погода, новости, курсы, VPN и календарь — vvvion.space", description: "Погода, новости, курсы, VPN и личный календарь внутри vvvion.space.", lead: "Погода, новости, курсы, VPN и календарь." },
+    en: { name: "Services", title: "Weather, news, rates, VPN and calendar — vvvion.space", description: "Weather, news, rates, a VPN plan and a personal calendar inside vvvion.space.", lead: "Weather, news, rates, VPN and a calendar." },
+    kk: { name: "Қызметтер", title: "Ауа райы, жаңалық, бағам, VPN және күнтізбе — vvvion.space", description: "vvvion.space ішіндегі ауа райы, жаңалық, бағам, VPN және жеке күнтізбе.", lead: "Ауа райы, жаңалық, бағам, VPN және күнтізбе." },
   },
   disk: {
     ru: { name: "Диск", title: "Диск — картинки и голосовые — vvvion.space", description: "Личный диск vvvion.space: картинки, голосовые, общая ссылка и архив.", lead: "Сюда сами складываются рисунки и голос из чата. Место можно докупить, архив скачивается целиком." },

@@ -1,7 +1,7 @@
 import { getBearerToken } from "@/lib/auth/client";
 import { publicNotifyIcon } from "@/lib/social/push-policy";
 
-type NotifyChannel = "messages" | "ai" | "subs" | "player" | "money" | "security" | "system";
+type NotifyChannel = "messages" | "ai" | "subs" | "player" | "money" | "security" | "system" | "calendar";
 
 type NotifyAction = { title: string; url: string };
 type NotifyKind = "ai_ready" | "ai_fail" | "message" | "info";

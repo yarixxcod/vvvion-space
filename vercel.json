@@ -3,6 +3,7 @@
   "regions": ["fra1"],
   "crons": [
     { "path": "/api/push/cron", "schedule": "0 3 * * *" },
+    { "path": "/api/calendar/cron", "schedule": "* * * * *" },
     { "path": "/api/cron/cryptopay-reconcile", "schedule": "0 4 * * *" }
   ],
   "headers": [

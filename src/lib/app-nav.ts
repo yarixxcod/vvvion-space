@@ -1,4 +1,11 @@
-export type AppSearch = { place?: CircleTab; chat?: string; room?: string; lang?: "ru" | "en" | "kk" };
+export type AppSearch = {
+  place?: CircleTab;
+  chat?: string;
+  room?: string;
+  lang?: "ru" | "en" | "kk";
+  svc?: "calendar";
+  event?: string;
+};
 
 const ID = /^[A-Za-z0-9_-]{8,80}$/;
 const TABS = ["chat", "feed", "play", "services", "disk", "bank", "shop", "apps", "admin"] as const;
@@ -31,7 +38,9 @@ export function parseSitePath(input: string): string | null {
 export function destinationFor(input: string): { to: "/"; search: AppSearch } | null {
   const path = parseSitePath(input);
   if (!path) return null;
-  const bare = path.split("?")[0]?.replace(/\/+$/, "") || "/";
+  const [bareRaw, query = ""] = path.split("?");
+  const bare = bareRaw?.replace(/\/+$/, "") || "/";
+  const params = new URLSearchParams(query);
   const chat = /^\/chat\/([^/]+)$/.exec(bare);
   if (chat?.[1] && ID.test(decodeURIComponent(chat[1]))) {
     return { to: "/", search: { chat: decodeURIComponent(chat[1]) } };
@@ -40,11 +49,21 @@ export function destinationFor(input: string): { to: "/"; search: AppSearch } | 
   if (message?.[1] && ID.test(decodeURIComponent(message[1]))) {
     return { to: "/", search: { place: "chat", room: decodeURIComponent(message[1]) } };
   }
+  const search: AppSearch = {};
+  const event = params.get("event") || "";
+  if (ID.test(event)) search.event = event;
+  if (params.get("svc") === "calendar") search.svc = "calendar";
   if (bare === "/messages" || bare === "/c/messages") return { to: "/", search: { place: "chat" } };
   if (bare === "/disk" || bare === "/c/disk") return { to: "/", search: { place: "disk" } };
   if (bare === "/shop" || bare === "/c/shop") return { to: "/", search: { place: "shop" } };
   const section = /^\/c\/([^/]+)$/.exec(bare);
-  if (section?.[1] && isTab(section[1])) return { to: "/", search: { place: section[1] } };
-  if (bare === "/" || bare === "") return { to: "/", search: {} };
+  if (section?.[1] && isTab(section[1])) {
+    return { to: "/", search: { place: section[1], ...(search.svc ? { svc: search.svc } : {}), ...(search.event ? { event: search.event } : {}) } };
+  }
+  if (bare === "/" || bare === "") {
+    const place = params.get("place") || "";
+    if (isTab(place)) search.place = place;
+    return { to: "/", search };
+  }
   return null;
 }

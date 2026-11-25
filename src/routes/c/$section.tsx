@@ -9,9 +9,14 @@ import { PLACES, absoluteUrl, placeBySlug, placePath } from "@/lib/places";
 import { appsJsonLd, seoHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/c/$section")({
-  validateSearch: (search: Record<string, unknown>): { lang?: Lang } => {
+  validateSearch: (search: Record<string, unknown>): { lang?: Lang; svc?: "calendar"; event?: string } => {
     const lang = normalizeLang(search.lang);
-    return lang ? { lang } : {};
+    const event = typeof search.event === "string" && /^[A-Za-z0-9_-]{8,80}$/.test(search.event.trim()) ? search.event.trim() : undefined;
+    return {
+      ...(lang ? { lang } : {}),
+      ...(search.svc === "calendar" ? { svc: "calendar" } : {}),
+      ...(event ? { event } : {}),
+    };
   },
   loader: ({ params }) => {
     const place = placeBySlug(params.section);
@@ -32,6 +37,7 @@ export const Route = createFileRoute("/c/$section")({
 function SectionPage() {
   const place = Route.useLoaderData();
   const { user, isPending } = useCurrentUserState();
+  const { svc, event } = Route.useSearch();
   const [ready, setReady] = useState(false);
   const lang = useLang();
   const copy = placeCopy(place.slug, lang) ?? {
@@ -44,7 +50,7 @@ function SectionPage() {
   if (place.slug === "apps" || (ready && !isPending && user)) {
     return (
       <div className="h-dvh">
-        <Circle tab={place.tab} />
+        <Circle tab={place.tab} svc={svc} eventId={event} />
       </div>
     );
   }
