@@ -67,7 +67,7 @@ async function complete(request: Request, gate: GuardOk, built: Built, present: 
   const timer = clock(request, built.stream ? 240_000 : 90_000);
   try {
     if (!built.stream) {
-      const result = await runUpstream(built.model, built.payload, timer.signal);
+      const result = await runUpstream(built.model, built.payload, timer.signal, gate.userId);
       if (!result.ok) return fail(gate, result.status, result.code, result.message, built.model);
       const text = await result.response.text();
       let parsed: unknown;
@@ -108,7 +108,7 @@ async function complete(request: Request, gate: GuardOk, built: Built, present: 
           controller.enqueue(enc.encode(`event: error\ndata: ${JSON.stringify({ type: "error", error: { type: "api_error", message } })}\n\n`));
         };
         try {
-          const result = await runUpstream(built.model, built.payload, timer.signal);
+          const result = await runUpstream(built.model, built.payload, timer.signal, gate.userId);
           if (!result.ok || !result.response.body) {
             pushError(result.ok ? "The model returned an error." : result.message);
             await gate.finish({ status: result.ok ? 502 : result.status, model: built.model });

@@ -1,3 +1,4 @@
+import { getPremium } from "@/lib/social/premium";
 import { VOICE_PROMPT } from "@/lib/ai/voice-turn";
 import {stickerMeaning} from "@/lib/stickers";
 import { peelQuestionLike } from "@/lib/ai/question-like";
@@ -45,7 +46,7 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 const LEGACY_NAME = "Yaronetic";
 
-function seedBuiltin(rows?: { name: string; displayName: string; icon?: string }[]): Provider {
+function seedBuiltin(rows?: { name: string; displayName: string; icon?: string; premiumOnly?: boolean }[]): Provider {
   const base = builtinProvider();
   if (!rows?.length) return base;
   const models = rows.map((row) => row.name);
@@ -258,8 +259,19 @@ async function postStop(chatId: string) {
   });
 }
 
-export function useStudio(initialModels?: { name: string; displayName: string; icon?: string }[]) {
+export function useStudio(initialModels?: { name: string; displayName: string; icon?: string; premiumOnly?: boolean }[]) {
   const { user, isPending } = useCurrentUserState();
+  const premiumUserId = user?.id;
+  const [premiumModels, setPremiumModels] = useState<string[]>(() => (initialModels ?? []).filter(m=>m.premiumOnly).map(m=>m.name));
+  const [premiumActive, setPremiumActive] = useState(false);
+  useEffect(() => {
+    let dead = false;
+    setPremiumActive(false);
+    if (!premiumUserId) return;
+    const refresh = () => { if (document.hidden) return; void getPremium().then(value => { if(!dead) setPremiumActive(value.active); }).catch(() => { if(!dead) setPremiumActive(false); }); };
+    refresh(); const timer=window.setInterval(refresh,60_000); window.addEventListener("focus",refresh);
+    return () => { dead=true; window.clearInterval(timer); window.removeEventListener("focus",refresh); };
+  }, [premiumUserId]);
   const [ready, setReady] = useState(false);
   const [theme, setThemeState] = useState<ThemeMode>("dark");
   const [paper, setPaperState] = useState<PaperId>("plain");
@@ -450,9 +462,10 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
-    const apply = (rows: { name: string; displayName: string; prompt?: string; icon?: string }[]) => {
+    const apply = (rows: { name: string; displayName: string; prompt?: string; icon?: string; premiumOnly?: boolean }[]) => {
       if (cancelled || rows.length === 0) return;
       const models = rows.map((row) => row.name);
+      setPremiumModels(rows.filter(row=>row.premiumOnly).map(row=>row.name));
       setModelLabels(Object.fromEntries(rows.map((row) => [row.name, row.displayName || row.name])));
       setModelIcons(Object.fromEntries(rows.map((row) => [row.name, row.icon || ""])));
       setModelPrompts(Object.fromEntries(rows.map((row) => [row.name, (row.prompt || "").trim()])));
@@ -1610,6 +1623,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     setAttachments,
     modelLabels,
     modelIcons,
+    premiumModels,
+    premiumActive,
     modelPrompts,
     imageModels,
     send,

@@ -1,14 +1,23 @@
+import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Crown, LockKeyhole } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/haptic";
 import { pushBackLayer } from "@/lib/app-back";
 
-export type ModelOption = { value: string; label: string; icon?: string; hint?: string };
+export type ModelOption = {
+  value: string;
+  label: string;
+  icon?: string;
+  hint?: string;
+  premium?: boolean;
+  locked?: boolean;
+};
 
 function modelIcon(icon?: string) {
-  if (!icon || icon.length > 80_000 || !/^data:image\/(png|jpeg|webp);base64,/.test(icon)) return "";
+  if (!icon || icon.length > 80_000 || !/^data:image\/(png|jpeg|webp);base64,/.test(icon))
+    return "";
   return icon;
 }
 
@@ -18,12 +27,14 @@ export function ModelMenu({
   options,
   onChange,
   plain = false,
+  onLocked,
 }: {
   id: string;
   value: string;
   options: ModelOption[];
   onChange: (value: string) => void;
   plain?: boolean;
+  onLocked?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [narrow, setNarrow] = useState(false);
@@ -67,8 +78,12 @@ export function ModelMenu({
       }
     };
     window.addEventListener("keydown", onKey);
-    const search = listRef.current?.querySelector<HTMLInputElement>("input[aria-label='Найти модель']");
-    const picked = listRef.current?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ?? listRef.current?.querySelector<HTMLElement>("[role='option']");
+    const search = listRef.current?.querySelector<HTMLInputElement>(
+      "input[aria-label='Найти модель']",
+    );
+    const picked =
+      listRef.current?.querySelector<HTMLElement>("[role='option'][aria-selected='true']") ??
+      listRef.current?.querySelector<HTMLElement>("[role='option']");
     (search ?? picked)?.focus();
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
@@ -80,7 +95,12 @@ export function ModelMenu({
 
   if (!current) {
     return (
-      <button id={id} type="button" disabled className="h-9 max-w-[70%] rounded-xl border border-line bg-elev px-3 text-sm text-faint">
+      <button
+        id={id}
+        type="button"
+        disabled
+        className="h-9 max-w-[70%] rounded-xl border border-line bg-elev px-3 text-sm text-faint"
+      >
         Нет модели
       </button>
     );
@@ -94,6 +114,12 @@ export function ModelMenu({
   }
 
   function pick(next: string) {
+    if (options.find((item) => item.value === next)?.locked) {
+      setOpen(false);
+      toast("Доступно с подпиской VVVion Premium");
+      onLocked?.();
+      return;
+    }
     if (next !== value) haptic("selection");
     onChange(next);
     setOpen(false);
@@ -102,11 +128,20 @@ export function ModelMenu({
   const shown = options.filter((item) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
-    return item.label.toLowerCase().includes(q) || item.value.toLowerCase().includes(q);
+    return (
+      item.label.toLowerCase().includes(q) ||
+      item.value.toLowerCase().includes(q) ||
+      Boolean(item.premium && "vvvion premium премиум".includes(q))
+    );
   });
 
   const list = (
-    <div ref={listRef} className={narrow ? "max-h-[70dvh] overflow-y-auto" : ""} role="listbox" aria-labelledby={id}>
+    <div
+      ref={listRef}
+      className={narrow ? "max-h-[70dvh] overflow-y-auto" : ""}
+      role="listbox"
+      aria-labelledby={id}
+    >
       {options.length > 8 ? (
         <input
           value={query}
@@ -123,7 +158,9 @@ export function ModelMenu({
         />
       ) : null}
       {shown.length === 0 ? (
-        <p className="px-3 py-4 text-center text-sm text-muted" role="status">Модели не найдены</p>
+        <p className="px-3 py-4 text-center text-sm text-muted" role="status">
+          Модели не найдены
+        </p>
       ) : null}
       {shown.map((item) => {
         const selected = item.value === current.value;
@@ -133,9 +170,13 @@ export function ModelMenu({
             type="button"
             role="option"
             aria-selected={selected}
+            aria-label={`${item.label}${item.premium ? " · VVVion Premium" : ""}${item.locked ? " · нужна подписка" : ""}`}
+            data-premium={item.premium || undefined}
             className={cn(
               "press flex w-full items-center gap-2 rounded-xl px-3 text-left text-sm",
               narrow ? "min-h-14" : "min-h-10",
+              item.premium &&
+                "border border-accent/25 bg-gradient-to-r from-accent/15 to-transparent",
               selected ? "bg-subtle" : "hover:bg-subtle",
             )}
             onClick={() => pick(item.value)}
@@ -163,11 +204,26 @@ export function ModelMenu({
               }
             }}
           >
-            {modelIcon(item.icon) ? <img src={modelIcon(item.icon)} alt="" className="size-6 shrink-0 rounded object-cover" /> : null}
+            {modelIcon(item.icon) ? (
+              <img
+                src={modelIcon(item.icon)}
+                alt=""
+                className="size-6 shrink-0 rounded object-cover"
+              />
+            ) : null}
             <span className="min-w-0 flex-1">
               <span className="block truncate">{item.label}</span>
-              {item.hint ? <span className="block truncate text-xs text-muted">{item.hint}</span> : null}
+              {item.premium ? (
+                <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-accent">
+                  <Crown className="size-3" />
+                  VVVion Premium
+                </span>
+              ) : null}
+              {item.hint ? (
+                <span className="block truncate text-xs text-muted">{item.hint}</span>
+              ) : null}
             </span>
+            {item.locked ? <LockKeyhole className="size-4 shrink-0 text-accent" /> : null}
             {selected ? <Check className="size-4 shrink-0" /> : null}
           </button>
         );
@@ -184,7 +240,9 @@ export function ModelMenu({
         aria-expanded={open}
         className={cn(
           "press inline-flex w-full min-w-0 items-center gap-1.5 text-left text-sm",
-          plain ? "h-12 rounded-2xl px-2 hover:bg-subtle" : "rounded-xl border border-line bg-elev px-3",
+          plain
+            ? "h-12 rounded-2xl px-2 hover:bg-subtle"
+            : "rounded-xl border border-line bg-elev px-3",
           !plain && (narrow ? "min-h-14" : "h-10"),
         )}
         onClick={() => setOpen((value) => !value)}
@@ -196,20 +254,38 @@ export function ModelMenu({
         }}
       >
         <span className="inline-flex min-w-0 flex-1 items-center gap-2">
-          {modelIcon(current.icon) ? <img src={modelIcon(current.icon)} alt="" className="size-4 shrink-0 rounded object-cover" /> : null}
+          {modelIcon(current.icon) ? (
+            <img
+              src={modelIcon(current.icon)}
+              alt=""
+              className="size-4 shrink-0 rounded object-cover"
+            />
+          ) : null}
           <span className="min-w-0 flex-1 truncate">{current.label}</span>
         </span>
-        <ChevronDown className={cn("size-4 shrink-0 text-muted transition", open && "rotate-180")} />
+        {current.premium ? (
+          <Crown aria-label="VVVion Premium" className="size-4 shrink-0 text-accent" />
+        ) : null}
+        <ChevronDown
+          className={cn("size-4 shrink-0 text-muted transition", open && "rotate-180")}
+        />
       </button>
       {open && !narrow ? (
-        <div className="vv-enter absolute bottom-full left-0 z-30 mb-1 max-h-80 w-max min-w-[16rem] max-w-[80vw] overflow-y-auto rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]">
+        <div
+          style={{ background: "var(--elev)" }}
+          className="vv-enter absolute bottom-full left-0 z-30 mb-1 max-h-80 w-max min-w-[16rem] max-w-[80vw] overflow-y-auto rounded-2xl border border-line bg-elev p-1 shadow-[var(--shadow)]"
+        >
           {list}
         </div>
       ) : null}
       {open && narrow && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed inset-0 z-[80] flex items-end bg-black/45" onClick={() => setOpen(false)}>
+            <div
+              className="fixed inset-0 z-[80] flex items-end bg-black/45"
+              onClick={() => setOpen(false)}
+            >
               <div
+                style={{ background: "var(--elev)" }}
                 className="vv-enter w-full rounded-t-3xl border border-line bg-elev px-2 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[var(--shadow)]"
                 onClick={(event) => event.stopPropagation()}
               >

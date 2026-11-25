@@ -41,22 +41,24 @@ export async function assertAdmin(userId: string): Promise<Access> {
   return access;
 }
 
-/** Builtin chat: model must be in the shared catalog. Signed-in bans are rejected. */
-export const assertBuiltinChat = createServerOnlyFn(async (model: string): Promise<void> => {
+/** Explicit userId is used by Telegram; the web path resolves the verified session. */
+export async function assertModelEntitlement(model: string, userId: string | null) {
   const sql = await getSql();
-  const known = await sql<{ name: string }>`
-    select name from catalog_models where name = ${model}
-  `;
+  const known = await sql<{ name: string; premium_only: boolean }>`select name,premium_only from catalog_models where name=${model}`;
   if (!known.length) throw new Error("Этой модели больше нет");
-  try {
-    const { getSessionUser } = await import("@/lib/auth/verify.server");
-    const user = await getSessionUser();
-    if (!user) return;
-    const access = await loadAccess(user.id);
-    if (access.banned) throw new Error("Аккаунт заблокирован");
-  } catch (err) {
-    if (err instanceof Error && (err.message === "Аккаунт заблокирован" || err.message === "Этой модели больше нет")) {
-      throw err;
+  if (userId && (await loadAccess(userId)).banned) throw new Error("Аккаунт заблокирован");
+  if (known[0].premium_only) {
+    const { isPremium } = await import("@/lib/social/premium");
+    if (!userId || !(await isPremium(userId))) {
+      const { PREMIUM_MODEL_MESSAGE } = await import("@/lib/ai/model-access");
+      throw new Error(PREMIUM_MODEL_MESSAGE);
     }
   }
+}
+
+/** Fail closed: an unavailable subscription check never grants access. */
+export const assertBuiltinChat = createServerOnlyFn(async (model: string): Promise<void> => {
+  const { getSessionUser } = await import("@/lib/auth/verify.server");
+  const user = await getSessionUser();
+  await assertModelEntitlement(model, user?.id ?? null);
 });

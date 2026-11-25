@@ -59,7 +59,7 @@ export function App({
   svc,
   eventId,
 }: {
-  initialModels?: { name: string; displayName: string; icon?: string }[];
+  initialModels?: { name: string; displayName: string; icon?: string; premiumOnly?: boolean }[];
   place?: CircleTab;
   openChat?: string;
   openRoom?: string;
@@ -907,6 +907,7 @@ function SoundBridge() {
 }
 
 function MobileModel({ studio, fieldId = "model-mobile", plain = false }: { studio: ReturnType<typeof useStudio>; fieldId?: string; plain?: boolean }) {
+  const navigate = useNavigate();
   if (studio.imageMode && studio.activeProvider.kind === "custom") {
     return (
       <input
@@ -944,7 +945,10 @@ function MobileModel({ studio, fieldId = "model-mobile", plain = false }: { stud
         value: model,
         label: studio.modelLabels[model] && studio.modelLabels[model] !== model ? studio.modelLabels[model] : model,
         icon: studio.modelIcons[model] || undefined,
+        premium: studio.activeProvider.kind === "builtin" && studio.premiumModels.includes(model),
+        locked: studio.activeProvider.kind === "builtin" && studio.premiumModels.includes(model) && !studio.premiumActive,
       }))}
+      onLocked={() => void navigate({ to: "/", search: { place: "shop", s: "subs" } })}
       onChange={(value) => studio.updateProvider(studio.activeProvider.id, { model: value })}
     />
   );

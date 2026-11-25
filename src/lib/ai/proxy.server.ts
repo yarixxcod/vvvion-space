@@ -1,3 +1,5 @@
+import { MAX_MODEL_PROVIDERS, PREMIUM_MODEL_MESSAGE } from "@/lib/ai/model-access";
+import { tagProvider, measuredProviderFetch } from "@/lib/ai/provider-usage.server";
 import {STICKER_REPLY_GUIDE, stickersAllowed} from "@/lib/stickers";
 import { createProviderRouter, recoverChatStream } from "@/lib/ai/provider-router";
 import { closeoutChatPayload } from "@/lib/ai/chat-wire";
@@ -20,7 +22,7 @@ import { assertDiskRoom, storeDiskImage } from "@/lib/social/disk";
 import { getSql } from "@/lib/db";
 import { listImageModels } from "@/lib/social/admin";
 import { getSessionUser } from "@/lib/auth/verify.server";
-import { assertBuiltinChat, loadAccess } from "@/lib/social/access";
+import { assertBuiltinChat, assertModelEntitlement, loadAccess } from "@/lib/social/access";
 import { explainApiError, readApiFailure } from "@/lib/ai/api-error";
 import { ACCOUNT_REQUIRED_MESSAGE } from "@/lib/ai/guest-limit";
 import { peekGuest, takeGuestQuestion, withGuestCookie } from "@/lib/ai/guest.server";
@@ -71,8 +73,8 @@ function readAgent(body: ChatBody): AgentChoice {
   };
 }
 type ModelsBody = { kind?: unknown; baseUrl?: unknown; apiKey?: unknown; extraHeaders?: unknown };
-type CatalogProvider = { baseUrl: string; apiKey: string; model: string };
-type CatalogChat = { prompt: string; providers: CatalogProvider[] };
+type CatalogProvider = { id?: string; slot?: number; baseUrl: string; apiKey: string; model: string };
+type CatalogChat = { name?: string; premiumOnly?: boolean; prompt: string; providers: CatalogProvider[] };
 
 const BUILTIN_BASE = "https://api.x.ai/v1";
 const BUILTIN_IMAGE_MODEL = "grok-imagine-image";
@@ -558,25 +560,27 @@ async function loadCatalog(model: string): Promise<CatalogChat> {
     `;
 		if (via[0]?.model_name) model = via[0].model_name;
 	}
-	const rows = await sql<{ base_url?: string; api_key?: string; system_prompt?: string }>`
-    select base_url, api_key, system_prompt from catalog_models where name = ${model}
+	const rows = await sql<{ base_url?: string; api_key?: string; system_prompt?: string; premium_only?: boolean }>`
+    select base_url, api_key, system_prompt, premium_only from catalog_models where name = ${model}
   `;
 	const row = rows[0];
-	const extra = await sql<{ base_url?: string; api_key?: string; model_id?: string }>`
-    select base_url, api_key, model_id from catalog_providers where model_name = ${model} order by slot asc
+	const extra = await sql<{ base_url?: string; api_key?: string; model_id?: string; provider_id?: string; slot?: number }>`
+    select base_url, api_key, model_id, provider_id, slot from catalog_providers where model_name = ${model} order by slot asc
   `;
-	const providers = (extra.length ? extra : [row]).slice(0, 4).map((item) => ({
+	const providers = (extra.length ? extra : [row]).slice(0, MAX_MODEL_PROVIDERS).map((item, index) => ({
+        id: item && "provider_id" in item ? item.provider_id : undefined,
+        slot: item && "slot" in item ? item.slot : index,
 		baseUrl: item?.base_url?.trim() || BUILTIN_BASE,
 		apiKey: item?.api_key?.trim() || "",
 		model: item && "model_id" in item ? item.model_id?.trim() || "" : ""
 	}));
 	return {
 		prompt: row?.system_prompt?.trim().slice(0, 8e3) || "",
-		providers
+		providers, name: model, premiumOnly: Boolean(row?.premium_only)
 	};
 }
-function builtinTargets(catalog: CatalogChat | null): { url: string; headers: Headers; secret: string; model: string }[] | Response {
-	const list = catalog?.providers?.length ? catalog.providers.slice(0, 4) : [{ baseUrl: BUILTIN_BASE, apiKey: "", model: "" }];
+function builtinTargets(catalog: CatalogChat | null, source = "chat"): { url: string; headers: Headers; secret: string; model: string }[] | Response {
+	const list = catalog?.providers?.length ? catalog.providers.slice(0, MAX_MODEL_PROVIDERS) : [{ baseUrl: BUILTIN_BASE, apiKey: "", model: "" }];
 	const targets: { url: string; headers: Headers; secret: string; model: string }[] = [];
 	for (const provider of list) {
 		let host = "";
@@ -592,6 +596,7 @@ function builtinTargets(catalog: CatalogChat | null): { url: string; headers: He
 		headers.set("content-type", "application/json");
 		headers.set("accept", "text/event-stream, application/json");
 		headers.set("authorization", `Bearer ${key}`);
+        if (catalog?.name) tagProvider(headers, { model: catalog.name, id: provider.id || `legacy:${catalog.name}:${provider.slot || 0}`, slot: provider.slot || 0, host, upstream: provider.model || catalog.name, source });
 		targets.push({
 			url: joinParsed(adminBase(provider.baseUrl || BUILTIN_BASE), "/chat/completions"),
 			headers,
@@ -1531,6 +1536,7 @@ export async function handleChat(request: Request): Promise<Response> {
 			}
 			return seal(new Response(null, { status: 499 }));
 		}
+		if (message === PREMIUM_MODEL_MESSAGE) return seal(json(403, { code: "premium_required", message }));
 		if (/timeout|aborted/i.test(message)) return seal(json(504, { message: "Провайдер не ответил вовремя" }));
 		return seal(json(400, { message: sanitize(message, secret) }));
 	}
@@ -1746,12 +1752,12 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 	}
 }
 async function callChat(url: string, headers: Headers, payload: Record<string, unknown>, signal: AbortSignal, secret: string) {
-	const send = (body: Record<string, unknown>) => publicFetch(url, {
+	const send = (body: Record<string, unknown>) => measuredProviderFetch(headers, () => publicFetch(url, {
 		method: "POST",
 		headers,
 		body: JSON.stringify(body),
 		signal
-	}, { hops: 0, timeoutMs: 180_000 });
+	}, { hops: 0, timeoutMs: 180_000 }));
 	const fail = (response: Response, unsupportedTools = false) => ({
         unsupportedTools,
 		failed: true,
@@ -1907,10 +1913,11 @@ export async function completeTelegramChat(userId: string, model: string, histor
   const sql = await getSql();
   const exists = await sql`select name from catalog_models where name = ${model}`;
   if (!exists.length) throw new Error("Модель удалена. Выберите другую через /models");
+  await assertModelEntitlement(model, userId);
   const limit = await enforceDailyLimit(userId);
   if (limit.blocked) throw new Error(limit.message);
   const catalog = await loadCatalog(model);
-  const targets = builtinTargets(catalog);
+  const targets = builtinTargets(catalog, "telegram");
   if (targets instanceof Response) throw new Error("У модели пока нет доступного ключа");
   const attempt = await recordAttempt({userId,guestId:null,model,kind:"builtin",mode:"telegram",ok:false,note:history.at(-1)?.content || ""});
   if (!attempt) throw new Error("Не удалось учесть запрос. Попробуйте позже");

@@ -1,3 +1,5 @@
+import { MAX_MODEL_PROVIDERS } from "@/lib/ai/model-access";
+import { ProviderStats } from "./provider-stats";
 import { useEffect, useState } from "react";
 import { Archive, BarChart3, Cpu, Image, Key, LifeBuoy, Mic, Send, Server, Smartphone, Tag, Users, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -67,6 +69,7 @@ type ModelDraft = {
   displayName: string;
   icon: string;
   prompt: string;
+  premiumOnly: boolean;
   providers: DraftProvider[];
 };
 
@@ -109,7 +112,8 @@ function catalogKey(draft: ModelDraft) {
 }
 
 function fromModel(model: AdminModel): ModelDraft {
-  const providers = (model.providers.length ? model.providers : [blankProvider()]).slice(0, 4).map((item) => ({
+  const providers = (model.providers.length ? model.providers : [blankProvider()]).slice(0, MAX_MODEL_PROVIDERS).map((item) => ({
+    id: item.id,
     baseUrl: item.baseUrl,
     apiKey: item.apiKey,
     model: item.model || model.name,
@@ -120,12 +124,13 @@ function fromModel(model: AdminModel): ModelDraft {
     displayName: model.displayName,
     icon: model.icon,
     prompt: model.prompt,
+    premiumOnly: Boolean(model.premiumOnly),
     providers,
   };
 }
 
 function blankModel(): ModelDraft {
-  return { name: "", previousName: "", displayName: "", icon: "", prompt: "", providers: [blankProvider()] };
+  return { name: "", previousName: "", displayName: "", icon: "", prompt: "", premiumOnly: false, providers: [blankProvider()] };
 }
 
 function fromImage(model: AdminImageModel): ImageDraft {
@@ -524,7 +529,9 @@ function ModelForm({
           displayName,
           icon: draft.icon,
           prompt: draft.prompt.trim(),
+          premiumOnly: draft.premiumOnly,
           providers: draft.providers.map((item) => ({
+            id: item.id,
             baseUrl: item.baseUrl.trim(),
             apiKey: item.apiKey.trim(),
             model: item.model.trim(),
@@ -583,11 +590,21 @@ function ModelForm({
         <textarea className="field mt-1 min-h-20 resize-y" value={draft.prompt} maxLength={8000} onChange={(event) => onChange({ prompt: event.target.value })} />
         <span className="mt-1 block">Агентные правила добавляются автоматически и этим полем не отменяются.</span>
       </label>
+      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-accent/30 bg-accent/10 p-4">
+        <input type="checkbox" className="mt-1 size-5 accent-[var(--accent)]" checked={draft.premiumOnly} onChange={event => onChange({ premiumOnly: event.target.checked })} />
+        <span><span className="block text-sm font-semibold">Только VVVion Premium</span><span className="mt-1 block text-xs text-muted">Модель видна всем. Общение доступно только с действующей подпиской.</span></span>
+      </label>
+      <p className="mt-4 text-sm font-medium">Провайдеры · {draft.providers.length} / {MAX_MODEL_PROVIDERS}</p>
+      <p className="mt-1 text-xs text-muted">Первый — основной. Следующий включается при ошибке. Порядок можно менять.</p>
       <div className="mt-3 space-y-2">
         {draft.providers.map((provider, index) => (
-          <div key={index} className="rounded-2xl border border-line bg-bg p-3">
+          <div key={provider.id || index} className="rounded-2xl border border-line bg-bg p-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-faint">Провайдер {index + 1}</p>
+              <p className="text-xs text-faint">Провайдер {index + 1}{index === 0 ? " · основной" : " · резерв"}</p>
+              <span className="ml-auto inline-flex gap-1">
+                <button type="button" disabled={index === 0} aria-label={`Поднять провайдер ${index + 1}`} className="press grid size-9 place-items-center rounded-lg border border-line disabled:opacity-30" onClick={() => { const next=[...draft.providers]; [next[index-1],next[index]]=[next[index],next[index-1]]; onChange({providers:next}); }}>↑</button>
+                <button type="button" disabled={index === draft.providers.length-1} aria-label={`Опустить провайдер ${index + 1}`} className="press grid size-9 place-items-center rounded-lg border border-line disabled:opacity-30" onClick={() => { const next=[...draft.providers]; [next[index],next[index+1]]=[next[index+1],next[index]]; onChange({providers:next}); }}>↓</button>
+              </span>
               {draft.providers.length > 1 ? (
                 <button
                   type="button"
@@ -613,7 +630,7 @@ function ModelForm({
           </div>
         ))}
       </div>
-      {draft.providers.length < 4 ? (
+      {draft.providers.length < MAX_MODEL_PROVIDERS ? (
         <button type="button" className="press mt-2 h-9 rounded-xl px-2 text-xs text-muted" onClick={() => onChange({ providers: [...draft.providers, blankProvider()] })}>
           Ещё провайдер
         </button>
@@ -1081,6 +1098,7 @@ function Stats() {
           ))}
         </ul>
       </section>
+      <ProviderStats rows={row.providers || []} />
     </div>
   );
 }

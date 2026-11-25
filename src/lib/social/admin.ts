@@ -1,3 +1,4 @@
+import { MAX_MODEL_PROVIDERS } from "@/lib/ai/model-access";
 import { createServerFn } from "@tanstack/react-start";
 import { getSql, withTransaction } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
@@ -17,15 +18,16 @@ export type MemberRow = {
   createdAt: string;
 };
 
-export type PublicModel = { name: string; displayName: string; prompt: string; icon: string };
+export type PublicModel = { name: string; displayName: string; prompt: string; icon: string; premiumOnly: boolean };
 
-export type AdminProvider = { baseUrl: string; apiKey: string; model: string };
+export type AdminProvider = { id?: string; baseUrl: string; apiKey: string; model: string };
 
 export type AdminModel = {
   name: string;
   displayName: string;
   icon: string;
   prompt: string;
+  premiumOnly: boolean;
   providers: AdminProvider[];
 };
 
@@ -74,6 +76,7 @@ type SaveModelInput = {
   displayName: string;
   icon: string;
   prompt: string;
+  premiumOnly?: boolean;
   providers: AdminProvider[];
   previousName: string;
 };
@@ -94,7 +97,7 @@ function publicIcon(value: string | null | undefined): string {
 }
 
 function providersOf(value: unknown): AdminProvider[] {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 4) throw new Error("Нужен хотя бы один адрес, не больше четырёх");
+  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_MODEL_PROVIDERS) throw new Error("Нужен хотя бы один адрес, не больше десяти");
   return value.map((item) => {
     if (!item || typeof item !== "object") throw new Error("Некорректный адрес");
     const raw = item as { baseUrl?: unknown; apiKey?: unknown; model?: unknown };
@@ -102,7 +105,9 @@ function providersOf(value: unknown): AdminProvider[] {
     if (apiKey && /[\r\n]/.test(apiKey)) throw new Error("Ключ не должен содержать переносы");
     const model = typeof raw.model === "string" ? raw.model.trim().slice(0, 120) : "";
     if (model && !MODEL_RE.test(model)) throw new Error("Некорректное имя модели у провайдера");
-    return { baseUrl: catalogUrl(raw.baseUrl), apiKey, model };
+    const id = typeof (raw as Record<string, unknown>).id === "string" ? String((raw as Record<string, unknown>).id) : "";
+    if (id && !/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Некорректный ID провайдера");
+    return { id: id || undefined, baseUrl: catalogUrl(raw.baseUrl), apiKey, model };
   });
 }
 
@@ -116,6 +121,7 @@ function saveInput(input: unknown): SaveModelInput {
     displayName: displayOf(raw.displayName, name),
     icon: modelIcon(raw.icon),
     prompt: typeof raw.prompt === "string" ? raw.prompt.trim().slice(0, 8000) : "",
+    premiumOnly: typeof raw.premiumOnly === "boolean" ? raw.premiumOnly : undefined,
     providers: providersOf(raw.providers),
     previousName,
   };
@@ -140,8 +146,8 @@ function usableKey(baseUrl: string | null | undefined, apiKey: string | null | u
 async function readPublicModels(): Promise<PublicModel[]> {
   const sql = await getSql();
   const xaiReady = Boolean(process.env.XAI_API_KEY?.trim());
-  const rows = await sql<{ name: string; display_name: string | null; system_prompt: string | null; icon: string | null; base_url: string | null; api_key: string | null }>`
-    select name, display_name, system_prompt, icon, base_url, api_key from catalog_models order by created_at asc, name asc
+  const rows = await sql<{ name: string; display_name: string | null; system_prompt: string | null; premium_only: boolean; icon: string | null; base_url: string | null; api_key: string | null }>`
+    select name, display_name, system_prompt, premium_only, icon, base_url, api_key from catalog_models order by created_at asc, name asc
   `;
   const links = await sql<{ model_name: string; base_url: string | null; api_key: string | null }>`
     select model_name, base_url, api_key from catalog_providers
@@ -161,6 +167,7 @@ async function readPublicModels(): Promise<PublicModel[]> {
     .map((row) => ({
       name: row.name,
       displayName: row.display_name || row.name,
+      premiumOnly: Boolean(row.premium_only),
       prompt: (row.system_prompt || "").trim().slice(0, 8000),
       icon: publicIcon(row.icon),
     }));
@@ -175,13 +182,14 @@ async function readAdminModels(): Promise<AdminModel[]> {
     base_url: string | null;
     api_key: string | null;
     system_prompt: string | null;
+    premium_only: boolean;
   }>`
-    select name, display_name, icon, base_url, api_key, system_prompt
+    select name, display_name, icon, base_url, api_key, system_prompt, premium_only
     from catalog_models
     order by created_at asc, name asc
   `;
-  const links = await sql<{ model_name: string; base_url: string | null; api_key: string | null; model_id: string | null; slot: number | string }>`
-    select model_name, base_url, api_key, model_id, slot
+  const links = await sql<{ model_name: string; base_url: string | null; api_key: string | null; model_id: string | null; provider_id: string; slot: number | string }>`
+    select model_name, base_url, api_key, model_id, slot, provider_id
     from catalog_providers
     order by slot asc
   `;
@@ -189,6 +197,7 @@ async function readAdminModels(): Promise<AdminModel[]> {
   for (const link of links) {
     const list = byName.get(link.model_name) ?? [];
     list.push({
+      id: link.provider_id,
       baseUrl: link.base_url?.trim() || "https://api.x.ai/v1",
       apiKey: link.api_key || "",
       model: (link.model_id || "").trim(),
@@ -196,11 +205,12 @@ async function readAdminModels(): Promise<AdminModel[]> {
     byName.set(link.model_name, list);
   }
   return rows.map((row) => {
-    const stored = (byName.get(row.name) ?? []).slice(0, 4);
+    const stored = (byName.get(row.name) ?? []).slice(0, MAX_MODEL_PROVIDERS);
     return {
       name: row.name,
       displayName: row.display_name || row.name,
       icon: publicIcon(row.icon),
+      premiumOnly: Boolean(row.premium_only),
       prompt: row.system_prompt || "",
       providers: stored.length ? stored : [{ baseUrl: row.base_url || "https://api.x.ai/v1", apiKey: row.api_key || "", model: "" }],
     };
@@ -209,20 +219,17 @@ async function readAdminModels(): Promise<AdminModel[]> {
 
 async function writeProviders(modelName: string, providers: AdminProvider[]) {
   const sql = await getSql();
-  await sql`delete from catalog_providers where model_name = ${modelName}`;
-  for (let slot = 0; slot < providers.length; slot += 1) {
-    const provider = providers[slot];
-    await sql`
-      insert into catalog_providers (model_name, slot, base_url, api_key, model_id)
-      values (${modelName}, ${slot}, ${provider.baseUrl}, ${provider.apiKey}, ${provider.model})
-    `;
-  }
+  const rows = providers.map((provider, slot) => ({ slot, id: provider.id || crypto.randomUUID(), base: provider.baseUrl, key: provider.apiKey, model: provider.model }));
+  if (new Set(rows.map(row => row.id)).size !== rows.length) throw new Error("Провайдер повторяется");
   const first = providers[0];
-  await sql`
-    update catalog_models
-    set base_url = ${first.baseUrl}, api_key = ${first.apiKey}
-    where name = ${modelName}
-  `;
+  await sql`with input as (select * from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(slot int,id text,base text,key text,model text)),
+    saved as (insert into catalog_providers(model_name,slot,provider_id,base_url,api_key,model_id)
+      select ${modelName},slot,id,base,key,model from input where true
+      on conflict(model_name,slot) do update set provider_id=excluded.provider_id,base_url=excluded.base_url,api_key=excluded.api_key,model_id=excluded.model_id returning slot),
+    removed as (delete from catalog_providers where model_name=${modelName} and slot >= ${rows.length}),
+    mirrored as (update catalog_models set base_url=${first.baseUrl},api_key=${first.apiKey} where name=${modelName})
+    select count(*) from saved`;
+
 }
 
 async function readMembers(): Promise<MemberRow[]> {
@@ -298,8 +305,8 @@ export const saveModel = createServerFn({ method: "POST" })
       if (existing.length) throw new Error("Такая модель уже есть");
       const first = data.providers[0];
       await sql`
-        insert into catalog_models (name, display_name, base_url, api_key, system_prompt, icon)
-        values (${data.name}, ${data.displayName}, ${first.baseUrl}, ${first.apiKey}, ${data.prompt}, ${data.icon})
+        insert into catalog_models (name, display_name, base_url, api_key, system_prompt, icon, premium_only)
+        values (${data.name}, ${data.displayName}, ${first.baseUrl}, ${first.apiKey}, ${data.prompt}, ${data.icon}, ${data.premiumOnly ?? false})
       `;
       await writeProviders(data.name, data.providers);
       return readAdminModels();
@@ -312,7 +319,7 @@ export const saveModel = createServerFn({ method: "POST" })
     if (!current.length) throw new Error("Модель не найдена");
     await sql`
       update catalog_models
-      set name = ${data.name}, display_name = ${data.displayName}, system_prompt = ${data.prompt}, icon = ${data.icon}
+      set name = ${data.name}, display_name = ${data.displayName}, system_prompt = ${data.prompt}, icon = ${data.icon}, premium_only = coalesce(${data.premiumOnly ?? null}, premium_only)
       where name = ${previous}
     `;
     await writeProviders(data.name, data.providers);
@@ -534,6 +541,7 @@ export type ChatStats = {
   tokens: number;
   days: { day: string; requests: number; tokens: number }[];
   models: { model: string; requests: number; tokens: number; icon: string }[];
+  providers: { model: string; id: string; slot: number; host: string; upstream: string; source: string; requests: number; accepted: number; errors: number; avgMs: number }[];
 };
 
 export const chatStats = createServerFn({ method: "GET" })
@@ -577,8 +585,17 @@ export const chatStats = createServerFn({ method: "GET" })
       order by coalesce(sum(a.total_tokens), 0) desc, count(*) desc
       limit 8
     `;
+    const providers = await sql<{ model: string; id: string; slot: number; host: string; upstream: string; source: string; requests: number; accepted: number; errors: number; avg_ms: number }>`
+      select coalesce(nullif(c.display_name,''),p.model_name) as model,p.provider_id as id,coalesce(max(cp.slot),max(p.slot))::int as slot,p.provider_host as host,p.upstream_model as upstream,p.source,
+        sum(p.requests)::bigint as requests,sum(p.accepted)::bigint as accepted,sum(p.errors)::bigint as errors,
+        (sum(p.elapsed_ms)/greatest(sum(p.requests),1))::int as avg_ms
+      from provider_usage_hourly p left join catalog_models c on c.name=p.model_name
+      left join catalog_providers cp on cp.provider_id=p.provider_id and cp.model_name=p.model_name
+      where p.bucket >= now()-interval '14 days'
+      group by 1,p.provider_id,p.provider_host,p.upstream_model,p.source order by sum(p.requests) desc limit 100`;
     const row = totals[0];
     return {
+      providers: providers.map(p => ({ model:p.model,id:p.id,slot:Number(p.slot),host:p.host,upstream:p.upstream,source:p.source,requests:Number(p.requests),accepted:Number(p.accepted),errors:Number(p.errors),avgMs:Number(p.avg_ms) })),
       requests: Number(row?.requests ?? 0),
       ok: Number(row?.ok ?? 0),
       tokens: Number(row?.tokens ?? 0),
