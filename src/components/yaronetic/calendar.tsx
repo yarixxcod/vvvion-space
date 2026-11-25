@@ -7,7 +7,7 @@ import { COLOR_INK } from "@/lib/calendar/colors";
 import type { Draft } from "@/lib/calendar/parse-nl";
 import { shiftCivil, utcFromWall, wallOf } from "@/lib/calendar/time";
 import { useSwipe } from "@/lib/gestures/use-swipe";
-import { useTx } from "@/lib/lang";
+import { useLang, useTx } from "@/lib/lang";
 
 type View = "month" | "week" | "day" | "agenda";
 type Cal = { id: string; name: string; color: string; tz: string; is_default: boolean };
@@ -29,6 +29,28 @@ type Parsed = { draft: Draft; confidence: "high" | "medium" | "low"; warnings: s
 type Scope = "this" | "this_and_future" | "all";
 
 const VIEW_KEY = "vvvion.calendar.view";
+const WEEKDAYS: Record<string, string[]> = {
+  ru: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+  en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  kk: ["Дс", "Сс", "Ср", "Бс", "Жм", "Сн", "Жк"],
+};
+
+function weekdayLabels(monday: boolean, lang: string) {
+  const row = WEEKDAYS[lang] ?? WEEKDAYS.ru!;
+  return monday ? row : [row[6]!, ...row.slice(0, 6)];
+}
+
+function weekdayOf(day: Date, tz: string, labels: string[], monday: boolean) {
+  const weekday = wallOf(day, tz).weekday;
+  const index = monday ? (weekday + 6) % 7 : weekday;
+  return labels[index] ?? "";
+}
+
+function monthTitle(date: Date, tz: string) {
+  const month = new Intl.DateTimeFormat(undefined, { month: "long", timeZone: tz }).format(date).replace(/\.$/, "");
+  const label = month.charAt(0).toLocaleUpperCase() + month.slice(1);
+  return `${label} ${wallOf(date, tz).year}`;
+}
 const COLOR: Record<string, string> = COLOR_INK;
 const HOURS = Array.from({ length: 18 }, (_, index) => index + 6);
 
@@ -115,7 +137,9 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
   const [undo, setUndo] = useState<{ item: Item; scope: Scope } | null>(null);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState(0);
+  const lang = useLang();
   const tz = prefs.tz || "Asia/Almaty";
+  const weekLabels = weekdayLabels(prefs.week_starts === 1, lang);
   const openRef = useRef(open);
   openRef.current = open;
 
@@ -368,37 +392,40 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
   }
 
   const days = Array.from({ length: view === "month" ? 42 : view === "week" ? 7 : 1 }, (_, index) => addDaysTz(range.from, index, tz));
-  const title = new Intl.DateTimeFormat(undefined, { timeZone: tz, month: "long", year: "numeric" }).format(cursor);
+  const title = monthTitle(cursor, tz);
+  const todayKey = ymd(new Date(), tz);
   const preview = parsed?.draft ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col outline-none" {...swipe}>
-      <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
-        <h2 className="min-w-0 flex-1 font-serif text-3xl capitalize tracking-tight">{title}</h2>
-        <button type="button" className="press min-h-11 rounded-2xl border border-line px-3 text-sm" onClick={() => setCursor(new Date())}>{tx({ ru: "Сегодня", en: "Today", kk: "Бүгін" })}</button>
-        <button type="button" className="press grid size-11 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Назад", en: "Back", kk: "Артқа" })} onClick={() => shift(-1)}><ChevronLeft className="size-5" /></button>
-        <button type="button" className="press grid size-11 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Дальше", en: "Forward", kk: "Алға" })} onClick={() => shift(1)}><ChevronRight className="size-5" /></button>
-        <button type="button" className="press grid size-11 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Настройки", en: "Settings", kk: "Баптау" })} onClick={() => setSettings(true)}><Settings className="size-5" /></button>
+      <div className="px-3 pt-2">
+        <h2 className="truncate font-serif text-[1.65rem] leading-none tracking-tight sm:text-3xl">{title}</h2>
+        <div className="mt-2 flex items-center gap-1.5">
+          <button type="button" className="press h-11 min-w-0 flex-1 rounded-2xl border border-line px-3 text-sm" onClick={() => setCursor(new Date())}>{tx({ ru: "Сегодня", en: "Today", kk: "Бүгін" })}</button>
+          <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Назад", en: "Back", kk: "Артқа" })} onClick={() => shift(-1)}><ChevronLeft className="size-5" /></button>
+          <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Дальше", en: "Forward", kk: "Алға" })} onClick={() => shift(1)}><ChevronRight className="size-5" /></button>
+          <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Настройки", en: "Settings", kk: "Баптау" })} onClick={() => setSettings(true)}><Settings className="size-5" /></button>
+        </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 px-3">
+      <div className="mt-2 grid grid-cols-4 gap-1.5 px-3">
         {(["month", "week", "day", "agenda"] as View[]).map((id) => (
-          <button key={id} type="button" className={`press min-h-11 rounded-full px-3 text-sm ${view === id ? "bg-fg text-bg" : "border border-line"}`} onClick={() => setView(id)}>
+          <button key={id} type="button" className={`press h-11 rounded-full px-1 text-sm ${view === id ? "bg-fg text-bg" : "border border-line"}`} onClick={() => setView(id)}>
             {tx(id === "month" ? { ru: "Месяц", en: "Month", kk: "Ай" } : id === "week" ? { ru: "Неделя", en: "Week", kk: "Апта" } : id === "day" ? { ru: "День", en: "Day", kk: "Күн" } : { ru: "Список", en: "List", kk: "Тізім" })}
           </button>
         ))}
-        <label className="relative min-w-[10rem] flex-1">
-          <Search className="pointer-events-none absolute top-3 left-3 size-4 text-faint" />
-          <input id="cal-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tx({ ru: "Поиск", en: "Search", kk: "Іздеу" })} className="h-11 w-full rounded-2xl border border-line bg-bg pr-3 pl-9 text-sm outline-none" data-no-swipe />
-        </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <label className="relative mx-3 mt-2 block">
+        <Search className="pointer-events-none absolute top-3 left-3 size-4 text-faint" />
+        <input id="cal-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tx({ ru: "Поиск", en: "Search", kk: "Іздеу" })} className="h-11 w-full rounded-2xl border border-line bg-bg pr-3 pl-9 text-sm outline-none" data-no-swipe />
+      </label>
+      <div className={view === "month" ? "min-h-0 flex-1 overflow-hidden px-2 py-2" : "min-h-0 flex-1 overflow-y-auto px-3 py-3"}>
         {error ? <p className="mb-3 text-sm text-danger">{error}</p> : null}
         {view === "agenda" ? (
           <Agenda items={shown} tz={tz} picked={picked} onOpen={setOpen} empty={tx({ ru: "Пока пусто. Напишите ниже: «завтра в 15:00 встреча».", en: "Nothing yet. Try “tomorrow at 3pm coffee”.", kk: "Әзірге бос. Төменге жазыңыз: «ертең сағат 15:00 кездесу»." })} />
         ) : view === "month" ? (
-          <Month days={days} items={shown} tz={tz} cursor={cursor} onOpen={setOpen} onDay={(day) => { setCursor(day); setView("day"); }} onMove={(item, startsAt, endsAt) => void move(item, startsAt, endsAt).catch((err: Error) => setError(err.message))} />
+          <Month days={days} items={shown} tz={tz} cursor={cursor} todayKey={todayKey} labels={weekLabels} onOpen={setOpen} onDay={(day) => { setCursor(day); setView("day"); }} onMove={(item, startsAt, endsAt) => void move(item, startsAt, endsAt).catch((err: Error) => setError(err.message))} />
         ) : (
-          <Hours days={days} items={shown} tz={tz} onOpen={setOpen} onMove={(item, startsAt, endsAt) => void move(item, startsAt, endsAt).catch((err: Error) => setError(err.message))} />
+          <Hours days={days} items={shown} tz={tz} labels={weekLabels} monday={prefs.week_starts === 1} todayKey={todayKey} onOpen={setOpen} onMove={(item, startsAt, endsAt) => void move(item, startsAt, endsAt).catch((err: Error) => setError(err.message))} />
         )}
       </div>
       <form className="border-t border-line px-3 py-3" data-no-swipe onSubmit={(event) => { event.preventDefault(); void savePhrase().catch((err: Error) => setError(err.message)); }}>
@@ -451,31 +478,39 @@ function Agenda({ items, tz, picked, onOpen, empty }: { items: Item[]; tz: strin
   );
 }
 
-function chip(item: Item, onOpen: (item: Item) => void) {
+function chip(item: Item, onOpen: (item: Item) => void, compact = false) {
   return (
-    <button key={`${item.id}-${item.startsAt}`} type="button" draggable className="mt-1 block min-h-8 w-full truncate rounded-lg px-1.5 py-1 text-left text-xs [@media(pointer:coarse)]:min-h-11" style={{ background: `${COLOR[item.color || "lilac"] || COLOR.lilac}33` }} onDragStart={(event) => event.dataTransfer.setData("text/plain", `${item.id}|${item.startsAt}`)} onClick={() => onOpen(item)}>
+    <button key={`${item.id}-${item.startsAt}`} type="button" draggable className={compact ? "block w-full truncate rounded px-0.5 text-left text-[10px] leading-4" : "mt-1 block min-h-8 w-full truncate rounded-lg px-1.5 py-1 text-left text-xs"} style={{ background: `${COLOR[item.color || "lilac"] || COLOR.lilac}33` }} onDragStart={(event) => event.dataTransfer.setData("text/plain", `${item.id}|${item.startsAt}`)} onClick={(event) => { event.stopPropagation(); onOpen(item); }}>
       {item.title}
     </button>
   );
 }
 
-function Month({ days, items, tz, cursor, onOpen, onDay, onMove }: { days: Date[]; items: Item[]; tz: string; cursor: Date; onOpen: (item: Item) => void; onDay: (day: Date) => void; onMove: (item: Item, startsAt: string, endsAt: string) => void }) {
+function Month({ days, items, tz, cursor, todayKey, labels, onOpen, onDay, onMove }: { days: Date[]; items: Item[]; tz: string; cursor: Date; todayKey: string; labels: string[]; onOpen: (item: Item) => void; onDay: (day: Date) => void; onMove: (item: Item, startsAt: string, endsAt: string) => void }) {
   const month = wallOf(cursor, tz).month;
+  const weeks = Math.max(1, days.length / 7);
   return (
-    <div className="grid grid-cols-7 gap-1">
+    <div className="grid h-full min-h-0 grid-cols-7 gap-1" style={{ gridTemplateRows: `auto repeat(${weeks}, minmax(0, 1fr))` }}>
+      {labels.map((label) => (
+        <p key={label} className="truncate text-center text-[11px] font-medium leading-4 text-faint">{label}</p>
+      ))}
       {days.map((day) => {
         const key = ymd(day, tz);
         const wall = wallOf(day, tz);
         const dayItems = items.filter((item) => ymd(new Date(item.startsAt), tz) === key);
+        const today = key === todayKey;
         return (
           <div
             key={key}
-            className={`min-h-24 rounded-2xl border border-line p-1 ${wall.month === month ? "bg-elev" : "opacity-45"}`}
+            className={`flex min-h-0 flex-col overflow-hidden rounded-xl border p-0.5 ${wall.month === month ? "bg-elev" : "opacity-40"} ${today ? "border-accent" : "border-line"}`}
+            onClick={() => onDay(day)}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => dropOn(event, items, day, tz, null, onMove)}
           >
-            <button type="button" className="press min-h-8 px-1 font-serif text-lg" onClick={() => onDay(day)}>{wall.day}</button>
-            {dayItems.slice(0, 3).map((item) => chip(item, onOpen))}
+            <button type="button" className={`press mx-auto grid size-6 shrink-0 place-items-center rounded-full text-sm leading-none ${today ? "bg-accent text-accent-fg" : ""}`} onClick={() => onDay(day)}>{wall.day}</button>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              {dayItems.slice(0, 2).map((item) => chip(item, onOpen, true))}
+            </div>
           </div>
         );
       })}
@@ -483,18 +518,24 @@ function Month({ days, items, tz, cursor, onOpen, onDay, onMove }: { days: Date[
   );
 }
 
-function Hours({ days, items, tz, onOpen, onMove }: { days: Date[]; items: Item[]; tz: string; onOpen: (item: Item) => void; onMove: (item: Item, startsAt: string, endsAt: string) => void }) {
+function Hours({ days, items, tz, labels, monday, todayKey, onOpen, onMove }: { days: Date[]; items: Item[]; tz: string; labels: string[]; monday: boolean; todayKey: string; onOpen: (item: Item) => void; onMove: (item: Item, startsAt: string, endsAt: string) => void }) {
   return (
-    <div className="min-w-[18rem]">
-      <div className="mb-1 grid gap-1" style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}>
+    <div className="min-w-0">
+      <div className="mb-1 grid gap-1" style={{ gridTemplateColumns: `2.25rem repeat(${days.length}, minmax(0, 1fr))` }}>
         <span />
         {days.map((day) => {
           const wall = wallOf(day, tz);
-          return <p key={ymd(day, tz)} className="px-1 font-serif text-lg">{wall.day}</p>;
+          const key = ymd(day, tz);
+          return (
+            <p key={key} className="truncate text-center leading-tight">
+              <span className="block text-[10px] text-faint">{weekdayOf(day, tz, labels, monday)}</span>
+              <span className={`mx-auto grid size-7 place-items-center rounded-full font-serif text-base ${key === todayKey ? "bg-accent text-accent-fg" : ""}`}>{wall.day}</span>
+            </p>
+          );
         })}
       </div>
       {HOURS.map((hour) => (
-        <div key={hour} className="grid gap-1 border-t border-line" style={{ gridTemplateColumns: `3rem repeat(${days.length}, minmax(0, 1fr))` }}>
+        <div key={hour} className="grid gap-1 border-t border-line" style={{ gridTemplateColumns: `2.25rem repeat(${days.length}, minmax(0, 1fr))` }}>
           <p className="py-1 text-[11px] text-faint">{pad(hour)}</p>
           {days.map((day) => {
             const key = ymd(day, tz);
