@@ -1,13 +1,13 @@
 import { ChatImage } from "./chat-image";
 import {StickerImage} from "@/components/yaronetic/sticker-picker";
-import { LikePin } from "@/components/yaronetic/message-like";
+import { LikePin, type ReactionActor } from "@/components/yaronetic/message-like";
 import {splitStickerContent} from "@/lib/stickers";
 import { SearchEvidence } from "./search-evidence";
 import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, TextSelect, Trash2, Volume2 } from "lucide-react";
+import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, FileSearch, FileText, FolderPlus, Globe, Pencil, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, TextSelect, Trash2, Volume2 } from "lucide-react";
 import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { Markdown } from "@/components/yaronetic/markdown";
@@ -65,6 +65,8 @@ export function Transcript({
   continuing = false,
   reasoningOn = true,
   assistantName = "",
+  selfImage,
+  selfName = "Вы",
   onQuote,
   onLike,
   onContinue,
@@ -83,6 +85,8 @@ export function Transcript({
   continuing?: boolean;
   reasoningOn?: boolean;
   assistantName?: string;
+  selfImage?: string | null;
+  selfName?: string;
   onQuote?: (text: string) => void;
   onContinue?: () => void;
 }) {
@@ -197,6 +201,11 @@ export function Transcript({
               const pending = streaming && index === messages.length - 1 && message.role === "assistant";
               const next = messages[index + 1];
               const praised = message.role === "user" && (message.praised || (next?.role === "assistant" && peelQuestionLike(next.content).like));
+              const selfActor: ReactionActor = { id: "self", label: selfName, image: selfImage };
+              const actors: ReactionActor[] = [
+                ...(message.liked ? [selfActor] : []),
+                ...(praised ? [{ id: "assistant", label: assistantName || "ИИ", node: personaId ? <CatalogArt kind="personas" id={personaId} className="size-6 rounded-full" /> : <ModelFace name={next?.model || "vvvion"} mood="happy" size={24} variant={face} /> }] : []),
+              ];
               return (
                 <motion.article
                   key={message.id}
@@ -207,6 +216,7 @@ export function Transcript({
                 >
                   {message.role === "user" ? (visual.text || message.files?.length ? <UserBubble
                       message={{ ...shown, praised }}
+                      reactionActors={actors}
                       editing={editing === message.id}
                       editText={editText}
                       disabled={streaming}
@@ -230,6 +240,7 @@ export function Transcript({
                   ) : (
                     <AssistantBubble
                       message={shown}
+                      reactionActors={actors}
                       pending={pending}
                       continuing={continuing && pending}
                       canRegenerate={!readonly && !streaming && !pending}
@@ -289,6 +300,7 @@ function motionReduced() {
 
 function UserBubble({
   message,
+  reactionActors,
   editing,
   editText,
   disabled,
@@ -302,6 +314,7 @@ function UserBubble({
   onLike,
 }: {
   message: ChatMessage;
+  reactionActors: ReactionActor[];
   editing: boolean;
   editText: string;
   disabled: boolean;
@@ -411,15 +424,12 @@ function UserBubble({
           ) : null}
         </div>
       )}
-      {!editing && (message.praised || onLike) ? <div className="mt-1 flex min-h-11 items-center justify-end gap-1">
-        {message.praised ? <span className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#e32650]" title="Модели понравился вопрос" aria-label="Модели понравился вопрос"><Heart aria-hidden="true" className="size-[18px]" fill="currentColor" /></span> : null}
-        {onLike ? <LikePin dock end liked={message.liked} onClick={onLike} /> : null}
-      </div> : null}
+      {!editing && (message.praised || onLike || message.liked) ? <LikePin reacted={Boolean(message.praised)} liked={message.liked} count={reactionActors.length} actors={reactionActors} onClick={onLike} /> : null}
       {!editing ? (
         <div className="msg-actions mt-1 flex justify-end gap-1">
           <Ghost label="Выделить" onClick={() => setPick(true)}><TextSelect className="size-4" /></Ghost>
           <Ghost label="Скопировать всё" onClick={() => void copyText(replaceStickerTokens(message.content))}><Copy className="size-4" /></Ghost>
-          {readonly ? null : <Ghost label="Изменить" disabled={disabled} onClick={onEdit}><span className="text-xs">Изм</span></Ghost>}
+          {readonly ? null : <Ghost label="Изменить" disabled={disabled} onClick={onEdit}><Pencil className="size-4" /></Ghost>}
           {onDelete ? <Ghost label="Удалить" disabled={disabled} onClick={onDelete}><Trash2 className="size-4" /></Ghost> : null}
         </div>
       ) : null}
@@ -535,6 +545,7 @@ function AgentTrace({ steps, pending }: { steps: NonNullable<ChatMessage["steps"
 
 function AssistantBubble({
   message,
+  reactionActors,
   pending,
   continuing,
   canRegenerate,
@@ -554,6 +565,7 @@ function AssistantBubble({
   onLike,
 }: {
   message: ChatMessage;
+  reactionActors: ReactionActor[];
   pending: boolean;
   continuing?: boolean;
   canRegenerate: boolean;
@@ -680,7 +692,7 @@ function AssistantBubble({
         {message.stopped ? <p className="mt-2 text-sm text-faint">Остановлено</p> : null}
         {onLike ? (
           <div className="flex w-full">
-            <LikePin dock end liked={message.liked} onClick={onLike} />
+            <LikePin liked={message.liked} count={reactionActors.length} actors={reactionActors} onClick={onLike} />
           </div>
         ) : null}
         {done ? (

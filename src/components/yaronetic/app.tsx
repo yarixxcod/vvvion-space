@@ -601,6 +601,8 @@ export function App({
           ) : (
             <Suspense fallback={<div className="min-h-0 flex-1" />}>
               <Transcript
+                selfImage={user?.profileImageUrl}
+                selfName={user?.displayName || "Вы"}
                 messages={studio.messages}
                 streaming={streamingHere}
                 continuing={studio.continuingId === studio.activeChatId}
