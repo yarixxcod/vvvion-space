@@ -220,6 +220,13 @@ async function deliver(row: { id: string; user_id: string; event_id: string; occ
   }, { ignoreQuiet: quiet });
 }
 
+export async function runCalendarReminders() {
+  const rows = await fireDue();
+  for (const row of rows) await deliver(row);
+  await extendHorizon();
+  return rows.length;
+}
+
 export async function handleCalendarCron(request: Request) {
   try {
     assertSameSiteRequest();
@@ -231,11 +238,8 @@ export async function handleCalendarCron(request: Request) {
   if (secret) {
     if (request.headers.get("authorization") !== `Bearer ${secret}`) return json(401, { message: "Unauthorized" });
   } else if (process.env.VERCEL) return json(401, { message: "Unauthorized" });
-  const rows = await fireDue();
-  for (const row of rows) await deliver(row);
-  const now = new Date();
-  if (now.getUTCHours() === 3 && now.getUTCMinutes() < 2) await extendHorizon();
-  return json(200, { ok: true, sent: rows.length });
+  const sent = await runCalendarReminders();
+  return json(200, { ok: true, sent });
 }
 
 export async function handleDue(request: Request) {

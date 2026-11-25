@@ -26,9 +26,11 @@ Deep link: `/?place=services&svc=calendar&event=<id>` и `/c/services?svc=calend
 
 ## Напоминания
 
-Cron `* * * * *` на `/api/calendar/cron` (секрет `CRON_SECRET` или `PUSH_CRON_SECRET`, как у `/api/push/cron`). Если план Vercel отклонит минутный cron, расписание нужно сменить на `*/5 * * * *`: на Hobby минутной доставки нет.
+Ручка `GET/POST /api/calendar/cron` авторизуется как `/api/push/cron` (`CRON_SECRET` или `PUSH_CRON_SECRET`). На плане Vercel Hobby отдельное расписание чаще одного раза в сутки отклоняется ещё до сборки: выражение `* * * * *` вернуло «Hobby accounts are limited to daily cron jobs». `*/5` тоже не встанет. Поэтому минутной записи в `vercel.json` нет.
 
-Пока сайт открыт, клиент раз в минуту зовёт `POST /api/calendar/due` и показывает `appNotify` канала `calendar`. FCM идёт через `sendPush` с видом `calendar` (тумблер включён по умолчанию, приоритет HIGH, TTL час). Тихие часы Москвы соблюдаются, кроме флага `remind_in_quiet` у конкретного напоминания.
+Пока сайт или приложение открыты, клиент раз в минуту зовёт `POST /api/calendar/due` и показывает `appNotify` канала `calendar`. Это основной путь «почти вовремя». Суточный cron `/api/push/cron` (`0 3 * * *`) дополнительно сливает просроченную очередь в FCM и достраивает горизонт 35 дней. Фоновая доставка минута-в-минуту на этом плане невозможна; внешний минутный планировщик может дергать `/api/calendar/cron` тем же секретом.
+
+FCM идёт через `sendPush` с видом `calendar` (тумблер включён по умолчанию, приоритет HIGH, TTL час). Тихие часы Москвы соблюдаются, кроме флага `remind_in_quiet`.
 
 Пока сайт не открыт в Windows-приложении и нет `FIREBASE_SERVICE_ACCOUNT_JSON`, фоновое напоминание на устройство не дойдёт. Web Notification API запрашивается только кнопкой в настройках календаря.
 

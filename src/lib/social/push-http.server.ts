@@ -133,5 +133,8 @@ export async function handlePushCron(request: Request) {
   await import("@/lib/social/tips.server")
     .then((mod) => mod.refreshTipsIfDue())
     .catch(() => undefined);
+  await import("@/lib/calendar/http.server")
+    .then((mod) => mod.runCalendarReminders())
+    .catch(() => undefined);
   return json(200, { ok: true });
 }
