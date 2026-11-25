@@ -49,8 +49,8 @@ test("deleting a message clears its reactions", async () => {
 });
 test("every sticker has a label and an actual local file, old marker roundtrips remain valid", () => {
   const codes = STICKER_PACKS.flatMap((p) => [...p.codes]);
-  assert.equal(codes.length, 104);
-  assert.equal(new Set(codes).size, 104);
+  assert.equal(codes.length, 112);
+  assert.equal(new Set(codes).size, 112);
   for (const code of codes) {
     assert.equal(stickerCode(stickerBody(code)), code);
     assert.equal(isKnownSticker(code), true);
@@ -64,7 +64,7 @@ test("every sticker has a label and an actual local file, old marker roundtrips 
 test("unknown IDs and injected markup never become URLs or images", () => {
   assert.equal(stickerUrl("../../private"), "");
   assert.deepEqual(splitStickerContent("Hello [[sticker:no-such-id]]"), {
-    text: "Hello [[sticker:no-such-id]]",
+    text: "Hello",
     stickers: [],
   });
   assert.equal(stickerCode("[[sticker:<script>]]"), null);
@@ -75,7 +75,7 @@ test("AI gets descriptive meaning; sticker suffix stays separate from prose and 
     text: "Привет!",
     stickers: ["cosmo-hello"],
   });
-  assert.equal(splitStickerContent("[[sticker:cosmo-love]]".repeat(20)).stickers.length, 2);
+  assert.equal(splitStickerContent("[[sticker:cosmo-love]]".repeat(20)).stickers.length, 1);
   assert.equal(stickersAllowed([{ role: "assistant", content: "[[sticker:cosmo-love]]" }]), false);
   assert.equal(
     stickersAllowed(

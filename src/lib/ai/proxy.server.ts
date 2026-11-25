@@ -1,6 +1,6 @@
 import { MAX_MODEL_PROVIDERS, PREMIUM_MODEL_MESSAGE } from "@/lib/ai/model-access";
 import { tagProvider, measuredProviderFetch } from "@/lib/ai/provider-usage.server";
-import {STICKER_REPLY_GUIDE, stickersAllowed} from "@/lib/stickers";
+import {stickerReplyGuide, stickerReplyPolicy, normalizeStickerReply, StickerTextGate, stickersAllowed, type StickerReplyPolicy} from "@/lib/stickers";
 import { createProviderRouter, recoverChatStream } from "@/lib/ai/provider-router";
 import { closeoutChatPayload } from "@/lib/ai/chat-wire";
 import { AGENT_CORE, AGENT_CORE_LITE, buildSystemPrompt } from "@/lib/ai/agent-prompt";
@@ -54,6 +54,7 @@ type ChatBody = {
   personaId?: unknown;
   toolNote?: unknown;
   stickerReplies?: unknown;
+  timeZone?: unknown;
   mcp?: unknown;
   diskAccess?: unknown;
   memory?: unknown;
@@ -108,8 +109,8 @@ function readTrack(body: ChatBody) {
 	if (!/^[A-Za-z0-9-]{8,80}$/.test(chatId) || !/^[A-Za-z0-9-]{8,80}$/.test(messageId)) return null;
 	return { chatId, messageId };
 }
-function blankSink() {
-	return { text: "", reason: "", error: "", imageUrl: "", truncated: false, sources: undefined as Source[] | undefined, search: undefined as SearchSummary | undefined };
+function blankSink(stickerPolicy?: StickerReplyPolicy) {
+	return { stickerPolicy, text: "", reason: "", error: "", imageUrl: "", truncated: false, sources: undefined as Source[] | undefined, search: undefined as SearchSummary | undefined };
 }
 function armRun(userId: string | null, track: { chatId: string } | null, request: Request, timeoutMs: number) {
 	const timeout = AbortSignal.timeout(timeoutMs);
@@ -126,7 +127,7 @@ function settleReply(request: Request, userId: string | null, track: { chatId: s
 	disarmRun(userId, track);
 	if (!userId || !track) return Promise.resolve();
 	const stopped = takeStop(userId, track.chatId);
-	const content = sink.text.trim();
+	const content = normalizeStickerReply(sink.text, sink.stickerPolicy).trim();
 	const reasoning = sink.reason.trim();
 	const error = sink.error.trim();
 	if (!content && !reasoning && !error && !sink.imageUrl) return Promise.resolve();
@@ -194,7 +195,7 @@ function holdStream(stream: ReadableStream<Uint8Array>, request: Request, userId
 		lastFlush = now;
 		sync += 1;
 		const mine = sync;
-		const snap = { content: sink.text, reasoning: sink.reason, imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search };
+		const snap = { content: normalizeStickerReply(sink.text, sink.stickerPolicy), reasoning: sink.reason, imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search };
 		tail = tail.then(() => finishCloudReply(userId, track.chatId, track.messageId, {
 			...snap,
 			live: true,
@@ -436,6 +437,8 @@ function sse(event: any,  data: any) {
 	return new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 function streamFromText(text: any, usage: any, reason: any, sink: ReturnType<typeof blankSink>) {
+  const stickerGate = new StickerTextGate(sink.stickerPolicy);
+  text = stickerGate.push(String(text || "")) + stickerGate.flush();
 	if (reason) sink.reason = String(reason);
 	if (text) sink.text = String(text);
 	return new ReadableStream({ start(controller) {
@@ -449,6 +452,7 @@ function streamFromText(text: any, usage: any, reason: any, sink: ReturnType<typ
 function normalizeSse(upstream: ReadableStream<Uint8Array>, secret: string | undefined, onUsage: ((total: number) => void) | undefined, sink: ReturnType<typeof blankSink>, keepReason = true) {
 	const decoder = new TextDecoder();
 	const gate = new ThinkGate();
+  const stickerGate = new StickerTextGate(sink.stickerPolicy);
 	let buffer = "";
     let activeReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 	return new ReadableStream({
@@ -471,10 +475,8 @@ function normalizeSse(upstream: ReadableStream<Uint8Array>, secret: string | und
 					sink.reason = (sink.reason + traced).slice(0, 24000);
 					push("reason", { text: traced });
 				}
-				if (split.answer) {
-					sink.text += split.answer;
-					push("delta", { text: split.answer });
-				}
+                const answer = stickerGate.push(split.answer);
+                if (answer) { sink.text += answer; push("delta", { text: answer }); }
 			};
 			try {
 				while (true) {
@@ -510,10 +512,8 @@ function normalizeSse(upstream: ReadableStream<Uint8Array>, secret: string | und
 					sink.reason = (sink.reason + rest.reason).slice(0, 24000);
 					push("reason", { text: rest.reason });
 				}
-				if (rest.answer) {
-					sink.text += rest.answer;
-					push("delta", { text: rest.answer });
-				}
+                const answer = stickerGate.push(rest.answer) + stickerGate.flush();
+                if (answer) { sink.text += answer; push("delta", { text: answer }); }
 				push("done", {});
 				if (!gone) try { controller.close(); } catch { gone = true; }
 			} catch {
@@ -1052,6 +1052,9 @@ async function handleChatRequest(request: Request): Promise<Response> {
 		const catalog = kind === "builtin" ? await loadCatalog(model) : null;
 		if (kind === "builtin") await assertBuiltinChat(catalog?.name || model);
 		const messagesIn: MessageIn[] = Array.isArray(body.messages) ? (body.messages as MessageIn[]) : [];
+        const stickerNow = new Date();
+        const stickerZone = typeof body.timeZone === "string" && body.timeZone.length <= 100 ? body.timeZone : "UTC";
+        sink.stickerPolicy = stickerReplyPolicy(messagesIn, stickerNow, stickerZone, body.stickerReplies === true);
 		const cap = kind === "builtin" ? 24e3 : 48e3;
 		const reasoningOn = body.reasoning !== false;
 		const messages: Array<{ role: string; content: string | ChatPart[]; reasoning_content?: string }> = messagesIn.slice(-32).map((item) => {
@@ -1076,7 +1079,7 @@ async function handleChatRequest(request: Request): Promise<Response> {
 			if (owner) personaText = await ownedPersonaPrompt(owner.id, personaId);
 		}
 		const toolNote = typeof body.toolNote === "string" ? body.toolNote.trim().slice(0, 4000) : "";
-        const stickerNote = body.stickerReplies === true && stickersAllowed(messagesIn) && !messagesIn.some((m) => m.role === "user" && typeof m.content === "string" && isAboutUser(m.content)) ? STICKER_REPLY_GUIDE : "";
+        const stickerNote = body.stickerReplies === true && stickersAllowed(messagesIn) && !isAboutUser(contentToText([...messagesIn].reverse().find(m => m.role === "user")?.content)) ? stickerReplyGuide(messagesIn, stickerNow, stickerZone) : "Не добавляй стикеры в этот ответ.";
 		if (!messages.some((item) => item.role === "user")) return json(400, { message: "Нет сообщения для отправки" });
 		let sources: Source[] = [];
         let searchSummary: SearchSummary | undefined;
@@ -1413,7 +1416,7 @@ async function handleChatRequest(request: Request): Promise<Response> {
                               if (usage?.total_tokens) remember(usage.total_tokens);
                               sink.text += parts.text;
                               if (reasoningOn) sink.reason += parts.reason;
-                              return streamFromText(parts.text, usage, reasoningOn ? parts.reason : "", blankSink());
+                              return streamFromText(parts.text, usage, reasoningOn ? parts.reason : "", blankSink(sink.stickerPolicy));
                             }, signal));
                           } else {
                             const parsed = await upstreamNow.response.json();
@@ -1508,7 +1511,7 @@ async function handleChatRequest(request: Request): Promise<Response> {
               if (usage?.total_tokens) remember(usage.total_tokens);
               sink.text += parts.text;
               if (reasoningOn) sink.reason += parts.reason;
-              return streamFromText(parts.text, usage, reasoningOn ? parts.reason : "", blankSink());
+              return streamFromText(parts.text, usage, reasoningOn ? parts.reason : "", blankSink(sink.stickerPolicy));
             }, signal);
 		} else {
 			const parsed = await upstream.response.json();
@@ -1535,7 +1538,7 @@ async function handleChatRequest(request: Request): Promise<Response> {
 		if (request.signal.aborted) {
 			if (actorUser && track && !stopped) {
 				keep(finishCloudReply(actorUser, track.chatId, track.messageId, {
-					content: sink.text,
+					content: normalizeStickerReply(sink.text, sink.stickerPolicy),
 					reasoning: sink.reason,
 					error: sink.error || (/timeout|aborted/i.test(message) ? "Провайдер не ответил вовремя" : "Не удалось дождаться ответа"),
 					imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search,
@@ -1746,7 +1749,7 @@ async function handleImage(request: Request, body: ChatBody, kind: "builtin" | "
 		if (request.signal.aborted) {
 			if (userId && track && !stopped) {
 				keep(finishCloudReply(userId, track.chatId, track.messageId, {
-					content: sink.text,
+					content: normalizeStickerReply(sink.text, sink.stickerPolicy),
 					reasoning: sink.reason,
 					error: sink.error || (/timeout|aborted/i.test(message) ? "Картинка не успела сгенерироваться" : "Не удалось дождаться картинки"),
 					imageUrl: sink.imageUrl, sources: sink.sources, search: sink.search,

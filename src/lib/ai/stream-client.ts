@@ -22,6 +22,7 @@ export type StreamPayload = {
   personaId?: string;
   toolNote?: string;
   stickerReplies?: boolean;
+  timeZone?: string;
   mcp?: string[];
   diskAccess?: boolean;
   memory?: string[];

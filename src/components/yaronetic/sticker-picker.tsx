@@ -73,7 +73,7 @@ export function StickerPicker({
       : STICKER_PACKS.find((p) => p.id === pack)?.codes || [];
   return (
     <section
-      className="sticker-picker rounded-2xl border border-line bg-elev p-2 text-fg"
+      className="sticker-picker w-full min-w-0 rounded-2xl border border-line bg-elev p-2 text-fg"
       aria-label="Выбор стикера"
     >
       <div className="flex items-center gap-2">
@@ -114,6 +114,7 @@ export function StickerPicker({
           </button>
         ))}
       </div>
+      {pack === "winter" && !query && ai ? <p className="px-2 pt-2 text-xs leading-relaxed text-muted">ИИ использует этот набор с 15 декабря по 10 января. В другое время — только по вашей просьбе. Вы можете отправлять его круглый год.</p> : null}
       <div className="mt-1 grid max-h-52 grid-cols-[repeat(auto-fill,minmax(72px,1fr))] gap-1 overflow-y-auto overscroll-contain">
         {codes.map((code) => (
           <button

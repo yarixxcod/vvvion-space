@@ -975,6 +975,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         await streamChat(
           {
             kind: provider.kind,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             baseUrl: provider.baseUrl,
             apiKey: provider.kind === "custom" ? provider.apiKey : "",
             extraHeaders: provider.extraHeaders.map(({ name, value }) => ({ name, value })),

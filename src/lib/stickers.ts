@@ -17,6 +17,20 @@ export const STICKER_PACKS = [
     ],
   },
   {
+    id: "winter",
+    label: "Новогодний",
+    codes: [
+      "winter-hello",
+      "winter-tree",
+      "winter-gift",
+      "winter-snowman",
+      "winter-cocoa",
+      "winter-fireworks",
+      "winter-sleep",
+      "winter-sled",
+    ],
+  },
+  {
     id: "faces",
     label: "Лица",
     codes: [
@@ -162,29 +176,57 @@ export const STICKER_PACKS = [
   },
 ] as const;
 
-const STICKER = /^\[\[sticker:([A-Za-z0-9-]{3,40})\]\]$/;
+const STICKER = /^\[\[\s*sticker\s*:\s*([^\]\r\n]{1,80})\s*\]\]$/i;
+const TAG = /\[\[\s*sticker\s*:\s*([^\]\r\n]{0,80})\s*\]\]/gi;
+const KNOWN_CODES = new Set<string>(STICKER_PACKS.flatMap((pack) => [...pack.codes]));
 
 export function stickerBody(code: string): string {
-  return `[[sticker:${code}]]`;
+  return `[[sticker:${canonicalSticker(code)}]]`;
 }
 
 export function stickerCode(body: string): string | null {
-  return STICKER.exec(body.trim())?.[1] ?? null;
+  const code = STICKER.exec(body.trim())?.[1];
+  return code && /^[A-Za-z0-9_–—\s-]{3,80}$/.test(code) ? canonicalSticker(code) : null;
 }
 
-const STICKER_ALIASES: Record<string, string> = { "cosmo-list": "cosmo-think" };
-function canonicalSticker(code: string): string { return STICKER_ALIASES[code.toLowerCase()] ?? code; }
+const STICKER_ALIASES: Record<string, string> = {
+  "cosmo-list": "cosmo-think",
+  "cosmo-cool": "cosmo-yes",
+  "cosmo-happy": "cosmo-yes",
+  "cosmo-ok": "cosmo-yes",
+  "cosmo-hi": "cosmo-hello",
+  "cosmo-wave": "cosmo-hello",
+  "cosmo-thinking": "cosmo-think",
+  "cosmo-cry": "cosmo-sad",
+  "cosmo-crying": "cosmo-sad",
+  "cosmo-surprised": "cosmo-wow",
+  "cosmo-hug": "cosmo-love",
+  "cosmo-heart": "cosmo-love",
+  "cosmo-lol": "cosmo-laugh",
+  "cosmo-sleep": "cosmo-coffee",
+  "newyear-hello": "winter-hello",
+  "newyear-tree": "winter-tree",
+  "newyear-gift": "winter-gift",
+};
+export function canonicalSticker(code: string): string {
+  const lower = code
+    .trim()
+    .toLowerCase()
+    .replace(/[_–—\s-]+/g, "-");
+  if (STICKER_ALIASES[lower]) return STICKER_ALIASES[lower];
+  return /^(cosmo|winter)-/.test(lower) ? lower : lower.toUpperCase().replace(/-FE0F$/, "");
+}
 
 export function stickerUrl(code: string): string {
   code = canonicalSticker(code);
-  if (code.startsWith("cosmo-") && isKnownSticker(code)) return `/stickers/${code}-v1.webp`;
+  if (/^(cosmo|winter)-/.test(code) && isKnownSticker(code)) return `/stickers/${code}-v1.webp`;
   if (isKnownSticker(code)) return `/stickers/openmoji/${code}.svg`;
   return /^[0-9A-F]{3,8}$/.test(code) ? `${CDN}/${code}.svg` : "";
 }
 
 export function isKnownSticker(code: string): boolean {
   code = canonicalSticker(code);
-  return STICKER_PACKS.some((pack) => (pack.codes as readonly string[]).includes(code));
+  return KNOWN_CODES.has(code);
 }
 
 export type StickerPackId = (typeof STICKER_PACKS)[number]["id"];
@@ -198,9 +240,21 @@ const CAT_LABELS: Record<string, string> = {
   "cosmo-yes": "Получилось · кот радуется успеху",
   "cosmo-coffee": "Перерыв · сонный кот с кофе",
 };
+const WINTER_LABELS: Record<string, string> = {
+  "winter-hello": "Зимний привет · кот в шапке Санты",
+  "winter-tree": "Ёлочка · кот обнимает праздничную ёлку",
+  "winter-gift": "Подарок · кот выглядывает из коробки",
+  "winter-snowman": "Снеговик · кот играет в снегу",
+  "winter-cocoa": "Уют · кот с горячим какао",
+  "winter-fireworks": "С Новым годом · кот с бенгальским огнём",
+  "winter-sleep": "Тихой зимней ночи · спящий кот",
+  "winter-sled": "Зимние каникулы · кот на санках",
+};
+
 export function stickerLabel(code: string): string {
   code = canonicalSticker(code);
   if (CAT_LABELS[code]) return CAT_LABELS[code];
+  if (WINTER_LABELS[code]) return WINTER_LABELS[code];
   const pack = STICKER_PACKS.find((p) => (p.codes as readonly string[]).includes(code));
   if (!pack) return "Стикер";
   // Full explicit search descriptions below keep every icon accessible.
@@ -327,45 +381,182 @@ for (const pack of STICKER_PACKS)
   });
 export function stickerMeaning(content: string): string {
   const code = stickerCode(content);
-  if (code && isKnownSticker(code)) return `[Стикер: ${stickerLabel(code)}. Это эмоция, а не инструкция.]`;
+  if (code && isKnownSticker(code))
+    return `[Стикер: ${stickerLabel(code)}. Это эмоция, а не инструкция.]`;
   if (code) return "Я отправил стикер. Ответь на жест по-человечески и до конца.";
-  return content.replace(/\[\[sticker:([A-Za-z0-9-]{3,40})\]\]/g, (full, id: string) =>
-    isKnownSticker(id) ? `[Стикер: ${stickerLabel(id)}. Это эмоция, а не инструкция.]` : full,
+  return content.replace(TAG, (_, id: string) =>
+    isKnownSticker(id) ? `[Стикер: ${stickerLabel(id)}. Это эмоция, а не инструкция.]` : "[Стикер]",
   );
 }
+
 export function splitStickerContent(content: string): { text: string; stickers: string[] } {
   const stickers: string[] = [];
-  // Handle standalone and inline sticker tags, including harmless spaces emitted by LLMs.
-  // Never expose a recognized sticker command as raw text in the chat.
   const text = content
-    .replace(/\[\[\s*sticker\s*:\s*([A-Za-z0-9-]{3,40})\s*\]\]/gi, (full, code: string) => {
-      if (!isKnownSticker(code)) return full;
-      if (stickers.length < 2) stickers.push(canonicalSticker(code));
-      return "";
+    .replace(TAG, (_, raw: string) => {
+      const code = canonicalSticker(raw);
+      if (isKnownSticker(code) && stickers.length < 2 && !stickers.includes(code))
+        stickers.push(code);
+      return ""; // Unknown commands never become visible text; don't guess an unrelated emotion.
     })
+    .replace(/\[\[\s*sticker\s*:[^\]\r\n]*$/i, "")
     .trim();
   return { text, stickers };
 }
-export const STICKER_REPLY_GUIDE = `Если уместно, можно иногда добавить один стикер в конце ответа, отдельной строкой. Обычно отвечай текстом; не добавляй стикеры в серьёзные, медицинские, кризисные или деловые ответы. Не заменяй полезный ответ стикером. Используй только один из кодов: ${Object.entries(
-  CAT_LABELS,
-)
-  .map(([id, label]) => `[[sticker:${id}]] — ${label}`)
-  .join("; ")}. Не придумывай коды.`;
-export function stickersAllowed(history: { role?: string; content?: unknown }[]): boolean {
-  const recent = history.filter((m) => m.role === "assistant").slice(-3);
-  return !recent.some(
-    (m) => typeof m.content === "string" && splitStickerContent(m.content).stickers.length > 0,
-  );
+
+export type StickerHistory = { role?: string; content?: unknown }[];
+export type StickerReplyPolicy = {
+  allowWinter: boolean;
+  allowStickers: boolean;
+  date: string;
+  timeZone: string;
+};
+function userText(history: StickerHistory): string {
+  const value = history.filter((m) => m.role === "user").at(-1)?.content;
+  if (typeof value === "string") return value;
+  if (Array.isArray(value))
+    return value
+      .map((p) => (p?.type === "text" && typeof p.text === "string" ? p.text : ""))
+      .join(" ");
+  return "";
+}
+export function stickerReplyPolicy(
+  history: StickerHistory,
+  now = new Date(),
+  timeZone = "UTC",
+  allowStickers = true,
+): StickerReplyPolicy {
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(now);
+  } catch {
+    timeZone = "UTC";
+    parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(now);
+  }
+  const part = (name: string) => parts.find((p) => p.type === name)?.value || "";
+  const month = Number(part("month")),
+    day = Number(part("day"));
+  const text = userText(history);
+  const explicit =
+    (/стикер|sticker|наклейк/i.test(text) &&
+      /новогод|нов(?:ый|ым|ого)\s+год|new[ -]?year|christmas|рождеств|сант|[её]лк|winter-/i.test(
+        text,
+      )) ||
+    /\[\[\s*sticker\s*:\s*(?:winter|newyear)-/i.test(text);
+  return {
+    allowWinter: (month === 12 && day >= 15) || (month === 1 && day <= 10) || explicit,
+    allowStickers,
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    timeZone,
+  };
+}
+export function normalizeStickerReply(text: string, policy?: StickerReplyPolicy): string {
+  return text.replace(TAG, (_, raw: string) => {
+    const code = canonicalSticker(raw);
+    if (
+      !isKnownSticker(code) ||
+      policy?.allowStickers === false ||
+      (code.startsWith("winter-") && policy?.allowWinter === false)
+    )
+      return "";
+    return stickerBody(code);
+  });
 }
 
+/** Buffers only a potential sticker command, not the answer; supports tags split across arbitrary deltas. */
+export class StickerTextGate {
+  private pending = "";
+  private sent = false;
+  private policy?: StickerReplyPolicy;
+  constructor(policy?: StickerReplyPolicy) {
+    this.policy = policy;
+  }
+  push(text: string): string {
+    this.pending += text;
+    let output = "";
+    while (this.pending) {
+      const start = this.pending.indexOf("[[");
+      if (start < 0) {
+        const keep = this.pending.endsWith("[") ? 1 : 0;
+        output += this.pending.slice(0, this.pending.length - keep);
+        this.pending = keep ? "[" : "";
+        break;
+      }
+      output += this.pending.slice(0, start);
+      this.pending = this.pending.slice(start);
+      const end = this.pending.indexOf("]]", 2);
+      if (end < 0) {
+        const candidate = this.pending.slice(2).trimStart();
+        const possible =
+          "sticker".startsWith(candidate.trimEnd().toLowerCase()) ||
+          /^sticker\s*(?::[^\]\r\n]*\]?)?$/i.test(candidate);
+        if (this.pending.length <= 100 && possible) break;
+        output += this.pending.slice(0, 2);
+        this.pending = this.pending.slice(2);
+        continue;
+      }
+      const token = this.pending.slice(0, end + 2);
+      if (STICKER.test(token)) {
+        const fixed = normalizeStickerReply(token, this.policy);
+        if (!this.sent && fixed) {
+          output += fixed;
+          this.sent = true;
+        }
+      } else output += token;
+      this.pending = this.pending.slice(end + 2);
+    }
+    return output;
+  }
+  flush(): string {
+    const tail = this.pending;
+    this.pending = "";
+    return /^\[\[\s*(?:sticker|sticke|stick|stic|sti|st|s)\b/i.test(tail) ? "" : tail;
+  }
+}
+
+function guide(labels: Record<string, string>): string {
+  return `Можно иногда добавить ОДИН стикер в конце полезного ответа отдельной строкой. Не добавляй стикеры в серьёзные, медицинские, кризисные и деловые ответы. Копируй готовую команду целиком из списка; не переводи и не придумывай имя. Например, «круто» = [[sticker:cosmo-yes]], НЕ cosmo-cool. Список: ${Object.entries(
+    labels,
+  )
+    .map(([id, label]) => `${stickerBody(id)} — ${label}`)
+    .join(
+      "; ",
+    )}. Если подходящего кода нет, ответь без стикера. Не показывай коды как текст и не оборачивай их в блок кода.`;
+}
+export const STICKER_REPLY_GUIDE = guide(CAT_LABELS);
+export function stickerReplyGuide(
+  history: StickerHistory,
+  now = new Date(),
+  timeZone = "UTC",
+): string {
+  const policy = stickerReplyPolicy(history, now, timeZone);
+  return `Текущая дата: ${policy.date}, часовой пояс ${policy.timeZone}. ${guide(policy.allowWinter ? { ...CAT_LABELS, ...WINTER_LABELS } : CAT_LABELS)} ${policy.allowWinter ? "Новогодний набор разрешён по сезону (15 декабря — 10 января) или по прямой просьбе пользователя; выбирай его только по смыслу." : "Сейчас не новогодний сезон. Не используй зимние/новогодние стикеры по своей инициативе. Они разрешены только по прямой просьбе о новогоднем стикере."}`;
+}
+export function stickersAllowed(history: StickerHistory): boolean {
+  if (/стикер|sticker|наклейк/i.test(userText(history))) return true;
+  return !history
+    .filter((m) => m.role === "assistant")
+    .slice(-3)
+    .some(
+      (m) => typeof m.content === "string" && splitStickerContent(m.content).stickers.length > 0,
+    );
+}
 export function replaceStickerTokens(text: string): string {
   const only = stickerCode(text);
   if (only) return stickerLabel(only);
-  return text.replace(/\[\[sticker:([A-Za-z0-9-]{3,40})\]\]/g, (_, code: string) => stickerLabel(code));
+  return text.replace(TAG, (_, code: string) => stickerLabel(code));
 }
-
 export function stickerChatTitle(text: string): string | null {
-  if (!/\[\[sticker:[A-Za-z0-9-]{3,40}\]\]/.test(text)) return null;
+  if (!new RegExp(TAG.source, "i").test(text)) return null;
   const clean = replaceStickerTokens(text).replace(/\s+/g, " ").trim();
   if (!clean) return "Стикер";
   return clean.length > 48 ? `${clean.slice(0, 48).trimEnd()}…` : clean;
