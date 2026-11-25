@@ -1,3 +1,4 @@
+import { ChatImage, ImageViewer } from "./chat-image";
 import {StickerPicker, StickerImage} from "@/components/yaronetic/sticker-picker";
 import {setRoomMessageLike} from "@/lib/social/messenger";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
@@ -996,7 +997,7 @@ function useRoomImage(file: FileMeta): string | null {
       return;
     }
     if (file.blob) {
-      if (file.size > 12_000_000) return;
+
       let dead = false;
       void fetchCircleBlob(file.id)
         .then((next) => {
@@ -1029,7 +1030,7 @@ function useRoomImage(file: FileMeta): string | null {
 }
 
 function PhotoPile({ files }: { files: FileMeta[] }) {
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<FileMeta | null>(null);
   const pile = files.length > 1;
   const shown = pile ? files.slice(0, 4) : files;
   return (
@@ -1046,25 +1047,28 @@ function PhotoPile({ files }: { files: FileMeta[] }) {
       {files.length > shown.length ? (
         <span className="absolute right-0 bottom-0 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] text-white">+{files.length - shown.length}</span>
       ) : null}
-      {open ? (
-        <div className="fixed inset-0 z-[80] flex flex-col bg-black/80 p-3" role="dialog" aria-modal="true">
-          <div className="flex justify-end">
-            <button type="button" className="press h-11 rounded-2xl bg-elev px-3 text-sm" onClick={() => setOpen(null)}>Закрыть</button>
-          </div>
-          <button type="button" className="flex min-h-0 flex-1 items-center justify-center" aria-label="Закрыть" onClick={() => setOpen(null)}>
-            <img src={open} alt="" className="max-h-full max-w-full object-contain" />
-          </button>
-        </div>
-      ) : null}
+      {open ? <RoomGallery files={files} initialId={open.id} onClose={() => setOpen(null)} /> : null}
     </div>
   );
 }
 
-function Shot({ file, pile, style, onOpen }: { file: FileMeta; pile: boolean; style?: CSSProperties; onOpen: (src: string) => void }) {
+function RoomGallery({ files, initialId, onClose }: { files: FileMeta[]; initialId: string; onClose: () => void }) {
+  const [index, setIndex] = useState(Math.max(0, files.findIndex(file => file.id === initialId)));
+  const at = Math.min(index, files.length - 1);
+  const file = files[at];
+  if (!file) return null;
+  return <RoomGalleryImage key={file.id} file={file} onClose={onClose} navigation={files.length > 1 ? { index: at, total: files.length, previous: () => setIndex((at + files.length - 1) % files.length), next: () => setIndex((at + 1) % files.length) } : undefined} />;
+}
+function RoomGalleryImage({ file, onClose, navigation }: { file: FileMeta; onClose: () => void; navigation?: { index: number; total: number; previous: () => void; next: () => void } }) {
+  const src = useRoomImage(file);
+  return <ImageViewer image={{src: src || "", name: file.name}} onClose={onClose} navigation={navigation} />;
+}
+
+function Shot({ file, pile, style, onOpen }: { file: FileMeta; pile: boolean; style?: CSSProperties; onOpen: (file: FileMeta) => void }) {
   const url = useRoomImage(file);
   if (!url) return pile ? null : <LoaderMark className="vv-loader-sm mt-1.5" />;
   return (
-    <button type="button" className={cn("block text-left", pile && "absolute")} style={style} onClick={() => onOpen(url)}>
+    <button type="button" className={cn("block text-left", pile && "absolute")} style={style} onClick={() => onOpen(file)}>
       <img src={url} alt={file.name} className={cn("rounded-xl object-cover", pile ? "h-[6.1rem] w-[7.1rem] shadow-md ring-2 ring-bg" : "max-h-44 max-w-[15rem] rounded-2xl")} />
     </button>
   );
@@ -1072,7 +1076,6 @@ function Shot({ file, pile, style, onOpen }: { file: FileMeta; pile: boolean; st
 
 function Attachment({ file, mine }: { file: FileMeta; mine: boolean }) {
   const [url, setUrl] = useState<string | null>(fileUrls.get(file.id) ?? null);
-  const [open, setOpen] = useState(false);
   const local = file.id.startsWith("local-");
 
   const stream = file.mime.startsWith("video/") && file.blob && !local;
@@ -1145,32 +1148,9 @@ function Attachment({ file, mine }: { file: FileMeta; mine: boolean }) {
   }
 
   if (file.mime.startsWith("image/") && url) {
-    return (
-      <>
-        <button type="button" className="mt-1.5 block text-left" onClick={() => setOpen(true)}>
-          <img src={url} alt={file.name} className="max-h-56 rounded-2xl" />
-        </button>
-        {open ? (
-          <div className="fixed inset-0 z-[80] flex flex-col bg-black/80 p-3" role="dialog" aria-modal="true" aria-label={file.name}>
-            <div className="flex items-center justify-between gap-2">
-              <BackButton onClick={() => setOpen(false)} label="Назад" className="text-white" />
-              <div className="flex gap-2">
-              <a href={url} download={file.name} className="press inline-flex h-11 items-center rounded-2xl bg-elev px-3 text-sm">
-                Скачать
-              </a>
-              <button type="button" className="press hidden h-11 items-center rounded-2xl border border-line bg-elev px-3 text-sm md:inline-flex" onClick={() => setOpen(false)}>
-                Закрыть
-              </button>
-              </div>
-            </div>
-            <button type="button" className="flex min-h-0 flex-1 items-center justify-center" aria-label="Закрыть" onClick={() => setOpen(false)}>
-              <img src={url} alt={file.name} className="max-h-full max-w-full object-contain" />
-            </button>
-          </div>
-        ) : null}
-      </>
-    );
+    return <ChatImage src={url} name={file.name} className="max-h-56 max-w-full rounded-2xl object-contain" />;
   }
+
   if (file.blob && !url) {
     return (
       <button

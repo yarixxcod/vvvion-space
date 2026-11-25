@@ -1,3 +1,4 @@
+import { ChatImage } from "./chat-image";
 import {StickerImage} from "@/components/yaronetic/sticker-picker";
 import { LikePin } from "@/components/yaronetic/message-like";
 import {splitStickerContent} from "@/lib/stickers";
@@ -6,8 +7,7 @@ import { CatalogArt } from "@/components/yaronetic/catalog-art";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, Download, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, TextSelect, Trash2, Volume2, X } from "lucide-react";
-import { BackButton } from "@/components/yaronetic/back-button";
+import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, FileSearch, FileText, FolderPlus, Globe, Heart, Image as ImageIcon, Info, Loader2, MoreHorizontal, RefreshCw, Search, Square, TextSelect, Trash2, Volume2 } from "lucide-react";
 import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { Markdown } from "@/components/yaronetic/markdown";
@@ -31,23 +31,6 @@ function clock(ts: number) {
 
 function pictureSrc(url?: string) {
   return loadableImageUrl(url);
-}
-
-function saveBlob(blob: Blob, name: string) {
-  const href = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = href;
-  link.download = name;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(href), 1500);
-}
-
-async function downloadPicture(url: string) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Не удалось скачать");
-  const type = res.headers.get("content-type") || "";
-  const ext = type.includes("png") ? "png" : type.includes("webp") ? "webp" : type.includes("gif") ? "gif" : "jpg";
-  saveBlob(await res.blob(), `vvvion.${ext}`);
 }
 
 function usageLine(usage?: Usage) {
@@ -404,7 +387,7 @@ function UserBubble({
                     <audio controls preload="metadata" src={file.url} className="h-9 w-full max-w-xs" />
                   </span>
                 ) : file.kind === "image" && (file.dataUrl || file.url) ? (
-                  <img key={file.id} src={file.dataUrl || file.url} alt={file.name} loading="lazy" decoding="async" className="max-h-64 rounded-2xl object-contain" />
+                  <ChatImage key={file.id} src={(file.dataUrl || file.url)!} name={file.name} />
                 ) : (
                   <span key={file.id} className="rounded-xl border border-line bg-bg px-2 py-1 text-xs">
                     {file.url ? (
@@ -797,67 +780,7 @@ function ImagePlate() {
 }
 
 function ChatPicture({ url, alt }: { url: string; alt: string }) {
-  const [failed, setFailed] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  useEffect(() => setNode(document.body), []);
-  useEffect(() => {
-    if (!open) return;
-    return pushBackLayer(() => setOpen(false));
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open]);
-  if (failed) {
-    return <p className="mt-2 text-sm text-muted">Картинка не открылась</p>;
-  }
-  return (
-    <>
-      <button type="button" className="mt-2 block max-w-xl text-left" onClick={() => setOpen(true)}>
-        <img
-          src={url}
-          alt={alt}
-          className="image-reveal max-h-[28rem] w-full rounded-2xl border border-line object-contain"
-          onError={() => setFailed(true)}
-        />
-      </button>
-      {open && node
-        ? createPortal(
-            <div className="fixed inset-0 z-[80] flex flex-col bg-black/80 p-3" role="dialog" aria-modal="true" aria-label={alt}>
-              <div className="flex items-center justify-between gap-2">
-                <BackButton onClick={() => setOpen(false)} label="Назад" className="text-white" />
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="press inline-flex h-11 items-center gap-1.5 rounded-2xl bg-elev px-3 text-sm"
-                    onClick={() => void downloadPicture(url).catch(() => undefined)}
-                  >
-                    <Download className="size-4" />
-                    Скачать
-                  </button>
-                  <button type="button" className="press hidden h-11 items-center gap-1.5 rounded-2xl border border-line bg-elev px-3 text-sm md:inline-flex" onClick={() => setOpen(false)}>
-                    <X className="size-4" />
-                    Закрыть
-                  </button>
-                </div>
-              </div>
-              <button type="button" className="flex min-h-0 flex-1 items-center justify-center" aria-label="Закрыть" onClick={() => setOpen(false)}>
-                <img src={url} alt={alt} className="max-h-full max-w-full object-contain" />
-              </button>
-            </div>,
-            node,
-          )
-        : null}
-    </>
-  );
+  return <ChatImage src={url} name="vvvion-image" alt={alt} className="image-reveal max-h-[28rem] w-full max-w-xl rounded-2xl border border-line object-contain" />;
 }
 
 function Thought({ text, live }: { text: string; live: boolean }) {

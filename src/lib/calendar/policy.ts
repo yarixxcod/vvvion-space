@@ -6,7 +6,7 @@ export function validReminder(minutes: number) {
 
 export function cleanText(value: unknown, max: number) {
   if (typeof value !== "string") return "";
-  return value.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  return Array.from(value, char => char.charCodeAt(0) < 32 ? " " : char).join("").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 export function validTitle(value: unknown) {

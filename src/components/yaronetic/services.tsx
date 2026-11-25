@@ -180,7 +180,7 @@ export function Services({
             aria-label={tile.title}
           >
             <img
-              src={`/services/${tile.id}-v2.webp`}
+              src={`/services/${tile.id}-${tile.id === "api" ? "v3" : "v2"}.webp`}
               alt=""
               width="512"
               height="512"

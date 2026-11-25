@@ -16,7 +16,7 @@ test("the public API does not spend chat limits or save images to disk", () => {
   assert.equal(api.includes("storeDiskImage"), false);
   assert.equal(api.includes("chat_attempts"), false);
   assert.match(readFileSync("src/lib/api/keys.server.ts", "utf8"), /user_id = \$\{userId\}/);
-  assert.match(readFileSync("src/lib/api/upstream.server.ts", "utf8"), /chatModelAllowed/);
+  assert.match(readFileSync("src/lib/api/upstream.server.ts", "utf8"), /resolveApiChatModel/);
 });
 
 test("api routes live at /v1 and ignore the site session", () => {
