@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Plus, Search, Settings, X } from "lucide-react";
 import { appNotify } from "@/lib/app-bridge";
 import { getBearerToken } from "@/lib/auth/client";
@@ -119,6 +120,9 @@ function asItem(row: Record<string, unknown>): Item | null {
   };
 }
 
+/** Survives remounts. The agent link otherwise reopens this card every time events reload. */
+let dismissedEventLink = "";
+
 export function CalendarDesk({ eventId }: { eventId?: string }) {
   const tx = useTx();
   const { user, isPending } = useCurrentUserState();
@@ -183,21 +187,36 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
     void load().catch((err: Error) => setError(err.message));
   }, [user, load]);
 
+  const openedLink = useRef("");
   useEffect(() => {
-    if (!eventId || !user) return;
+    if (!eventId || !user || dismissedEventLink === eventId || openedLink.current === eventId) return;
     const found = items.find((item) => item.id === eventId);
-    if (found) {
-      setOpen(found);
-      setCursor(new Date(found.startsAt));
-      return;
+    if (!found) {
+      let dead = false;
+      void api(`/api/calendar/events/${eventId}`).then((body) => {
+        if (dead || dismissedEventLink === eventId || openedLink.current === eventId) return;
+        const item = asItem(body);
+        if (!item) return;
+        openedLink.current = eventId;
+        setOpen(item);
+        setCursor((current) => (ymd(current, tz) === ymd(new Date(item.startsAt), tz) ? current : new Date(item.startsAt)));
+      }).catch(() => undefined);
+      return () => {
+        dead = true;
+      };
     }
-    void api(`/api/calendar/events/${eventId}`).then((body) => {
-      const item = asItem(body);
-      if (!item) return;
-      setOpen(item);
-      setCursor(new Date(item.startsAt));
-    }).catch(() => undefined);
-  }, [eventId, items, user]);
+    openedLink.current = eventId;
+    setOpen(found);
+    setCursor((current) => (ymd(current, tz) === ymd(new Date(found.startsAt), tz) ? current : new Date(found.startsAt)));
+  }, [eventId, items, tz, user]);
+
+  function closeCard() {
+    if (eventId) {
+      dismissedEventLink = eventId;
+      openedLink.current = eventId;
+    }
+    setOpen(null);
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -292,7 +311,7 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
 
   async function remove(item: Item, scope: Scope) {
     await api(`/api/calendar/events/${item.id}?scope=${scope}&occurrence=${encodeURIComponent(item.startsAt)}`, { method: "DELETE" });
-    setOpen(null);
+    closeCard();
     setUndo({ item, scope });
     window.setTimeout(() => setUndo((current) => (current?.item.id === item.id ? null : current)), 8000);
     await load();
@@ -368,7 +387,7 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
       }
       if (event.key === "Enter" && shown[picked]) setOpen(shown[picked]);
       if (event.key === "Escape") {
-        setOpen(null);
+        closeCard();
         setForm(false);
         setSettings(false);
       }
@@ -441,7 +460,7 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
           </p>
         ) : null}
       </form>
-      {open ? <Card item={open} tz={tz} onClose={() => setOpen(null)} onDelete={(scope) => void remove(open, scope).catch((err: Error) => setError(err.message))} onEdit={() => { setSeed(null); setForm(true); }} /> : null}
+      {open ? <Card item={open} tz={tz} onClose={closeCard} onDelete={(scope) => void remove(open, scope).catch((err: Error) => setError(err.message))} onEdit={() => { setSeed(null); setForm(true); }} /> : null}
       {form ? (
         <Editor
           tz={tz}
@@ -608,9 +627,9 @@ function Card({ item, tz, onClose, onDelete, onEdit }: { item: Item; tz: string;
   const [scope, setScope] = useState<Scope>(item.rrule ? "this" : "all");
   const [sure, setSure] = useState(false);
   const when = new Intl.DateTimeFormat(undefined, { timeZone: tz, weekday: "short", day: "numeric", month: "long", hour: item.allDay ? undefined : "2-digit", minute: item.allDay ? undefined : "2-digit" }).format(new Date(item.startsAt));
-  return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
-      <div className="w-full max-w-md rounded-t-[1.6rem] border border-line bg-elev p-4 sm:rounded-[1.6rem]" onClick={(event) => event.stopPropagation()} role="dialog">
+  return createPortal(
+    <div className="fixed inset-0 z-[140] flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-md rounded-[1.6rem] border border-line bg-elev p-4" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
         <div className="flex items-start gap-3">
           <h3 className="min-w-0 flex-1 font-serif text-2xl">{item.title}</h3>
           <button type="button" className="press grid size-11 place-items-center" onClick={onClose} aria-label="Close"><X className="size-5" /></button>
@@ -642,7 +661,8 @@ function Card({ item, tz, onClose, onDelete, onEdit }: { item: Item; tz: string;
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { pushBackLayer } from "@/lib/app-back";
+import { loadError } from "@/lib/load-error";
 import { fetchImageFile, saveImageFile } from "@/lib/image-download";
 
 export type ChatImageSource = { src: string; name: string; alt?: string };
@@ -68,6 +69,7 @@ export function ImageViewer({
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
+  const [painted, setPainted] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [sharing, setSharing] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -89,12 +91,13 @@ export function ImageViewer({
     const controller = new AbortController();
     setFile(null);
     setError("");
+    setPainted(false);
     if (!image.src) return () => controller.abort();
     void fetchImageFile(image.src, image.name, controller.signal)
       .then(setFile)
       .catch((err) => {
         if (!controller.signal.aborted)
-          setError(err instanceof Error ? err.message : "Не удалось подготовить изображение");
+          setError(loadError(err instanceof Error ? err.message : "", "Не удалось подготовить изображение"));
       });
     return () => controller.abort();
   }, [image.src, image.name]);
@@ -167,20 +170,22 @@ export function ImageViewer({
         </button>
       </header>
       <div
-        className={`flex min-h-0 flex-1 ${zoom ? "overflow-auto" : "items-center justify-center overflow-hidden"}`}
+        className={`relative min-h-0 flex-1 ${zoom ? "overflow-auto" : "overflow-hidden"}`}
       >
         {image.src ? (
           <img
             src={image.src}
             alt={image.alt || image.name}
-            className={zoom ? "m-auto max-w-none shrink-0" : "max-h-full max-w-full object-contain"}
+            onLoad={() => setPainted(true)}
+            onError={() => setPainted(false)}
+            className={zoom ? "mx-auto max-w-none" : "absolute inset-0 m-auto max-h-full max-w-full object-contain"}
           />
         ) : (
-          <Loader2 aria-label="Загружаю фото" className="m-auto size-8 animate-spin" />
+          <Loader2 aria-label="Загружаю фото" className="absolute inset-0 m-auto size-8 animate-spin" />
         )}
       </div>
       <footer className="shrink-0 border-t border-white/15 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
-        {error ? (
+        {error && !painted ? (
           <div role="alert" className="mb-3 text-center text-sm text-rose-200">
             {error}.{" "}
             <a

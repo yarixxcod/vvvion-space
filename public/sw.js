@@ -1,4 +1,4 @@
-const CACHE = "vvvion-shell-5";
+const CACHE = "vvvion-shell-6";
 const SHELL = ["/offline.html", "/favicon.svg", "/favicon.ico", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png"];
 const PUBLIC_PAGES = new Set(["/", "/about", "/updates", "/login", "/offline.html"]);
 
@@ -47,6 +47,7 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
+  if (url.protocol !== "https:" && url.protocol !== "http:") return;
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_server") || url.pathname.startsWith("/auth")) return;
 

@@ -56,6 +56,7 @@ import { megaFileUrl } from "@/lib/social/mega-upload";
 import { WishCarousel } from "@/components/yaronetic/wishes";
 import { cn } from "@/lib/utils";
 import { CIRCLE_MAX_BYTES, fetchCircleBlob, uploadCircleFile } from "@/lib/social/circle-upload";
+import { forgetImageBlob, rememberImageBlob } from "@/lib/image-download";
 
 const tones = ["#c4b5e8", "#9dccb6", "#e7c89a", "#e7a19c", "#9bb7d4", "#d7b4c8"];
 
@@ -97,7 +98,10 @@ function b64Url(b64: string, mime: string) {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+  const blob = new Blob([bytes], { type: mime });
+  const url = URL.createObjectURL(blob);
+  rememberImageBlob(url, blob);
+  return url;
 }
 
 const fileUrls = new Map<string, string>();
@@ -1002,6 +1006,7 @@ function useRoomImage(file: FileMeta): string | null {
       void fetchCircleBlob(file.id)
         .then((next) => {
           if (dead) {
+            forgetImageBlob(next);
             URL.revokeObjectURL(next);
             return;
           }
@@ -1092,6 +1097,7 @@ function Attachment({ file, mine }: { file: FileMeta; mine: boolean }) {
       void fetchCircleBlob(file.id)
         .then((next) => {
           if (dead) {
+            forgetImageBlob(next);
             URL.revokeObjectURL(next);
             return;
           }

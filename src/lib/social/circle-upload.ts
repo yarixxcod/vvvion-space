@@ -1,4 +1,5 @@
 import { getBearerToken } from "@/lib/auth/client";
+import { rememberImageBlob } from "@/lib/image-download";
 
 const CHUNK = 1_500_000;
 export const CIRCLE_MAX_BYTES = 200 * 1024 * 1024;
@@ -147,5 +148,8 @@ export async function fetchCircleBlob(id: string): Promise<string> {
   if (token) head.set("Authorization", `Bearer ${token}`);
   const response = await fetch(`/api/circle-file/${id}`, { headers: head, credentials: "same-origin" });
   if (!response.ok) throw new Error("Файл не открывается");
-  return URL.createObjectURL(await response.blob());
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  rememberImageBlob(url, blob);
+  return url;
 }

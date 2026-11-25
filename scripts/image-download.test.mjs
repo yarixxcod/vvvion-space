@@ -9,6 +9,32 @@ new Function(
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText,
 )(exports);
+test("blob and data pictures are read without a credentialed request", async (t) => {
+  const prior = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = prior;
+    exports.forgetImageBlob("blob:kept");
+  });
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    seen.push({ url, credentials: init?.credentials });
+    return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0x00]), {
+      headers: { "content-type": "application/octet-stream" },
+    });
+  };
+  const jpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString("base64")}`;
+  const data = await exports.fetchImageFile(jpeg, "Снимок", new AbortController().signal);
+  exports.rememberImageBlob("blob:kept", new Blob([Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0])], { type: "image/png" }));
+  const kept = await exports.fetchImageFile("blob:kept", "Снимок", new AbortController().signal);
+  const loose = await exports.fetchImageFile("blob:photo", "Снимок", new AbortController().signal);
+  const remote = await exports.fetchImageFile("/api/circle-file/abc", "Снимок", new AbortController().signal);
+  assert.equal(data.type, "image/jpeg");
+  assert.equal(data.name, "Снимок.jpg");
+  assert.equal(kept.type, "image/png");
+  assert.equal(loose.type, "image/jpeg");
+  assert.equal(remote.name, "Снимок.jpg");
+  assert.deepEqual(seen.map((row) => row.credentials), ["omit", "same-origin"]);
+});
 test("image filenames preserve a meaningful name with the actual MIME extension", () => {
   assert.equal(exports.imageDownloadName("Фото.png", "image/jpeg"), "Фото.jpg");
   assert.equal(exports.imageDownloadName("../evil:name", "image/webp"), ".._evil_name.webp");
