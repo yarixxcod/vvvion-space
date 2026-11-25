@@ -56,13 +56,25 @@ export async function streamChat(payload: StreamPayload, handlers: Handlers): Pr
   });
 
   if (!res.ok) {
-    let message = `Ошибка ${res.status}`;
+    let message = "";
+    const raw = await res.text().catch(() => "");
     try {
-      const body = (await res.json()) as { message?: string };
-      if (body.message) message = body.message;
-    } catch {
-      /* ignore broken error bodies */
+      const body = JSON.parse(raw) as { message?: unknown; error?: unknown };
+      const nested = body?.error;
+      const detail = typeof body?.message === "string" ? body.message
+        : typeof nested === "string" ? nested
+        : nested && typeof nested === "object" && "message" in nested && typeof nested.message === "string" ? nested.message : "";
+      message = detail.trim().slice(0, 350);
+    } catch { /* An HTML gateway denial is not an application JSON error. */ }
+    if (!message) {
+      const handled = res.headers.get("x-vvvion-chat") === "1";
+      message = res.status === 401 ? "Сессия истекла. Войдите в аккаунт снова."
+        : res.status === 403 ? (handled ? "Доступ к чату отклонён. Проверьте вход в аккаунт и подписку."
+          : "Соединение отклонено до обработки чата (403). Обновите страницу и повторите отправку.")
+        : `Не удалось выполнить запрос (${res.status}).`;
     }
+    const requestId = res.headers.get("x-vvvion-request-id") || res.headers.get("x-vercel-id");
+    if (requestId && /^[a-zA-Z0-9:_.-]{1,160}$/.test(requestId)) message += ` Код запроса: ${requestId}`;
     throw new Error(message);
   }
 

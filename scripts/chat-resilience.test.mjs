@@ -155,3 +155,25 @@ test("VVVion Memory tool calls emitted as DSML text are executed as calls", () =
   assert.equal(calls[0].name, "memory_list");
   assert.deepEqual(JSON.parse(calls[0].args), {});
 });
+
+test("HTTP refusals distinguish application messages from opaque gateway 403 without replaying the request", async () => {
+  const previous = globalThis.fetch;
+  const handlers={signal:new AbortController().signal,onDelta(){},onUsage(){},onError(){}};
+  const cases=[
+    [Response.json({message:'Нужна подписка'}, {status:403}), /Нужна подписка/],
+    [Response.json({error:{message:'Сессия недействительна'}}, {status:403}), /Сессия недействительна/],
+    [new Response('<html>Forbidden</html>', {status:403}), /до обработки чата/],
+    [new Response('', {status:403,headers:{'x-vvvion-chat':'1'}}), /Доступ к чату/],
+    [new Response('', {status:401}), /Сессия истекла/],
+  ];
+  try {
+    for (const [reply,pattern] of cases) {
+      let calls=0;
+      globalThis.fetch=async()=>{calls++;return reply;};
+      await assert.rejects(stream.streamChat({},handlers),pattern);
+      assert.equal(calls,1);
+    }
+    globalThis.fetch=async()=>new Response('',{status:403,headers:{'x-vercel-id':'fra1::trace-123'}});
+    await assert.rejects(stream.streamChat({},handlers), /Код запроса: fra1::trace-123/);
+  } finally {globalThis.fetch=previous;}
+});

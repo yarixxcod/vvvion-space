@@ -1019,7 +1019,17 @@ async function commitBuiltinGuest(request: any,  seal: any) {
 		blocked: null
 	};
 }
+/** Identify application replies separately from a gateway/edge denial, without logging chat contents. */
 export async function handleChat(request: Request): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  const response = await handleChatRequest(request);
+  const headers = new Headers(response.headers);
+  headers.set("x-vvvion-chat", "1");
+  headers.set("x-vvvion-request-id", requestId);
+  if (response.status >= 400) console.warn("[chat-denied]", { requestId, status: response.status });
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+async function handleChatRequest(request: Request): Promise<Response> {
 	let guestSeal: string | null = null;
 	const seal = (response: Response) => withGuestCookie(response, guestSeal);
 	if (!(request.headers.get("content-type") || "").includes("application/json")) return json(415, { message: "Ожидался JSON" });
@@ -1040,7 +1050,7 @@ export async function handleChat(request: Request): Promise<Response> {
 	try {
 		const model = modelName(body.model);
 		const catalog = kind === "builtin" ? await loadCatalog(model) : null;
-		if (kind === "builtin") await assertBuiltinChat(model);
+		if (kind === "builtin") await assertBuiltinChat(catalog?.name || model);
 		const messagesIn: MessageIn[] = Array.isArray(body.messages) ? (body.messages as MessageIn[]) : [];
 		const cap = kind === "builtin" ? 24e3 : 48e3;
 		const reasoningOn = body.reasoning !== false;
