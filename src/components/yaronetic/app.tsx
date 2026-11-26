@@ -40,6 +40,7 @@ import { writeLivePersona } from "@/lib/social/persona-live";
 import { useReleaseFlag } from "@/lib/release";
 import { gestureSurface, pushBackLayer } from "@/lib/app-back";
 import { circleExitDelta } from "@/lib/circle-history";
+import { circleUnderlay } from "@/lib/app-nav";
 import { shareOut } from "@/lib/app-bridge";
 import { modLabel, useChatShortcuts } from "@/lib/chat-shortcuts";
 import { haptic } from "@/lib/haptic";
@@ -167,21 +168,13 @@ export function App({
     });
     if (!circleViaUi.current && !(window.history.state as { vvCircle?: number } | null)?.vvCircle) {
       const current = window.location.pathname + window.location.search;
-      const url = new URL(window.location.href);
-      const insideService = url.searchParams.get("place") === "services" && url.searchParams.has("svc");
-      if (insideService) {
-        url.searchParams.delete("svc");
-        url.searchParams.delete("event");
-      } else {
-        url.searchParams.delete("place");
-        url.searchParams.delete("room");
-        url.searchParams.delete("svc");
-        url.searchParams.delete("event");
-      }
-      const back = url.pathname + url.search;
-      if (back !== current) {
-        window.history.replaceState(insideService ? { vvCircle: 1 } : { vvChat: 1 }, "", back);
+      const underlay = circleUnderlay(window.location.href);
+      if (underlay && underlay !== current) {
+        window.history.replaceState({ vvChat: 1 }, "", underlay);
         window.history.pushState({ vvCircle: 1 }, "", current);
+      } else {
+        const prev = typeof window.history.state === "object" && window.history.state ? window.history.state : {};
+        window.history.replaceState({ ...prev, vvCircle: 1 }, "");
       }
     } else {
       const prev = typeof window.history.state === "object" && window.history.state ? window.history.state : {};

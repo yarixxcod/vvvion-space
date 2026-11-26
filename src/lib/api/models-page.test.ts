@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { catalogWindow, parseModelsQuery, renderModelsShell, sliceByCursor, wantsModelsHtml } from "./models-page.ts";
 import { parsePublicModels } from "./public-models.ts";
-import { apiHostDecision, isApiHost } from "./api-host.ts";
+import { apiHostDecision, hasApiHost, isApiHost } from "./api-host.ts";
 
 const models = [
   { id: "deepseek-4.1-flash", displayName: "DeepSeek-4.1 Flash", type: "chat" as const },
@@ -60,7 +60,12 @@ test("public model JSON is parsed and the API host never opens the app", () => {
   ]);
   assert.equal(isApiHost("api.vvvion.space"), true);
   assert.equal(isApiHost("API.vvvion.space:443"), true);
+  assert.equal(isApiHost("api.vvvion.space."), true);
+  assert.equal(isApiHost("https://api.vvvion.space/v1/models"), true);
   assert.equal(isApiHost("vvvion.space"), false);
+  assert.equal(hasApiHost(["vvvion-space.vercel.app", "api.vvvion.space"]), true);
+  assert.equal(hasApiHost(["vvvion.space, api.vvvion.space"]), true);
+  assert.equal(hasApiHost(["vvvion.space", "localhost"]), false);
   assert.equal(apiHostDecision("GET", "/"), "redirect");
   assert.equal(apiHostDecision("GET", "/login"), "redirect");
   assert.equal(apiHostDecision("GET", "/v1/models"), "pass");

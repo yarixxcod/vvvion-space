@@ -60,7 +60,11 @@ export function Pwa() {
       void wipe().finally(() => window.location.reload());
     };
     heal();
-    if (import.meta.env.PROD && "serviceWorker" in navigator) {
+    if (location.hostname === "api.vvvion.space") {
+      if ("serviceWorker" in navigator) {
+        void navigator.serviceWorker.getRegistrations().then((regs) => Promise.all(regs.map((reg) => reg.unregister()))).catch(() => undefined);
+      }
+    } else if (import.meta.env.PROD && "serviceWorker" in navigator) {
       void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
     }
     const onClick = (event: MouseEvent) => {

@@ -69,3 +69,25 @@ export function destinationFor(input: string): { to: "/"; search: AppSearch } | 
   }
   return null;
 }
+
+/**
+ * URL to put under the circle on a cold load.
+ * Null means leave the address alone — a service deep link must survive reload.
+ */
+export function circleUnderlay(href: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(href, "https://vvvion.space");
+  } catch {
+    return null;
+  }
+  if (url.searchParams.get("place") === "services" && serviceView(url.searchParams.get("svc"))) return null;
+  const current = url.pathname + url.search;
+  url.searchParams.delete("place");
+  url.searchParams.delete("room");
+  url.searchParams.delete("svc");
+  url.searchParams.delete("event");
+  const next = url.pathname + url.search;
+  return next === current ? null : next;
+}
+

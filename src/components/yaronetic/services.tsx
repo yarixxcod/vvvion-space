@@ -65,10 +65,12 @@ export function Services({
   initial = null,
   eventId,
   onWide,
+  onNested,
 }: {
   initial?: ServiceView | null;
   eventId?: string;
   onWide?: (wide: boolean) => void;
+  onNested?: (nested: boolean) => void;
 }) {
   const tx = useTx();
   const navigate = useNavigate();
@@ -87,10 +89,12 @@ export function Services({
     };
   }
   function open(id: ServiceView) {
+    onNested?.(true);
     setView(id);
     void navigate({ to: "/", search: searchFor(id) });
   }
   function back() {
+    onNested?.(false);
     setView(null);
     void navigate({ to: "/", search: searchFor(null), replace: true });
   }

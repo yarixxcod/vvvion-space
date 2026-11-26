@@ -66,5 +66,13 @@
       "source": "/(favicon.ico|favicon.svg|icon-192.png|icon-512.png|icon-maskable-512.png|og.jpg|manifest.webmanifest|robots.txt|sitemap.xml)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
     }
+  ],
+  "redirects": [
+    {
+      "source": "/((?!v1(?:/|$)).*)",
+      "has": [{ "type": "host", "value": "api.vvvion.space" }],
+      "destination": "/v1/models",
+      "permanent": false
+    }
   ]
 }

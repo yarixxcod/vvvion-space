@@ -288,6 +288,7 @@ function Home({
   const order: CircleTab[] = ["chat", "feed", "play", "services", "disk", "bank", "shop", "apps"];
   const column =
     tab === "feed" ? "max-w-[42rem]" : tab === "bank" || tab === "apps" ? "max-w-6xl" : tab === "disk" || tab === "shop" ? "max-w-[45rem]" : tab === "services" ? (calendarWide ? "max-w-[80rem]" : "max-w-[60rem]") : tab === "play" ? "max-w-[60rem]" : "max-w-none";
+  const inService = tab === "services" && (nested || Boolean(serviceView(svc)));
   const mainTabs: CircleTab[] = ["chat", "feed", "play", "services"];
   const moreTabs: CircleTab[] = admin ? ["disk", "bank", "shop", "apps", "admin"] : ["disk", "bank", "shop", "apps"];
 
@@ -322,8 +323,8 @@ function Home({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-14 items-center gap-2 border-b border-line px-2 pt-[env(safe-area-inset-top)]">
           {onClose ? (
-            <button type="button" className="press inline-flex size-11 items-center justify-center rounded-2xl text-fg xl:hidden" aria-label={tab === "services" && nested ? ui(lang, "services") : ui(lang, "toChat")} data-site-nav="home" onClick={() => {
-              if (tab === "services" && nested) {
+            <button type="button" className="press inline-flex size-11 items-center justify-center rounded-2xl text-fg xl:hidden" aria-label={inService ? ui(lang, "services") : ui(lang, "toChat")} data-site-nav="home" onClick={() => {
+              if (inService) {
                 window.dispatchEvent(new Event("vv-service-back"));
                 return;
               }
@@ -367,7 +368,7 @@ function Home({
             </TabButton>
           ) : null}
         </div>
-        <SectionSwipe tabs={order} active={order.includes(tab) ? tab : "chat"} paused={nested} onChange={(id) => pick(id, true)}>
+        <SectionSwipe tabs={order} active={order.includes(tab) ? tab : "chat"} paused={inService} onChange={(id) => pick(id, true)}>
           <div ref={paneRef} data-circle-pane className={cn("mx-auto flex h-full min-h-0 w-full flex-col pb-[var(--player-dock,0px)]", column)}>
             {banned ? (
               <p className="p-4 text-sm text-danger">{ui(lang, "banned")}</p>
@@ -378,7 +379,7 @@ function Home({
             ) : tab === "play" ? (
               <Library />
             ) : tab === "services" ? (
-              <Services initial={serviceView(svc) ?? null} eventId={eventId || undefined} onWide={setCalendarWide} />
+              <Services initial={serviceView(svc) ?? null} eventId={eventId || undefined} onWide={setCalendarWide} onNested={setNested} />
             ) : tab === "disk" ? (
               <Disk />
             ) : tab === "bank" ? (
@@ -392,7 +393,7 @@ function Home({
             )}
           </div>
         </SectionSwipe>
-        <nav ref={mobileNavRef} data-site-nav="sections" className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", nested && "hidden")} aria-label={ui(lang, "circle")}>
+        <nav ref={mobileNavRef} data-site-nav="sections" className={cn("circle-nav relative grid shrink-0 grid-cols-5 border-t border-line bg-elev pt-1.5 pb-[max(0.9rem,env(safe-area-inset-bottom))] md:hidden", inService && "hidden")} aria-label={ui(lang, "circle")}>
           <span
             className="circle-drop"
             style={{ "--tab-index": mainTabs.indexOf(tab) >= 0 ? mainTabs.indexOf(tab) : 4 } as import("react").CSSProperties}
