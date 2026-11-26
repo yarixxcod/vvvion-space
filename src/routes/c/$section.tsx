@@ -6,15 +6,17 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { langOf, normalizeLang, placeCopy, ui, type Lang } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
 import { PLACES, absoluteUrl, placeBySlug, placePath } from "@/lib/places";
+import { serviceView, type ServiceView } from "@/lib/service-view";
 import { appsJsonLd, seoHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/c/$section")({
-  validateSearch: (search: Record<string, unknown>): { lang?: Lang; svc?: "calendar"; event?: string } => {
+  validateSearch: (search: Record<string, unknown>): { lang?: Lang; svc?: ServiceView; event?: string } => {
     const lang = normalizeLang(search.lang);
     const event = typeof search.event === "string" && /^[A-Za-z0-9_-]{8,80}$/.test(search.event.trim()) ? search.event.trim() : undefined;
+    const svc = serviceView(search.svc);
     return {
       ...(lang ? { lang } : {}),
-      ...(search.svc === "calendar" ? { svc: "calendar" } : {}),
+      ...(svc ? { svc } : {}),
       ...(event ? { event } : {}),
     };
   },

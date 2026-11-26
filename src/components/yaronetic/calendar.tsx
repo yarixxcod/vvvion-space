@@ -123,7 +123,7 @@ function asItem(row: Record<string, unknown>): Item | null {
 /** Survives remounts. The agent link otherwise reopens this card every time events reload. */
 let dismissedEventLink = "";
 
-export function CalendarDesk({ eventId }: { eventId?: string }) {
+export function CalendarDesk({ eventId, onBack }: { eventId?: string; onBack?: () => void }) {
   const tx = useTx();
   const { user, isPending } = useCurrentUserState();
   const [view, setView] = useState<View>("week");
@@ -404,6 +404,7 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
   if (!user) {
     return (
       <div className="mx-auto max-w-md px-5 py-16 text-center">
+        {onBack ? <button type="button" className="press mb-6 inline-flex min-h-11 items-center gap-1 text-sm text-muted" onClick={onBack}><ChevronLeft className="size-4" />{tx({ ru: "Сервисы", en: "Services", kk: "Сервистер" })}</button> : null}
         <h2 className="font-serif text-3xl">{tx({ ru: "Календарь", en: "Calendar", kk: "Күнтізбе" })}</h2>
         <p className="mt-3 text-sm text-muted">{tx({ ru: "Войдите, чтобы встречи были только ваши.", en: "Sign in so the events stay yours.", kk: "Кездесулер тек сіздікі болуы үшін кіріңіз." })}</p>
       </div>
@@ -418,10 +419,11 @@ export function CalendarDesk({ eventId }: { eventId?: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col outline-none" {...swipe}>
       <div className="px-3 pt-2">
+        {onBack ? <button type="button" className="press mb-2 inline-flex min-h-11 items-center gap-1 text-sm text-muted" onClick={onBack}><ChevronLeft className="size-4" />{tx({ ru: "Сервисы", en: "Services", kk: "Сервистер" })}</button> : null}
         <h2 className="truncate font-serif text-[1.65rem] leading-none tracking-tight sm:text-3xl">{title}</h2>
         <div className="mt-2 flex items-center gap-1.5">
           <button type="button" className="press h-11 min-w-0 flex-1 rounded-2xl border border-line px-3 text-sm" onClick={() => setCursor(new Date())}>{tx({ ru: "Сегодня", en: "Today", kk: "Бүгін" })}</button>
-          <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Назад", en: "Back", kk: "Артқа" })} onClick={() => shift(-1)}><ChevronLeft className="size-5" /></button>
+          <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Предыдущий", en: "Previous", kk: "Алдыңғы" })} onClick={() => shift(-1)}><ChevronLeft className="size-5" /></button>
           <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Дальше", en: "Forward", kk: "Алға" })} onClick={() => shift(1)}><ChevronRight className="size-5" /></button>
           <button type="button" className="press grid size-11 shrink-0 place-items-center rounded-2xl border border-line" aria-label={tx({ ru: "Настройки", en: "Settings", kk: "Баптау" })} onClick={() => setSettings(true)}><Settings className="size-5" /></button>
         </div>

@@ -4,6 +4,7 @@ import { homeSeo, langOf, normalizeLang, placeCopy, type Lang } from "@/lib/i18n
 import { useLang } from "@/lib/lang";
 import { isCircleTab, placePath, type CircleTab } from "@/lib/places";
 import { appsJsonLd, seoHead, websiteJsonLd } from "@/lib/seo";
+import { serviceView, type ServiceView } from "@/lib/service-view";
 import { listModels } from "@/lib/social/admin";
 
 function cleanId(value: unknown) {
@@ -22,7 +23,7 @@ function topupId(value: unknown) {
 }
 
 export const Route = createFileRoute("/")({
-  validateSearch: (search: Record<string, unknown>): { place?: CircleTab; lang?: Lang; chat?: string; room?: string; new?: boolean; topup?: string; s?: string; book?: string; view?: "read" | "watch" | "mega"; svc?: "calendar"; event?: string } => {
+  validateSearch: (search: Record<string, unknown>): { place?: CircleTab; lang?: Lang; chat?: string; room?: string; new?: boolean; topup?: string; s?: string; book?: string; view?: "read" | "watch" | "mega"; svc?: ServiceView; event?: string } => {
     const lang = normalizeLang(search.lang);
     const chat = cleanId(search.chat);
     const room = cleanId(search.room);
@@ -30,6 +31,7 @@ export const Route = createFileRoute("/")({
     const topup = topupId(search.topup);
     const section = typeof search.s === "string" && SHOP_SECTIONS.has(search.s) ? search.s : undefined;
     const event = cleanId(search.event);
+    const svc = serviceView(search.svc);
     return {
       place: isCircleTab(search.place) ? search.place : undefined,
       ...(lang ? { lang } : {}),
@@ -40,7 +42,7 @@ export const Route = createFileRoute("/")({
       ...(section ? { s: section } : {}),
       ...(cleanId(search.book) ? { book: cleanId(search.book) } : {}),
       ...(search.view === "read" || search.view === "watch" || search.view === "mega" ? { view: search.view } : {}),
-      ...(search.svc === "calendar" ? { svc: "calendar" as const } : {}),
+      ...(svc ? { svc } : {}),
       ...(event ? { event } : {}),
     };
   },

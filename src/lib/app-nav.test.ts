@@ -7,7 +7,8 @@ test("notification paths map onto the real home search", () => {
   assert.deepEqual(destinationFor("/messages/room_1234"), { to: "/", search: { place: "chat", room: "room_1234" } });
   assert.deepEqual(destinationFor("/disk"), { to: "/", search: { place: "disk" } });
   assert.deepEqual(destinationFor("/c/shop"), { to: "/", search: { place: "shop" } });
-  assert.equal(destinationFor("/chat/short"), null);
+  assert.deepEqual(destinationFor("/?place=services&svc=weather"), { to: "/", search: { place: "services", svc: "weather" } });
+  assert.deepEqual(destinationFor("/c/services?svc=api"), { to: "/", search: { place: "services", svc: "api" } });
 });
 
 test("only this site's absolute urls are accepted", () => {

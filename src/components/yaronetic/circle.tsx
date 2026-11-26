@@ -18,6 +18,7 @@ import { Wordmark } from "@/components/yaronetic/wordmark";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getAccess, type Access } from "@/lib/social/admin";
 import { type CircleTab } from "@/lib/places";
+import { serviceView } from "@/lib/service-view";
 import { readJump } from "@/lib/jump";
 import { ui, type UiKey } from "@/lib/i18n";
 import { useLang } from "@/lib/lang";
@@ -321,7 +322,13 @@ function Home({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-14 items-center gap-2 border-b border-line px-2 pt-[env(safe-area-inset-top)]">
           {onClose ? (
-            <button type="button" className="press inline-flex size-11 items-center justify-center rounded-2xl text-fg xl:hidden" aria-label={ui(lang, "toChat")} data-site-nav="home" onClick={onClose}>
+            <button type="button" className="press inline-flex size-11 items-center justify-center rounded-2xl text-fg xl:hidden" aria-label={tab === "services" && nested ? ui(lang, "services") : ui(lang, "toChat")} data-site-nav="home" onClick={() => {
+              if (tab === "services" && nested) {
+                window.dispatchEvent(new Event("vv-service-back"));
+                return;
+              }
+              onClose();
+            }}>
               <ChevronLeft className="size-5" strokeWidth={2.25} aria-hidden="true" />
             </button>
           ) : null}
@@ -371,7 +378,7 @@ function Home({
             ) : tab === "play" ? (
               <Library />
             ) : tab === "services" ? (
-              <Services initial={svc === "calendar" ? "calendar" : null} eventId={eventId || undefined} onWide={setCalendarWide} />
+              <Services initial={serviceView(svc) ?? null} eventId={eventId || undefined} onWide={setCalendarWide} />
             ) : tab === "disk" ? (
               <Disk />
             ) : tab === "bank" ? (

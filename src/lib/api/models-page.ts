@@ -71,55 +71,7 @@ export function catalogWindow(models: CatalogCard[], page: number, type: "all" |
   };
 }
 
-function esc(value: string): string {
-  return value.replace(/[&<>"']/g, (ch) => {
-    if (ch === "&") return "\u0026amp;";
-    if (ch === "<") return "\u0026lt;";
-    if (ch === ">") return "\u0026gt;";
-    if (ch === '"') return "\u0026quot;";
-    return "\u0026#39;";
-  });
-}
-
-function href(type: "all" | "chat" | "image", page: number): string {
-  const query = new URLSearchParams();
-  if (type !== "all") query.set("type", type);
-  if (page > 1) query.set("page", String(page));
-  const text = query.toString();
-  return text ? `/v1/models?${text}` : "/v1/models";
-}
-
-function chip(label: string, count: number, active: boolean, type: "all" | "chat" | "image"): string {
-  const cls = active ? "chip on" : "chip";
-  return `<a class="${cls}" href="${href(type, 1)}">${esc(label)} <span>${count}</span></a>`;
-}
-
-function cards(items: CatalogCard[], type: "chat" | "image"): string {
-  const rows = items.filter((item) => item.type === type);
-  if (!rows.length) return "";
-  const title = type === "chat" ? "Чат" : "Картинки";
-  const body = rows
-    .map((item) => {
-      const kind = type === "chat" ? "чат" : "картинка";
-      return `<article class="card">
-        <div class="card-top"><span class="kind">${kind}</span><button type="button" class="copy" data-copy="${esc(item.id)}">копировать</button></div>
-        <h3>${esc(item.displayName)}</h3>
-        <code>${esc(item.id)}</code>
-      </article>`;
-    })
-    .join("");
-  return `<section><h2>${title}</h2><div class="grid">${body}</div></section>`;
-}
-
-export function renderModelsPage(models: CatalogCard[], page: number, type: "all" | "chat" | "image"): string {
-  const view = catalogWindow(models, page, type);
-  const sections = `${cards(view.items, "chat")}${cards(view.items, "image")}`;
-  const empty = view.total
-    ? sections
-    : `<p class="empty">${view.chats + view.images ? "В этом разделе пусто." : "Пока нет моделей, открытых для API."}</p>`;
-  const prev = view.page > 1 ? `<a href="${href(view.type, view.page - 1)}">Назад</a>` : `<span class="off">Назад</span>`;
-  const next = view.page < view.pages ? `<a href="${href(view.type, view.page + 1)}">Дальше</a>` : `<span class="off">Дальше</span>`;
-  const pager = view.pages > 1 ? `<nav class="pager" aria-label="Страницы">${prev}<span>${view.page} из ${view.pages}</span>${next}</nav>` : "";
+export function renderModelsShell(): string {
   return `<!doctype html>
 <html lang="ru">
 <head>
@@ -165,7 +117,6 @@ export function renderModelsPage(models: CatalogCard[], page: number, type: "all
   .off { color: #63636c; }
   .empty { margin-top: 28px; color: #b0ada6; }
   footer { margin-top: 36px; color: #9a958c; font-size: 13px; }
-  footer code { color: #b0ada6; }
 </style>
 </head>
 <body>
@@ -173,30 +124,141 @@ export function renderModelsPage(models: CatalogCard[], page: number, type: "all
     <header>
       <p class="brand">VVVion <b>API</b></p>
       <h1>Модели</h1>
-      <p class="lead">В запросе указывайте <code>id</code>. Название становится им само: DeepSeek-4.1 Flash → <code>deepseek-4.1-flash</code>.</p>
+      <p class="lead">Список читается с <code>https://api.vvvion.space/v1/models</code>. В запросе указывайте <code>id</code>.</p>
       <p class="meta"><code>https://api.vvvion.space/v1</code></p>
-      <nav class="filters" aria-label="Разделы">
-        ${chip("Все", view.chats + view.images, view.type === "all", "all")}
-        ${chip("Чат", view.chats, view.type === "chat", "chat")}
-        ${chip("Картинки", view.images, view.type === "image", "image")}
-      </nav>
+      <nav id="filters" class="filters" aria-label="Разделы"></nav>
     </header>
-    <main>${empty}</main>
-    ${pager}
-    <footer>Клиенты с ключом получают JSON на этом же адресе. Страницы: <code>?limit=20\u0026amp;after=id</code>. На странице по ${MODELS_PAGE_SIZE}.</footer>
+    <main id="list"><p class="empty">Загружаю модели…</p></main>
+    <div id="pager"></div>
+    <footer>Страницы по ${MODELS_PAGE_SIZE}. Клиенты с ключом получают тот же JSON.</footer>
   </div>
   <script>
-    document.querySelectorAll("[data-copy]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var value = btn.getAttribute("data-copy") || "";
-        var done = function () {
-          btn.classList.add("on");
-          btn.textContent = "скопировано";
-          setTimeout(function () { btn.classList.remove("on"); btn.textContent = "копировать"; }, 1100);
-        };
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(done).catch(function () {});
-      });
-    });
+    (function () {
+      var PAGE = ${MODELS_PAGE_SIZE};
+      var root = document.getElementById("list");
+      var filters = document.getElementById("filters");
+      var pager = document.getElementById("pager");
+      var params = new URLSearchParams(location.search);
+      var page = Math.max(1, parseInt(params.get("page") || "1", 10) || 1);
+      var kind = params.get("type") === "chat" || params.get("type") === "image" ? params.get("type") : "all";
+      function link(type, nextPage) {
+        var query = new URLSearchParams();
+        if (type !== "all") query.set("type", type);
+        if (nextPage > 1) query.set("page", String(nextPage));
+        var text = query.toString();
+        return text ? "/v1/models?" + text : "/v1/models";
+      }
+      function render(models) {
+        var filtered = models.filter(function (model) { return kind === "all" || model.type === kind; });
+        var pages = Math.max(1, Math.ceil(filtered.length / PAGE) || 1);
+        var current = Math.min(pages, page);
+        var slice = filtered.slice((current - 1) * PAGE, current * PAGE);
+        var chats = models.filter(function (model) { return model.type === "chat"; }).length;
+        filters.textContent = "";
+        [["all", "Все", models.length], ["chat", "Чат", chats], ["image", "Картинки", models.length - chats]].forEach(function (item) {
+          var anchor = document.createElement("a");
+          anchor.className = item[0] === kind ? "chip on" : "chip";
+          anchor.href = link(item[0], 1);
+          anchor.append(document.createTextNode(item[1] + " "));
+          var count = document.createElement("span");
+          count.textContent = String(item[2]);
+          anchor.append(count);
+          filters.append(anchor);
+        });
+        root.textContent = "";
+        if (!slice.length) {
+          var empty = document.createElement("p");
+          empty.className = "empty";
+          empty.textContent = models.length ? "В этом разделе пусто." : "Пока нет моделей, открытых для API.";
+          root.append(empty);
+          return;
+        }
+        ["chat", "image"].forEach(function (type) {
+          var rows = slice.filter(function (model) { return model.type === type; });
+          if (!rows.length) return;
+          var section = document.createElement("section");
+          var heading = document.createElement("h2");
+          heading.textContent = type === "chat" ? "Чат" : "Картинки";
+          var grid = document.createElement("div");
+          grid.className = "grid";
+          rows.forEach(function (model) {
+            var card = document.createElement("article");
+            card.className = "card";
+            var top = document.createElement("div");
+            top.className = "card-top";
+            var badge = document.createElement("span");
+            badge.className = "kind";
+            badge.textContent = type === "chat" ? "чат" : "картинка";
+            var button = document.createElement("button");
+            button.type = "button";
+            button.className = "copy";
+            button.textContent = "копировать";
+            button.addEventListener("click", function () {
+              if (!navigator.clipboard) return;
+              navigator.clipboard.writeText(model.id).then(function () {
+                button.classList.add("on");
+                button.textContent = "скопировано";
+                setTimeout(function () { button.classList.remove("on"); button.textContent = "копировать"; }, 1100);
+              }).catch(function () {});
+            });
+            top.append(badge, button);
+            var title = document.createElement("h3");
+            title.textContent = model.name;
+            var code = document.createElement("code");
+            code.textContent = model.id;
+            card.append(top, title, code);
+            grid.append(card);
+          });
+          section.append(heading, grid);
+          root.append(section);
+        });
+        pager.textContent = "";
+        if (pages < 2) return;
+        var nav = document.createElement("nav");
+        nav.className = "pager";
+        nav.setAttribute("aria-label", "Страницы");
+        function edge(label, target, enabled) {
+          if (!enabled) {
+            var span = document.createElement("span");
+            span.className = "off";
+            span.textContent = label;
+            return span;
+          }
+          var anchor = document.createElement("a");
+          anchor.href = link(kind, target);
+          anchor.textContent = label;
+          return anchor;
+        }
+        var mark = document.createElement("span");
+        mark.textContent = current + " из " + pages;
+        nav.append(edge("Назад", current - 1, current > 1), mark, edge("Дальше", current + 1, current < pages));
+        pager.append(nav);
+      }
+      var urls = ["https://api.vvvion.space/v1/models", "/v1/models"];
+      function attempt(index) {
+        if (index >= urls.length) {
+          root.textContent = "";
+          var fail = document.createElement("p");
+          fail.className = "empty";
+          fail.textContent = "Список моделей сейчас недоступен.";
+          root.append(fail);
+          return;
+        }
+        fetch(urls[index], { headers: { Accept: "application/json" }, credentials: "omit" })
+          .then(function (res) { if (!res.ok) throw new Error("status"); return res.json(); })
+          .then(function (body) {
+            var data = Array.isArray(body && body.data) ? body.data : [];
+            render(data.map(function (row) {
+              var id = row && typeof row.id === "string" ? row.id.trim() : "";
+              if (!id) return null;
+              var name = row.display_name && String(row.display_name).trim() ? String(row.display_name).trim() : id;
+              return { id: id, name: name, type: row.type === "image" ? "image" : "chat" };
+            }).filter(Boolean));
+          })
+          .catch(function () { attempt(index + 1); });
+      }
+      attempt(0);
+    })();
   </script>
 </body>
 </html>`;

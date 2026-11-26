@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpRight, ChevronLeft, ExternalLink, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
-import { useCircleNest } from "@/lib/circle-history";
 import { forgetCity, loadWeather, watchCity } from "@/lib/weather/service";
 import { setWidgetCity } from "@/lib/app-bridge";
 import { weatherKind, type WeatherCard, type WeatherKind } from "@/lib/weather/parse";
@@ -18,6 +18,7 @@ import { Grabber } from "@/components/yaronetic/grabber";
 import { CalendarDesk } from "@/components/yaronetic/calendar";
 import { useTx } from "@/lib/lang";
 import { loadError } from "@/lib/load-error";
+import { type ServiceView } from "@/lib/service-view";
 
 const COUNTRY_NAME: Record<NewsCode, string> = {
   KZ: "Казахстан",
@@ -60,8 +61,6 @@ const FX_COIN: Record<FxCode, { paper: string; ink: string }> = {
   BYN: { paper: "#f3e4e1", ink: "#1c1b19" },
 };
 
-type ServiceView = "weather" | "news" | "fx" | "vpn" | "grab" | "speed" | "api" | "calendar";
-
 export function Services({
   initial = null,
   eventId,
@@ -72,10 +71,32 @@ export function Services({
   onWide?: (wide: boolean) => void;
 }) {
   const tx = useTx();
+  const navigate = useNavigate();
   const [view, setView] = useState<ServiceView | null>(initial);
   const [apiOn, setApiOn] = useState(false);
+  const backRef = useRef<() => void>(() => undefined);
+  function searchFor(next: ServiceView | null): { place: "services"; lang?: "en" | "kk"; svc?: ServiceView; event?: string } {
+    const raw = new URL(window.location.href).searchParams.get("lang");
+    const lang: "en" | "kk" | undefined = raw === "en" || raw === "kk" ? raw : undefined;
+    const event = new URL(window.location.href).searchParams.get("event");
+    return {
+      place: "services",
+      ...(lang ? { lang } : {}),
+      ...(next ? { svc: next } : {}),
+      ...(next === "calendar" && event && /^[A-Za-z0-9_-]{8,80}$/.test(event) ? { event } : {}),
+    };
+  }
+  function open(id: ServiceView) {
+    setView(id);
+    void navigate({ to: "/", search: searchFor(id) });
+  }
+  function back() {
+    setView(null);
+    void navigate({ to: "/", search: searchFor(null), replace: true });
+  }
+  backRef.current = back;
   useEffect(() => {
-    if (initial === "calendar") setView("calendar");
+    setView(initial ?? null);
   }, [initial]);
   useEffect(() => {
     onWide?.(view === "calendar");
@@ -84,21 +105,25 @@ export function Services({
   useEffect(() => {
     void getApiEntry().then((row) => setApiOn(row.visible)).catch(() => setApiOn(false));
   }, []);
-  useCircleNest(view !== null, () => setView(null));
+  useEffect(() => {
+    const onBack = () => backRef.current();
+    window.addEventListener("vv-service-back", onBack);
+    return () => window.removeEventListener("vv-service-back", onBack);
+  }, []);
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("vv-circle-nested", { detail: view !== null }));
     return () => {
       window.dispatchEvent(new CustomEvent("vv-circle-nested", { detail: false }));
     };
   }, [view]);
-  if (view === "weather") return <Weather onBack={() => setView(null)} />;
-  if (view === "news") return <News onBack={() => setView(null)} />;
-  if (view === "fx") return <Rates onBack={() => setView(null)} />;
-  if (view === "vpn") return <VpnService onBack={() => setView(null)} />;
-  if (view === "speed") return <SpeedTest onBack={() => setView(null)} />;
-  if (view === "grab") return <Grabber onBack={() => setView(null)} />;
-  if (view === "api") return <ApiService onBack={() => setView(null)} />;
-  if (view === "calendar") return <CalendarDesk eventId={eventId} />;
+  if (view === "weather") return <Weather onBack={back} />;
+  if (view === "news") return <News onBack={back} />;
+  if (view === "fx") return <Rates onBack={back} />;
+  if (view === "vpn") return <VpnService onBack={back} />;
+  if (view === "speed") return <SpeedTest onBack={back} />;
+  if (view === "grab") return <Grabber onBack={back} />;
+  if (view === "api") return <ApiService onBack={back} />;
+  if (view === "calendar") return <CalendarDesk eventId={eventId} onBack={back} />;
   const tiles = [
     {
       id: "calendar",
@@ -175,7 +200,7 @@ export function Services({
           <button
             key={tile.id}
             type="button"
-            onClick={() => setView(tile.id)}
+            onClick={() => open(tile.id)}
             className="service-tile press group relative flex aspect-square min-w-0 flex-col overflow-hidden rounded-[1.4rem] border border-line bg-elev text-left"
             aria-label={tile.title}
           >

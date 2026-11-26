@@ -1,9 +1,11 @@
+import { serviceView, type ServiceView } from "./service-view.ts";
+
 export type AppSearch = {
   place?: CircleTab;
   chat?: string;
   room?: string;
   lang?: "ru" | "en" | "kk";
-  svc?: "calendar";
+  svc?: ServiceView;
   event?: string;
 };
 
@@ -52,7 +54,7 @@ export function destinationFor(input: string): { to: "/"; search: AppSearch } | 
   const search: AppSearch = {};
   const event = params.get("event") || "";
   if (ID.test(event)) search.event = event;
-  if (params.get("svc") === "calendar") search.svc = "calendar";
+  if (serviceView(params.get("svc"))) search.svc = serviceView(params.get("svc"));
   if (bare === "/messages" || bare === "/c/messages") return { to: "/", search: { place: "chat" } };
   if (bare === "/disk" || bare === "/c/disk") return { to: "/", search: { place: "disk" } };
   if (bare === "/shop" || bare === "/c/shop") return { to: "/", search: { place: "shop" } };

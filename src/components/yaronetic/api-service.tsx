@@ -3,7 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, Copy, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { LoaderMark } from "@/components/yaronetic/page-loader";
-import { createApiKey, getApiDesk, revokeApiKey, type ApiDesk } from "@/lib/api/desk";
+import { getApiDesk, createApiKey, revokeApiKey, type ApiDesk } from "@/lib/api/desk";
+import { loadPublicModels, type PublicModel } from "@/lib/api/public-models";
 import { useTx } from "@/lib/lang";
 
 const TABS = ["curl", "python", "node", "claude", "codex", "cursor"] as const;
@@ -18,6 +19,8 @@ export function ApiService({ onBack }: { onBack: () => void }) {
   const tx = useTx();
   const navigate = useNavigate();
   const [desk, setDesk] = useState<ApiDesk | null>(null);
+  const [models, setModels] = useState<PublicModel[]>([]);
+  const [modelsFailed, setModelsFailed] = useState(false);
   const [failed, setFailed] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,6 +35,13 @@ export function ApiService({ onBack }: { onBack: () => void }) {
   }
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    let live = true;
+    void loadPublicModels()
+      .then((rows) => { if (live) setModels(rows); })
+      .catch(() => { if (live) setModelsFailed(true); });
+    return () => { live = false; };
+  }, []);
 
   async function copy(value: string) {
     try {
@@ -70,7 +80,7 @@ export function ApiService({ onBack }: { onBack: () => void }) {
     }
   }
 
-  const chatModel = desk?.models.find((model) => model.type === "chat")?.id || "model";
+  const chatModel = models.find((model) => model.type === "chat")?.id || "model";
   const example = exampleOf(tab, desk?.openaiBase || "https://api.vvvion.space/v1", desk?.anthropicBase || "https://api.vvvion.space", chatModel);
 
   return (
@@ -201,7 +211,7 @@ export function ApiService({ onBack }: { onBack: () => void }) {
           <section className="mt-3 rounded-[1.4rem] border border-line bg-elev p-4">
             <p className="text-xs text-faint">{tx({ ru: "Модели", en: "Models", kk: "Модельдер" })}</p>
             <ul className="mt-2 space-y-1">
-              {desk.models.map((model) => (
+              {models.map((model) => (
                 <li key={`${model.type}:${model.id}`} className="flex items-center justify-between gap-3 py-2">
                   <span className="min-w-0">
                     <span className="block truncate text-sm">{model.displayName}</span>
@@ -212,6 +222,7 @@ export function ApiService({ onBack }: { onBack: () => void }) {
                   </button>
                 </li>
               ))}
+              {!models.length ? <li className="text-sm text-muted">{modelsFailed ? tx({ ru: "Не удалось прочитать список моделей", en: "Could not read the model list", kk: "Модель тізімін оқу мүмкін болмады" }) : tx({ ru: "Загружаю модели…", en: "Loading models…", kk: "Модельдер жүктелуде…" })}</li> : null}
             </ul>
           </section>
 

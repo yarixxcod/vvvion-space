@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { catalogWindow, parseModelsQuery, renderModelsPage, sliceByCursor, wantsModelsHtml } from "./models-page.ts";
+import { catalogWindow, parseModelsQuery, renderModelsShell, sliceByCursor, wantsModelsHtml } from "./models-page.ts";
+import { parsePublicModels } from "./public-models.ts";
+import { apiHostDecision, isApiHost } from "./api-host.ts";
 
 const models = [
   { id: "deepseek-4.1-flash", displayName: "DeepSeek-4.1 Flash", type: "chat" as const },
@@ -25,14 +27,13 @@ test("JSON stays complete unless limit and after ask for a page", () => {
   assert.equal(parseModelsQuery(new URLSearchParams("limit=500")).limit, 100);
 });
 
-test("the catalog page groups models, escapes names and paginates", () => {
-  const html = renderModelsPage(models, 1, "all");
-  assert.match(html, /deepseek-4\.1-flash/);
-  assert.match(html, /glm-5\.3-flash/);
-  assert.match(html, /z-image/);
-  assert.match(html, new RegExp("Z-image " + "\u0026lt;script\u0026gt;"));
+test("the catalog page loads the live JSON and does not bake model names in", () => {
+  const html = renderModelsShell();
+  assert.match(html, /https:\/\/api\.vvvion\.space\/v1\/models/);
+  assert.match(html, /application\/json/);
+  assert.doesNotMatch(html, /deepseek-4\.1-flash/);
+  assert.doesNotMatch(html, /DeepSeek/);
   assert.equal(html.split("<script>").length, 2);
-  assert.doesNotMatch(html, /grok-4/);
   const many = Array.from({ length: 13 }, (_, index) => ({
     id: `model-${index + 1}`,
     displayName: `Model ${index + 1}`,
@@ -43,6 +44,26 @@ test("the catalog page groups models, escapes names and paginates", () => {
   assert.equal(first.items.length, 12);
   assert.equal(second.items.length, 1);
   assert.equal(second.pages, 2);
-  assert.match(renderModelsPage(many, 2, "chat"), /model-13/);
-  assert.match(renderModelsPage(many, 1, "chat"), /page=2/);
+  assert.equal(second.items[0]?.id, "model-13");
+});
+
+test("public model JSON is parsed and the API host never opens the app", () => {
+  assert.deepEqual(parsePublicModels({
+    data: [
+      { id: "deepseek-4.1-flash", display_name: "DeepSeek-4.1 Flash", type: "chat" },
+      { id: "z-image", type: "image" },
+      { id: "  ", display_name: "skip" },
+    ],
+  }), [
+    { id: "deepseek-4.1-flash", displayName: "DeepSeek-4.1 Flash", type: "chat" },
+    { id: "z-image", displayName: "z-image", type: "image" },
+  ]);
+  assert.equal(isApiHost("api.vvvion.space"), true);
+  assert.equal(isApiHost("API.vvvion.space:443"), true);
+  assert.equal(isApiHost("vvvion.space"), false);
+  assert.equal(apiHostDecision("GET", "/"), "redirect");
+  assert.equal(apiHostDecision("GET", "/login"), "redirect");
+  assert.equal(apiHostDecision("GET", "/v1/models"), "pass");
+  assert.equal(apiHostDecision("POST", "/v1/chat/completions"), "pass");
+  assert.equal(apiHostDecision("POST", "/"), "missing");
 });

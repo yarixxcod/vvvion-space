@@ -168,11 +168,19 @@ export function App({
     if (!circleViaUi.current && !(window.history.state as { vvCircle?: number } | null)?.vvCircle) {
       const current = window.location.pathname + window.location.search;
       const url = new URL(window.location.href);
-      url.searchParams.delete("place");
-      url.searchParams.delete("room");
+      const insideService = url.searchParams.get("place") === "services" && url.searchParams.has("svc");
+      if (insideService) {
+        url.searchParams.delete("svc");
+        url.searchParams.delete("event");
+      } else {
+        url.searchParams.delete("place");
+        url.searchParams.delete("room");
+        url.searchParams.delete("svc");
+        url.searchParams.delete("event");
+      }
       const back = url.pathname + url.search;
       if (back !== current) {
-        window.history.replaceState({ vvChat: 1 }, "", back);
+        window.history.replaceState(insideService ? { vvCircle: 1 } : { vvChat: 1 }, "", back);
         window.history.pushState({ vvCircle: 1 }, "", current);
       }
     } else {

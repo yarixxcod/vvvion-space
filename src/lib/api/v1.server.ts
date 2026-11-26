@@ -4,8 +4,8 @@ import { readApiBody } from "@/lib/api/body";
 import { guardRequest, type GuardOk } from "@/lib/api/guard.server";
 import { apiError, apiJson } from "@/lib/api/http";
 import { generateApiImage } from "@/lib/api/images.server";
-import { listApiModels } from "@/lib/api/models.server";
-import { parseModelsQuery, renderModelsError, renderModelsPage, sliceByCursor, wantsModelsHtml } from "@/lib/api/models-page";
+import { listApiModels, type ApiModel } from "@/lib/api/models.server";
+import { parseModelsQuery, renderModelsShell, sliceByCursor, wantsModelsHtml } from "@/lib/api/models-page";
 import { buildChatPayload, normalizeChatCompletion, textOfCompletion, usageOf } from "@/lib/api/openai-wire";
 import { ResponsesEncoder, chatCompletionToResponse, responsesRequestToChat } from "@/lib/api/responses-convert";
 import { decorateOpenAiSse } from "@/lib/api/sse";
@@ -32,34 +32,64 @@ async function fail(gate: GuardOk, status: number, code: string, message?: strin
   return apiError(gate.dialect, status, code, gate.requestId, message, gate.headers);
 }
 
+function modelsDocument(request: Request, models: ApiModel[], requestId: string, extra?: Record<string, string>): Response {
+  const query = parseModelsQuery(new URL(request.url).searchParams);
+  if (request.headers.get("anthropic-version")) {
+    const chats = sliceByCursor(models.filter((model) => model.type === "chat"), query.limit, query.after);
+    return apiJson(200, {
+      data: chats.data.map((model) => ({
+        type: "model",
+        id: model.id,
+        display_name: model.displayName,
+        created_at: new Date(model.created * 1000).toISOString(),
+      })),
+      has_more: chats.hasMore,
+      first_id: chats.data[0]?.id ?? null,
+      last_id: chats.data.at(-1)?.id ?? null,
+    }, requestId, extra);
+  }
+  const page = sliceByCursor(models, query.limit, query.after);
+  return apiJson(200, {
+    object: "list",
+    data: page.data.map((model) => ({
+      id: model.id,
+      object: "model",
+      created: model.created,
+      owned_by: "vvvion",
+      type: model.type,
+      display_name: model.displayName,
+    })),
+    has_more: page.hasMore,
+  }, requestId, extra);
+}
+
 export async function v1Models(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const query = parseModelsQuery(url.searchParams);
+  const authed = Boolean((request.headers.get("authorization") || "").trim() || (request.headers.get("x-api-key") || "").trim());
   if (
+    !authed &&
     wantsModelsHtml({
       accept: request.headers.get("accept"),
-      authorization: request.headers.get("authorization"),
-      apiKey: request.headers.get("x-api-key"),
+      authorization: null,
+      apiKey: null,
     })
   ) {
+    return new Response(renderModelsShell(), {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "vary": "accept, authorization, x-api-key",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer",
+      },
+    });
+  }
+  if (!authed) {
     try {
-      const models = await listApiModels();
-      return new Response(renderModelsPage(models, query.page, query.type), {
-        status: 200,
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "cache-control": "no-store",
-          "vary": "accept, authorization, x-api-key",
-          "x-content-type-options": "nosniff",
-          "referrer-policy": "no-referrer",
-        },
-      });
+      return modelsDocument(request, await listApiModels(), crypto.randomUUID());
     } catch (error) {
       console.error("[api] models", error instanceof Error ? error.name : "failed");
-      return new Response(renderModelsError(), {
-        status: 502,
-        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
-      });
+      return apiError("openai", 502, "upstream_error", crypto.randomUUID());
     }
   }
   const gate = await guardRequest(request, "models");
@@ -67,30 +97,7 @@ export async function v1Models(request: Request): Promise<Response> {
   try {
     const models = await listApiModels();
     await gate.finish({ status: 200 });
-    if (request.headers.get("anthropic-version")) {
-      const chats = sliceByCursor(
-        models.filter((model) => model.type === "chat"),
-        query.limit,
-        query.after,
-      );
-      return apiJson(200, {
-        data: chats.data.map((model) => ({
-          type: "model",
-          id: model.id,
-          display_name: model.displayName,
-          created_at: new Date(model.created * 1000).toISOString(),
-        })),
-        has_more: chats.hasMore,
-        first_id: chats.data[0]?.id ?? null,
-        last_id: chats.data.at(-1)?.id ?? null,
-      }, gate.requestId, gate.headers);
-    }
-    const page = sliceByCursor(models, query.limit, query.after);
-    return apiJson(200, {
-      object: "list",
-      data: page.data.map((model) => ({ id: model.id, object: "model", created: model.created, owned_by: "vvvion", type: model.type })),
-      has_more: page.hasMore,
-    }, gate.requestId, gate.headers);
+    return modelsDocument(request, models, gate.requestId, gate.headers);
   } catch (error) {
     console.error("[api] models", error instanceof Error ? error.name : "failed");
     return fail(gate, 502, "upstream_error");
