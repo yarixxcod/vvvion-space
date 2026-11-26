@@ -5,6 +5,7 @@ import { guardRequest, type GuardOk } from "@/lib/api/guard.server";
 import { apiError, apiJson } from "@/lib/api/http";
 import { generateApiImage } from "@/lib/api/images.server";
 import { listApiModels } from "@/lib/api/models.server";
+import { parseModelsQuery, renderModelsError, renderModelsPage, sliceByCursor, wantsModelsHtml } from "@/lib/api/models-page";
 import { buildChatPayload, normalizeChatCompletion, textOfCompletion, usageOf } from "@/lib/api/openai-wire";
 import { ResponsesEncoder, chatCompletionToResponse, responsesRequestToChat } from "@/lib/api/responses-convert";
 import { decorateOpenAiSse } from "@/lib/api/sse";
@@ -32,28 +33,62 @@ async function fail(gate: GuardOk, status: number, code: string, message?: strin
 }
 
 export async function v1Models(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const query = parseModelsQuery(url.searchParams);
+  if (
+    wantsModelsHtml({
+      accept: request.headers.get("accept"),
+      authorization: request.headers.get("authorization"),
+      apiKey: request.headers.get("x-api-key"),
+    })
+  ) {
+    try {
+      const models = await listApiModels();
+      return new Response(renderModelsPage(models, query.page, query.type), {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "public, max-age=30",
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "no-referrer",
+        },
+      });
+    } catch (error) {
+      console.error("[api] models", error instanceof Error ? error.name : "failed");
+      return new Response(renderModelsError(), {
+        status: 502,
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+      });
+    }
+  }
   const gate = await guardRequest(request, "models");
   if (!gate.ok) return gate.response;
   try {
     const models = await listApiModels();
     await gate.finish({ status: 200 });
     if (request.headers.get("anthropic-version")) {
-      const chats = models.filter((model) => model.type === "chat");
+      const chats = sliceByCursor(
+        models.filter((model) => model.type === "chat"),
+        query.limit,
+        query.after,
+      );
       return apiJson(200, {
-        data: chats.map((model) => ({
+        data: chats.data.map((model) => ({
           type: "model",
           id: model.id,
           display_name: model.displayName,
           created_at: new Date(model.created * 1000).toISOString(),
         })),
-        has_more: false,
-        first_id: chats[0]?.id ?? null,
-        last_id: chats.at(-1)?.id ?? null,
+        has_more: chats.hasMore,
+        first_id: chats.data[0]?.id ?? null,
+        last_id: chats.data.at(-1)?.id ?? null,
       }, gate.requestId, gate.headers);
     }
+    const page = sliceByCursor(models, query.limit, query.after);
     return apiJson(200, {
       object: "list",
-      data: models.map((model) => ({ id: model.id, object: "model", created: model.created, owned_by: "vvvion", type: model.type })),
+      data: page.data.map((model) => ({ id: model.id, object: "model", created: model.created, owned_by: "vvvion", type: model.type })),
+      has_more: page.hasMore,
     }, gate.requestId, gate.headers);
   } catch (error) {
     console.error("[api] models", error instanceof Error ? error.name : "failed");

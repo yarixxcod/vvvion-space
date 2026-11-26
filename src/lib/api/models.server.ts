@@ -1,10 +1,11 @@
 import { getSql } from "@/lib/db";
-import { publishedChatId, resolvePublishedChat } from "@/lib/api/model-public";
+import { publishedChatId, resolvePublishedChat, uniquePublicId } from "@/lib/api/model-public";
 
 const MODEL_RE = /^[A-Za-z0-9._:/-]+$/;
 
 export type ApiModel = {
   id: string;
+  catalog: string;
   created: number;
   type: "chat" | "image";
   displayName: string;
@@ -29,6 +30,18 @@ function usable(
 ): boolean {
   if ((apiKey || "").trim()) return true;
   return xaiReady && xaiHost(baseUrl);
+}
+
+function aliasesFor(id: string, catalog: string, extra: string[]): string[] {
+  const out: string[] = [];
+  const push = (value: string) => {
+    const alias = value.trim();
+    if (!alias || alias === id || out.includes(alias) || !MODEL_RE.test(alias)) return;
+    out.push(alias);
+  };
+  push(catalog);
+  for (const item of extra) push(item);
+  return out;
 }
 
 export async function listApiModels(): Promise<ApiModel[]> {
@@ -63,7 +76,7 @@ export async function listApiModels(): Promise<ApiModel[]> {
     byName.set(link.model_name, list);
   }
   const visible: ApiModel[] = [];
-  const seen = new Set<string>();
+  const taken = new Set<string>();
   for (const row of chats) {
     if (!MODEL_RE.test(row.name)) continue;
     const stored = byName.get(row.name);
@@ -72,21 +85,22 @@ export async function listApiModels(): Promise<ApiModel[]> {
       : [{ baseUrl: row.base_url, apiKey: row.api_key, modelId: null }];
     const configured = list.filter((item) => usable(item.baseUrl, item.apiKey, xaiReady));
     const keyed = configured.find((item) => (item.apiKey || "").trim());
-    const id = keyed ? publishedChatId(row.name, null, keyed.apiKey) : null;
-    if (!id || seen.has(`chat:${id}`)) continue;
-    seen.add(`chat:${id}`);
+    const label = (row.display_name || "").trim() || row.name;
+    if (!keyed || !publishedChatId(label, row.name, keyed.apiKey)) continue;
+    const id = uniquePublicId(label, row.name, taken);
+    if (!id) continue;
+    taken.add(id);
     visible.push({
       id,
+      catalog: row.name,
       created: Number(row.created) || 0,
       type: "chat",
-      displayName: row.display_name || row.name,
-      aliases: [
-        ...new Set(
-          configured
-            .map((item) => item.modelId?.trim() || "")
-            .filter((alias) => alias !== id && MODEL_RE.test(alias)),
-        ),
-      ],
+      displayName: label,
+      aliases: aliasesFor(
+        id,
+        row.name,
+        configured.map((item) => item.modelId?.trim() || ""),
+      ),
     });
   }
   const images = await sql<{
@@ -102,11 +116,18 @@ export async function listApiModels(): Promise<ApiModel[]> {
   for (const row of images) {
     if (!MODEL_RE.test(row.name)) continue;
     if (!(row.api_key || "").trim()) continue;
+    const label = (row.display_name || "").trim() || row.name;
+    if (!publishedChatId(label, row.name, row.api_key)) continue;
+    const id = uniquePublicId(label, row.name, taken);
+    if (!id) continue;
+    taken.add(id);
     visible.push({
-      id: row.name,
+      id,
+      catalog: row.name,
       created: Number(row.created) || 0,
       type: "image",
-      displayName: row.display_name || row.name,
+      displayName: label,
+      aliases: aliasesFor(id, row.name, []),
     });
   }
   return visible;
@@ -130,6 +151,12 @@ export async function imageModelRow(
   requestConfig: Record<string, unknown>;
 } | null> {
   if (!MODEL_RE.test(name)) return null;
+  const listed = (await listApiModels()).find(
+    (model) =>
+      model.type === "image" &&
+      (model.id === name || model.catalog === name || Boolean(model.aliases?.includes(name))),
+  );
+  const internal = listed?.catalog || name;
   const sql = await getSql();
   const rows = await sql<{
     name: string;
@@ -138,7 +165,7 @@ export async function imageModelRow(
     request_config: unknown;
     api_enabled: boolean;
   }>`
-    select name, base_url, api_key, request_config, api_enabled from image_models where name = ${name} limit 1
+    select name, base_url, api_key, request_config, api_enabled from image_models where name = ${internal} limit 1
   `;
   const row = rows[0];
   if (!row || row.api_enabled === false) return null;

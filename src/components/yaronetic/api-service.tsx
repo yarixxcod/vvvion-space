@@ -202,8 +202,11 @@ export function ApiService({ onBack }: { onBack: () => void }) {
             <p className="text-xs text-faint">{tx({ ru: "Модели", en: "Models", kk: "Модельдер" })}</p>
             <ul className="mt-2 space-y-1">
               {desk.models.map((model) => (
-                <li key={`${model.type}:${model.id}`} className="flex items-center justify-between gap-2 py-1.5">
-                  <span className="min-w-0 truncate text-sm">{model.displayName}</span>
+                <li key={`${model.type}:${model.id}`} className="flex items-center justify-between gap-3 py-2">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm">{model.displayName}</span>
+                    <span className="block truncate font-mono text-[11px] text-faint">{model.id}</span>
+                  </span>
                   <button type="button" className="press min-h-11 shrink-0 rounded-xl px-2 text-xs text-muted" onClick={() => void copy(model.id)}>
                     {model.type === "image" ? tx({ ru: "картинка", en: "image", kk: "сурет" }) : tx({ ru: "чат", en: "chat", kk: "чат" })}
                   </button>

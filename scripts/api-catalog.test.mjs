@@ -48,10 +48,13 @@ test("one public catalog model per chat choice, not one per upstream deployment"
   const models = await catalog.listApiModels();
   assert.deepEqual(
     models.map((m) => m.id),
-    ["DeepSeek", "Kimi"],
+    ["deepseek-4.1-flash", "kimi"],
   );
+  assert.equal(models[0].catalog, "DeepSeek");
   assert.equal(models[0].displayName, "DeepSeek 4.1 Flash");
-  assert.deepEqual(models[0].aliases, ["vendor/deepseek", "deepseek-chat"]);
+  assert.deepEqual(models[0].aliases, ["DeepSeek", "vendor/deepseek", "deepseek-chat"]);
+  assert.equal(await catalog.resolveApiChatModel("deepseek-4.1-flash"), "DeepSeek");
+  assert.equal(await catalog.resolveApiChatModel("DeepSeek"), "DeepSeek");
   assert.equal(await catalog.resolveApiChatModel("deepseek-chat"), "DeepSeek");
   assert.equal(await catalog.resolveApiChatModel("missing"), null);
 });
