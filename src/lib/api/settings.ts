@@ -21,7 +21,8 @@ export const API_SETTING_DEFAULTS: ApiSettings = {
 function cap(value: unknown, max: number): number | null {
   if (value == null || value === "") return null;
   const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isInteger(n) || n < 0 || n > max) throw new Error("Лимит — целое число или пустое поле");
+  if (!Number.isInteger(n) || n < 0) throw new Error("Лимит — целое число или пустое поле");
+  if (n > max) throw new Error(`Лимит не больше ${max}`);
   return n;
 }
 
@@ -40,7 +41,7 @@ export function settingsInput(input: unknown): ApiSettings {
     dailyTokens: cap(raw.dailyTokens, 10_000_000),
     dailyImages: cap(raw.dailyImages, 10_000_000),
     perMinute: requiredCap(raw.perMinute, 10_000, 30),
-    maxOutputTokens: requiredCap(raw.maxOutputTokens, 128_000, 4096),
+    maxOutputTokens: requiredCap(raw.maxOutputTokens, 1_000_000, 4096),
     maxKeys: cap(raw.maxKeys, 100) ?? 5,
   };
 }

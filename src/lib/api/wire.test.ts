@@ -5,6 +5,7 @@ import { corsPreflight } from "./cors.ts";
 import { errorBody, publicUpstream } from "./errors.ts";
 import { failoverChat } from "./failover.ts";
 import { buildChatPayload, normalizeChatCompletion } from "./openai-wire.ts";
+import { settingsInput } from "./settings.ts";
 import { decorateOpenAiSse } from "./sse.ts";
 
 test("openai and anthropic errors are different shapes and 401 is stable", () => {
@@ -102,6 +103,53 @@ test("failover tries the next provider and does not rewrite tools", async () => 
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[1].tools, [{ type: "function", function: { name: "ping" } }]);
   assert.equal(calls[1].url.endsWith("/b"), true);
+});
+
+test("a silent provider is skipped and the next one answers with its own model id", async () => {
+  const calls: { url: string; model: unknown }[] = [];
+  const send = async (url: string, _headers: Headers, body: Record<string, unknown>, signal: AbortSignal) => {
+    calls.push({ url, model: body.model });
+    if (url.endsWith("/a")) {
+      await new Promise((_resolve, reject) => {
+        const fail = () => reject(new DOMException("aborted", "AbortError"));
+        if (signal.aborted) fail();
+        else signal.addEventListener("abort", fail, { once: true });
+      });
+    }
+    return { failed: false, response: Response.json({ choices: [{ message: { content: "ok" } }] }) };
+  };
+  const result = await failoverChat(
+    [
+      { url: "https://a.example/a", headers: new Headers(), secret: "one", model: "vendor/deepseek" },
+      { url: "https://b.example/b", headers: new Headers(), secret: "two", model: "deepseek-chat" },
+    ],
+    { model: "DeepSeek", messages: [{ role: "user", content: "hi" }] },
+    send,
+    new AbortController().signal,
+    30,
+  );
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls.map((call) => call.model), ["vendor/deepseek", "deepseek-chat"]);
+  assert.equal(calls[1]?.url.endsWith("/b"), true);
+});
+
+test("empty daily limits and a million output tokens can turn the API on", () => {
+  const settings = settingsInput({
+    enabled: true,
+    perMinute: 30,
+    maxOutputTokens: 1_000_000,
+    dailyRequests: null,
+    dailyTokens: "",
+    dailyImages: null,
+    maxKeys: 0,
+  });
+  assert.equal(settings.enabled, true);
+  assert.equal(settings.maxOutputTokens, 1_000_000);
+  assert.equal(settings.dailyRequests, null);
+  assert.equal(settings.dailyTokens, null);
+  assert.equal(settings.dailyImages, null);
+  assert.equal(settings.maxKeys, 0);
+  assert.throws(() => settingsInput({ maxOutputTokens: 1_000_001 }), /1000000/);
 });
 
 test("a stream keeps ping comments and ends with DONE", async () => {
