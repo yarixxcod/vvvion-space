@@ -48,7 +48,8 @@ export async function v1Models(request: Request): Promise<Response> {
         status: 200,
         headers: {
           "content-type": "text/html; charset=utf-8",
-          "cache-control": "public, max-age=30",
+          "cache-control": "no-store",
+          "vary": "accept, authorization, x-api-key",
           "x-content-type-options": "nosniff",
           "referrer-policy": "no-referrer",
         },
