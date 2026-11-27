@@ -1,8 +1,16 @@
+import {
+  feedSelect,
+  parseFeedQuery,
+  EMPTY_FEED_QUERY,
+  FEED_PAGE_SIZE,
+  type FeedQuery,
+} from "./feed-query";
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { grantAchievement } from "@/lib/social/achievements";
 import { assertActive } from "@/lib/social/access";
+import { preparePostSource } from "@/lib/social/post-rich";
 
 export type FeedFile = {
   id: string;
@@ -27,7 +35,6 @@ export type FeedPost = {
   files: FeedFile[];
 };
 
-const LIMIT = 40;
 const POST_ID = /^[0-9a-f-]{36}$/i;
 const SHARE_TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
 
@@ -76,55 +83,26 @@ function newToken(): string {
   return btoa(text).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-export const listPosts = createServerFn({ method: "GET" })
-  .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<FeedPost[]> => {
-    await assertActive(context.userId);
-    const sql = await getSql();
-    const rows = await sql<{
-      id: string;
-      body: string;
-      created_at: string;
-      user_id: string;
-      author: string;
-      image: string | null;
-      likes: number;
-      liked: boolean | null;
-      replies: number;
-    }>`
-      select p.id,
-             p.body,
-             p.user_id,
-             p.created_at::text as created_at,
-             coalesce(u.name, 'Участник') as author,
-             u.image,
-             coalesce(c.likes, 0) as likes,
-             m.liked as liked,
-             coalesce(r.replies, 0) as replies
-      from posts p
-      left join "user" u on u.id = p.user_id
-      left join (
-        select post_id, count(*) as likes
-        from post_likes
-        group by post_id
-      ) c on c.post_id = p.id
-      left join (
-        select post_id, true as liked
-        from post_likes
-        where user_id = ${context.userId}
-      ) m on m.post_id = p.id
-      left join (
-        select parent_id, count(*) as replies
-        from posts
-        where parent_id is not null and hidden_at is null
-        group by parent_id
-      ) r on r.parent_id = p.id
-      where p.parent_id is null and p.hidden_at is null
-      order by p.created_at desc
-      limit ${LIMIT}
-    `;
-    const files = await filesFor(rows.map((row) => row.id));
-    return rows.map((row) => ({
+type PostRow = {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
+  author: string;
+  image: string | null;
+  likes: number;
+  liked: boolean | null;
+  replies: number;
+};
+async function queryPosts(userId: string, filter: FeedQuery) {
+  await assertActive(userId);
+  const sql = await getSql();
+  const query = feedSelect(userId, filter);
+  const rows = await sql.query<PostRow>(query.sql, query.values);
+  const files = await filesFor(rows.slice(0, FEED_PAGE_SIZE).map((row) => row.id));
+  const posts = rows
+    .slice(0, FEED_PAGE_SIZE)
+    .map((row) => ({
       id: row.id,
       body: row.body,
       createdAt: row.created_at,
@@ -133,12 +111,23 @@ export const listPosts = createServerFn({ method: "GET" })
       authorImage: row.image,
       likes: Number(row.likes) || 0,
       liked: Boolean(row.liked),
-      mine: row.user_id === context.userId,
+      mine: row.user_id === userId,
       replies: Number(row.replies) || 0,
       parentId: null,
       files: files.get(row.id) ?? [],
     }));
-  });
+  return { posts, hasMore: rows.length > FEED_PAGE_SIZE, nextOffset: filter.offset + posts.length };
+}
+export const listPosts = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(
+    async ({ context }): Promise<FeedPost[]> =>
+      (await queryPosts(context.userId, EMPTY_FEED_QUERY)).posts,
+  );
+export const searchPosts = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .validator(parseFeedQuery)
+  .handler(async ({ context, data }) => queryPosts(context.userId, data));
 
 export const readPostCard = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -172,11 +161,12 @@ export const createPost = createServerFn({ method: "POST" })
           ? (input as { body?: unknown; parentId?: unknown })
           : {};
     if (typeof raw.body !== "string") throw new Error("Напишите текст");
-    const text = raw.body.replace(/\s+/g, " ").trim();
-    if (!text || text.length > 500) throw new Error("От 1 до 500 символов");
+    const prepared = preparePostSource(raw.body);
+    if (prepared.error) throw new Error(prepared.error);
+    if (!prepared.text) throw new Error("Напишите текст");
     const parentId = typeof raw.parentId === "string" ? raw.parentId.trim() : "";
     if (parentId && !/^[0-9a-f-]{16,40}$/i.test(parentId)) throw new Error("Запись не найдена");
-    return { body: text, parentId };
+    return { body: prepared.text, parentId };
   })
   .handler(async ({ context, data }) => {
     await assertActive(context.userId);
@@ -221,7 +211,8 @@ export const createPost = createServerFn({ method: "POST" })
       void import("@/lib/social/telegram.server")
         .then(async ({ notifyUser, senderName }) => {
           const name = await senderName(from);
-          await notifyUser(to, `Ответ в ленте от ${name}:\n${body}`);
+          const preview = body.replace(/\s+/g, " ").trim().slice(0, 400);
+          await notifyUser(to, `Ответ в ленте от ${name}:\n${preview}`);
         })
         .catch(() => undefined);
     }
@@ -278,7 +269,8 @@ export const deletePost = createServerFn({ method: "POST" })
 export const listThread = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((id: unknown) => {
-    if (typeof id !== "string" || !/^[0-9a-f-]{16,40}$/i.test(id)) throw new Error("Запись не найдена");
+    if (typeof id !== "string" || !/^[0-9a-f-]{16,40}$/i.test(id))
+      throw new Error("Запись не найдена");
     return id;
   })
   .handler(async ({ context, data }): Promise<FeedPost[]> => {
@@ -343,9 +335,13 @@ export const sharePost = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<{ token: string }> => {
     await assertActive(context.userId);
     const sql = await getSql();
-    const post = await sql<{ id: string }>`select id from posts where id = ${data} and hidden_at is null limit 1`;
+    const post = await sql<{
+      id: string;
+    }>`select id from posts where id = ${data} and hidden_at is null limit 1`;
     if (!post.length) throw new Error("Запись не найдена");
-    const existing = await sql<{ token: string }>`select token from post_shares where post_id = ${data} limit 1`;
+    const existing = await sql<{
+      token: string;
+    }>`select token from post_shares where post_id = ${data} limit 1`;
     if (existing[0]?.token) return { token: existing[0].token };
     const token = newToken();
     const saved = await sql<{ token: string }>`
@@ -355,7 +351,9 @@ export const sharePost = createServerFn({ method: "POST" })
       returning token
     `;
     if (saved[0]?.token) return { token: saved[0].token };
-    const again = await sql<{ token: string }>`select token from post_shares where post_id = ${data} limit 1`;
+    const again = await sql<{
+      token: string;
+    }>`select token from post_shares where post_id = ${data} limit 1`;
     if (again[0]?.token) return { token: again[0].token };
     throw new Error("Не удалось создать ссылку");
   });
@@ -371,7 +369,9 @@ export type SharedPost = {
 };
 
 export const readSharedPost = createServerFn({ method: "GET" })
-  .validator((token: unknown): string => (typeof token === "string" && SHARE_TOKEN.test(token) ? token : ""))
+  .validator((token: unknown): string =>
+    typeof token === "string" && SHARE_TOKEN.test(token) ? token : "",
+  )
   .handler(async ({ data }): Promise<SharedPost | null> => {
     if (!data) return null;
     const sql = await getSql();
