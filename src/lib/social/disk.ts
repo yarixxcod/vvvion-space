@@ -2,7 +2,7 @@ import { createServerOnlyFn } from "@tanstack/react-start";
 import { zipSync } from "fflate";
 import { getSql } from "@/lib/db";
 import { playbackType } from "@/lib/music/tags";
-import { bytesResponse } from "@/lib/http/byte-range";
+import { storedBytesResponse } from "@/lib/http/db-blob";
 import { assertActive } from "@/lib/social/access";
 import { DISK_ID, chatShareToken, diskPath, shareReferencesDisk } from "@/lib/social/disk-path";
 import { isPremium, PREMIUM_DISK } from "@/lib/social/premium";
@@ -169,17 +169,21 @@ const requireUser = createServerOnlyFn(async (request: Request): Promise<string 
   return id;
 });
 
-function contentTag(bytes: Uint8Array): string {
-  let hash = 2166136261;
-  const n = Math.min(bytes.length, 8192);
-  for (let i = 0; i < n; i += 1) hash = Math.imul(hash ^ (bytes[i] ?? 0), 16777619);
-  hash = Math.imul(hash ^ bytes.length, 16777619);
-  return `W/"${(hash >>> 0).toString(16)}"`;
-}
-
-function fileResponse(request: Request, row: { data: string; mime: string; name: string }, download: boolean): Response {
-  const bytes = Buffer.from(row.data, "base64");
-  const etag = contentTag(bytes);
+/**
+ * Validator for a stored file, computed INSIDE the database: only a 32-char digest and
+ * the size leave Neon. (The old tag hashed the bytes in Node, so every revalidation
+ * — `no-cache` means every page view — pulled the whole file out of the database
+ * just to answer 304.) Content-derived, so replacing an audio file still changes it.
+ */
+async function fileResponse(request: Request, id: string, ownerId: string, download: boolean): Promise<Response> {
+  const sql = await getSql();
+  const rows = await sql<{ mime: string; name: string; chars: number; tail: string | null; tag: string }>`
+    select mime, name, length(data) as chars, right(data, 2) as tail, md5(data) as tag
+    from disk_files where id = ${id} and user_id = ${ownerId} limit 1
+  `;
+  const row = rows[0];
+  if (!row) return json(404, { message: "Файл не найден" });
+  const etag = `W/"${row.tag}"`;
   const headers = new Headers({
     "content-type": playbackType(row.name, row.mime || ""),
     "cache-control": "private, no-cache",
@@ -194,7 +198,16 @@ function fileResponse(request: Request, row: { data: string; mime: string; name:
   if (!request.headers.get("range") && request.headers.get("if-none-match") === etag) {
     return new Response(null, { status: 304, headers });
   }
-  return bytesResponse(request, bytes, headers);
+  return storedBytesResponse({
+    request,
+    headers,
+    sql,
+    table: "disk_files",
+    id,
+    chars: row.chars,
+    tail: row.tail,
+    media: /^(video|audio)\//i.test(playbackType(row.name, row.mime || "")),
+  });
 }
 
 export const readDiskFile = createServerOnlyFn(async (request: Request, id: string): Promise<Response> => {
@@ -241,13 +254,8 @@ export const readDiskFile = createServerOnlyFn(async (request: Request, id: stri
       return json(403, { message: error instanceof Error ? error.message : "Аккаунт закрыт" });
     }
   }
-  const rows = await sql<{ data: string; mime: string; name: string }>`
-    select data, mime, name from disk_files where id = ${id} and user_id = ${ownerId} limit 1
-  `;
-  const row = rows[0];
-  if (!row) return json(404, { message: "Файл не найден" });
   const download = new URL(request.url).searchParams.get("dl") === "1";
-  return fileResponse(request, row, download);
+  return fileResponse(request, id, ownerId, download);
 });
 
 async function replaceAudio(userId: string, form: FormData): Promise<Response> {

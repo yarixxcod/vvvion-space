@@ -615,6 +615,39 @@ export const listRoomMessages = createServerFn({ method: "POST" })
     }
   });
 
+/**
+ * Fingerprint of everything listRoomMessages() would show for a room (messages, files, the
+ * other members' read marks, likes, sender names/avatars). The open room polls this every
+ * 3 s and downloads the 120-message list only when it changed.
+ */
+export const roomStamp = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown) => asId(input, "Переписка не найдена"))
+  .handler(async ({ context, data }): Promise<{ stamp: string }> => {
+    try {
+      await assertActive(context.userId);
+      await assertMember(data, context.userId);
+      const sql = await getSql();
+      const { ensureMessageLikes } = await import("@/lib/social/message-likes.server");
+      await ensureMessageLikes();
+      const rows = await sql<{ stamp: string }>`
+        select concat_ws('|',
+          (select count(*) from room_messages where room_id = ${data}),
+          (select coalesce(max(created_at)::text, '') from room_messages where room_id = ${data}),
+          (select count(*) from room_files where room_id = ${data}),
+          (select coalesce(string_agg(last_read_at::text, ',' order by user_id), '')
+             from room_members where room_id = ${data} and user_id <> ${context.userId}),
+          (select count(*) from room_message_likes l join room_messages m on m.id = l.message_id where m.room_id = ${data}),
+          (select coalesce(md5(string_agg(coalesce(u.name, '') || coalesce(u.image, ''), ',' order by u.id)), '')
+             from "user" u where u.id in (select user_id from room_messages where room_id = ${data}))
+        ) as stamp
+      `;
+      return { stamp: rows[0]?.stamp ?? "" };
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 type OutFile = { name: string; mime: string; data: string };
 
 export const sendRoomMessage = createServerFn({ method: "POST" })

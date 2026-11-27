@@ -8,6 +8,15 @@ const LIMIT = 30;
 type Sample = { ok: boolean; ms: number | null };
 type Body = { kind?: unknown; baseUrl?: unknown; model?: unknown; image?: unknown; imageModel?: unknown };
 
+// The status dot polls /api/ping every 12 s per open tab; the base URL it resolves only changes when an
+// admin edits a model, so remember it for a minute instead of querying Neon (and waking it) each time.
+const BASE_TTL_MS = 60_000;
+const baseCache = new Map<string, { at: number; base: string }>();
+function remember(key: string, base: string) {
+  if (baseCache.size >= 200) baseCache.clear();
+  baseCache.set(key, { at: Date.now(), base });
+}
+
 const buckets = new Map<string, { n: number; reset: number }>();
 const fresh = new Map<string, Sample & { at: number }>();
 const inflight = new Map<string, Promise<Sample>>();
@@ -76,18 +85,30 @@ async function resolveTarget(body: Body) {
   try {
     if (image) {
       const asked = typeof body.imageModel === "string" ? body.imageModel.trim() : "";
+      const key = `image:${asked}`;
+      const hit = baseCache.get(key);
+      if (hit && Date.now() - hit.at < BASE_TTL_MS) return targetOf(hit.base);
       const rows = await (await getSql())<{ name: string; base_url: string | null }>`
         select name, base_url from image_models order by created_at asc, name asc
       `;
       const row = rows.find((item) => item.name === asked) || rows[0];
-      return targetOf(row?.base_url?.trim() || BUILTIN_BASE);
+      const base = row?.base_url?.trim() || BUILTIN_BASE;
+      const target = targetOf(base);
+      remember(key, base);
+      return target;
     }
     const model = typeof body.model === "string" ? body.model.trim() : "";
     if (model && /^[A-Za-z0-9._:/-]+$/.test(model)) {
+      const key = `model:${model}`;
+      const hit = baseCache.get(key);
+      if (hit && Date.now() - hit.at < BASE_TTL_MS) return targetOf(hit.base);
       const rows = await (await getSql())<{ base_url?: string }>`
         select base_url from catalog_models where name = ${model}
       `;
-      return targetOf(rows[0]?.base_url?.trim() || BUILTIN_BASE);
+      const base = rows[0]?.base_url?.trim() || BUILTIN_BASE;
+      const target = targetOf(base);
+      remember(key, base);
+      return target;
     }
   } catch {
     return targetOf(BUILTIN_BASE);

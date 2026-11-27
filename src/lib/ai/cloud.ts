@@ -179,39 +179,82 @@ export const listCloudChats = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<Chat[]> => readChats(context.userId));
 
+/**
+ * Cheap change detector for the background poll: one md5 over id / updated_at / unread /
+ * stored size of every chat, computed inside the database (pg_column_size does not even
+ * detoast `messages`). The client downloads the chats again only when this changes.
+ */
+export const cloudChatsStamp = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ stamp: string }> => {
+    const sql = await getSql();
+    const rows = await sql<{ stamp: string | null }>`
+      select md5(coalesce(string_agg(
+               id || ':' || updated_at::text || ':' || coalesce(unread, false)::text || ':' || pg_column_size(messages)::text,
+               ',' order by id), '')) as stamp
+      from (
+        select id, updated_at, unread, messages
+        from saved_chats
+        where user_id = ${context.userId}
+        order by updated_at desc
+        limit ${MAX_CHATS}
+      ) c
+    `;
+    return { stamp: rows[0]?.stamp ?? "" };
+  });
+
 export const saveCloudChat = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(asChat)
   .handler(async ({ context, data }): Promise<{ ok: true }> => {
     const sql = await getSql();
     const messages = JSON.stringify(data.messages);
-    const stored = await sql<{ messages: unknown }>`
-      select messages from saved_chats where id = ${data.id} and user_id = ${context.userId}
+    // Only the stored LAST assistant reply (id + length) decides `keepStored`, so ask the database
+    // for just that instead of downloading the whole chat on every save.
+    const stored = await sql<{ id: string; len: number | string }>`
+      select left(e->>'id', 80) as id,
+             -- UTF-16 length, like JS String.length (characters outside the BMP count twice)
+             length(coalesce(e->>'content', ''))
+               + length(regexp_replace(coalesce(e->>'content', ''), '[^\\U00010000-\\U0010FFFF]', '', 'g')) as len
+      from saved_chats c
+      cross join lateral (
+        select t.e
+        from jsonb_array_elements(
+          case jsonb_typeof(c.messages)
+            when 'array' then c.messages
+            when 'string' then (c.messages #>> '{}')::jsonb
+            else '[]'::jsonb
+          end
+        ) with ordinality as t(e, i)
+        where t.e->>'role' = 'assistant' and btrim(coalesce(t.e->>'id', '')) <> ''
+        order by t.i desc
+        limit 1
+      ) last
+      where c.id = ${data.id} and c.user_id = ${context.userId}
     `;
-    const previous = stored[0] ? parseMessages(stored[0].messages) : [];
-    const prevReply = [...previous].reverse().find((item) => item.role === "assistant");
+    const prevReply = stored[0] ? { id: stored[0].id, length: Number(stored[0].len) } : undefined;
     const nextReply = [...data.messages].reverse().find((item) => item.role === "assistant");
-    const keepStored =
+    const keepStored = Boolean(
       prevReply &&
-      nextReply &&
-      prevReply.id === nextReply.id &&
-      prevReply.content.length > nextReply.content.length &&
-      !nextReply.stopped;
-    const savedMessages = keepStored ? JSON.stringify(previous) : messages;
+        nextReply &&
+        prevReply.id === nextReply.id &&
+        prevReply.length > nextReply.content.length &&
+        !nextReply.stopped,
+    );
     await sql`
       insert into saved_chats (id, user_id, title, messages, unread, created_at, updated_at)
       values (
         ${data.id},
         ${context.userId},
         ${data.title},
-        ${savedMessages}::jsonb,
+        ${messages}::jsonb,
         ${data.unread === true},
         to_timestamp(${data.createdAt} / 1000.0),
         to_timestamp(${data.updatedAt} / 1000.0)
       )
       on conflict (id) do update
         set title = excluded.title,
-            messages = excluded.messages,
+            messages = case when ${keepStored} then saved_chats.messages else excluded.messages end,
             unread = excluded.unread,
             updated_at = case when ${keepStored} then saved_chats.updated_at else excluded.updated_at end
         where saved_chats.user_id = excluded.user_id

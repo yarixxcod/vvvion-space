@@ -155,7 +155,10 @@ async function withLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   const url = process.env.DATABASE_URL?.trim();
   if (!url) throw new Error("MEMORY_WRITE_FAILED");
   const { Client } = await import("pg");
-  const db = new Client({ connectionString: url, connectionTimeoutMillis: 8000, query_timeout: 20000 });
+  const { pgOptions } = await import("../../../scripts/pg-config.mjs");
+  const { connectionString, ssl, keepAlive, keepAliveInitialDelayMillis } = pgOptions(url);
+  const db = new Client({ connectionString, ssl, keepAlive, keepAliveInitialDelayMillis, connectionTimeoutMillis: 8000, query_timeout: 20000 });
+  db.on("error", () => undefined); // a dropped connection surfaces through the pending query
   await db.connect();
   try {
     await db.query("begin");

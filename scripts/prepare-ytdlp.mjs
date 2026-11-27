@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, chmod, rename } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { slimYtdlp } from "./slim-function.mjs";
 
 // Official immutable Linux release; verify bytes before packaging/executing.
 const version = "2026.10.26";
 const digest = "767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795";
 const destination = resolve(".bin/yt-dlp");
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
-if (process.platform !== "linux" || process.arch !== "x64") {
+if (slimYtdlp(process.env)) {
+  console.log("yt-dlp: slim build, the function downloads the pinned release on first use");
+} else if (process.platform !== "linux" || process.arch !== "x64") {
   if (process.env.VERCEL) throw new Error("yt-dlp packaging requires Linux x64");
   console.log("yt-dlp: native local binary may be supplied with YTDLP_BIN");
 } else {

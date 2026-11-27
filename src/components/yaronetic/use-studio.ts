@@ -27,7 +27,7 @@ import {
 } from "@/lib/ai/defaults";
 import { deleteChat, loadChats, loadProviders, saveChat, saveProviders, clearChats, wipeDatabase } from "@/lib/ai/db";
 import { GUEST_OWNER, localChatAccess } from "@/lib/ai/chat-owner";
-import { deleteCloudChat, deleteAllCloudChats, listCloudChats, saveCloudChat } from "@/lib/ai/cloud";
+import { cloudChatsStamp, deleteCloudChat, deleteAllCloudChats, listCloudChats, saveCloudChat } from "@/lib/ai/cloud";
 import { ACCOUNT_REQUIRED_MESSAGE } from "@/lib/ai/guest-limit";
 import { streamChat } from "@/lib/ai/stream-client";
 import { pluginNote } from "@/lib/ai/calc";
@@ -1420,12 +1420,32 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   useEffect(() => {
     if (!ready || isPending || !user?.id) return;
     let cancelled = false;
-    const pull = () => {
+    // Neon egress: listCloudChats() ships up to 80 chats with every message. The 15 s timer
+    // first asks for a ~32 byte fingerprint of the stored chats and only downloads them when
+    // it changed. Focus / tab-visible pulls, a live or detached reply and a chat that ended
+    // with a dropped-stream error always take the full path, exactly as before.
+    let lastStamp: string | null = null;
+    const run = (idle: boolean) => {
       if (cancelled || !userIdRef.current) return;
       if (document.visibilityState === "hidden" && !detachedRef.current) return;
       const epoch = wipeEpoch.current;
-      void listCloudChats()
+      const fetchChats = async (): Promise<Chat[] | null> => {
+        const stamp = await cloudChatsStamp().then((row) => row.stamp).catch(() => null);
+        const mustLoad =
+          !idle ||
+          stamp === null ||
+          lastStamp === null ||
+          Boolean(detachedRef.current) ||
+          Boolean(liveRef.current) ||
+          chatsRef.current.some((item) => isDropError(lastAssistant(item)?.error));
+        if (!mustLoad && stamp === lastStamp) return null;
+        const rows = await listCloudChats();
+        lastStamp = stamp;
+        return rows;
+      };
+      void fetchChats()
         .then((remote) => {
+          if (!remote) return;
           if (cancelled || epoch !== wipeEpoch.current) return;
           const liveId = liveRef.current?.chatId ?? null;
           const watch = detachedRef.current;
@@ -1477,6 +1497,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         })
         .catch(() => undefined);
     };
+    const pull = () => run(false);
     pullRef.current = pull;
     const onVis = () => {
       const live = liveRef.current;
@@ -1503,7 +1524,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     };
     window.addEventListener("focus", pull);
     document.addEventListener("visibilitychange", onVis);
-    const timer = window.setInterval(pull, 15_000);
+    const timer = window.setInterval(() => run(true), 15_000);
     const fast = window.setInterval(() => {
       if (detachedRef.current) pull();
     }, 4_000);

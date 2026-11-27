@@ -27,6 +27,7 @@ import {
   listFriends,
   listRequests,
   listRoomMessages,
+  roomStamp,
   listRooms,
   openDm,
   readRoomFile,
@@ -121,8 +122,12 @@ export function useCircleUnread(enabled: boolean) {
       return;
     }
     let dead = false;
+    let ticks = 0;
+    let roomsAt = -1;
+    let roomsN = -1;
     const pull = () => {
       if (document.hidden && !nativeShell()) return;
+      const tick = ticks++;
       void countUnread()
         .then((row) => {
           if (dead) return;
@@ -133,9 +138,17 @@ export function useCircleUnread(enabled: boolean) {
             badged.current = row.n;
             appBadge(row.n);
           }
+          // Native shell only: the per-room list (80 rooms, 8 subqueries each) is re-read when the
+          // unread total moved, and at least every 4th tick (~32 s) as a safety net.
+          if (nativeShell() && (row.n !== roomsN || roomsAt < 0 || tick - roomsAt >= 4)) {
+            roomsN = row.n;
+            roomsAt = tick;
+            pullRooms();
+          }
         })
         .catch(() => undefined);
-      if (!nativeShell()) return;
+    };
+    const pullRooms = () => {
       void listRooms()
         .then((rooms) => {
           if (dead) return;
@@ -555,15 +568,29 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
         toast.error(err instanceof Error ? err.message : "Переписка недоступна");
       }
     });
+    // Neon egress: every 3 s ask for a tiny fingerprint of the room and download the
+    // message list only when it changed (a quiet open chat used to re-download it forever).
+    let seen: string | null = null;
+    let checking = false;
     const timer = window.setInterval(() => {
-      if (document.hidden || busyRef.current) return;
-      void pull().catch(() => undefined);
+      if (document.hidden || busyRef.current || checking) return;
+      checking = true;
+      void roomStamp({ data: room.id })
+        .then(async ({ stamp }) => {
+          if (dead || (seen !== null && stamp === seen)) return;
+          await pull();
+          seen = stamp;
+        })
+        .catch(() => pull().catch(() => undefined))
+        .finally(() => {
+          checking = false;
+        });
     }, 3000);
     return () => {
       dead = true;
       window.clearInterval(timer);
     };
-  }, [pull]);
+  }, [pull, room.id]);
 
   useEffect(() => {
     primed.current = false;

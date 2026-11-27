@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
@@ -12,6 +12,8 @@ import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
+// @ts-expect-error JS helper alongside the TS vite config
+import { slimYtdlp, slimPglite } from "./scripts/slim-function.mjs";
 
 /** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
 function hasGlobbedMigrations(root: string): boolean {
@@ -36,6 +38,18 @@ function pgliteBundleAssetsPlugin(): Plugin {
     name: "app-builder:pglite-assets",
     apply: "build",
     closeBundle() {
+      // Production runs on Neon (DATABASE_URL is set), so the ~17 MB PGlite
+      // fallback is dead weight in every stored deployment. Previews without a
+      // database keep it.
+      if (slimPglite(process.env)) {
+        const assets = join(process.cwd(), ".vercel/output/static/assets");
+        if (existsSync(assets)) {
+          for (const name of readdirSync(assets)) {
+            if (/^(pglite|initdb)-[\w-]+\.(wasm|data)$/.test(name)) rmSync(join(assets, name), { force: true });
+          }
+        }
+        return;
+      }
       const destDir = join(process.cwd(), ".vercel/output/functions/__server.func/_libs");
       if (!existsSync(destDir)) return;
       const srcDir = join(process.cwd(), "node_modules/@electric-sql/pglite/dist");
@@ -79,10 +93,13 @@ function ytdlpPlugin(): Plugin {
     name: "app-builder:ytdlp",
     apply: "build",
     buildStart() {
+      if (slimYtdlp(process.env)) return;
       if (process.platform !== "linux" || process.arch !== "x64") return;
       execFileSync(process.execPath, [join(process.cwd(), "scripts/prepare-ytdlp.mjs")], { stdio: "inherit" });
     },
     closeBundle() {
+      // Slim build: the function fetches yt-dlp into /tmp on first use instead.
+      if (slimYtdlp(process.env)) return;
       const from = join(process.cwd(), ".bin", "yt-dlp");
       if (!existsSync(from)) return;
       const destinations = [

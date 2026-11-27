@@ -36,6 +36,7 @@ import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
+import { guardPoolErrors, pgOptions } from "../../../scripts/pg-config.mjs";
 import { getSql } from "@/lib/db";
 import { emailAndPasswordEnabled } from "./email-password";
 import { sessionEpoch } from "@/lib/security/epoch.server";
@@ -161,7 +162,7 @@ const grokUserInfoUrl = `${issuerBase}/api/auth/oauth2/userinfo`;
 // schema from `migrations/auth/0001_auth.sql`, copied into `migrations/` when
 // the app turns sign-in on.
 const database = databaseUrl
-  ? new Pool({ connectionString: databaseUrl })
+  ? guardPoolErrors(new Pool(pgOptions(databaseUrl)), "auth")
   : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
 
 /** Session token cookie name — also read by the live-preview popup completion page. */

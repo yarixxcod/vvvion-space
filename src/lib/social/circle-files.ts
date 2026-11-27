@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { acceptUpload, claimedMime, serveFile } from "@/lib/social/file-accept";
 import { byteRange } from "@/lib/http/byte-range";
+import { storedBytesResponse } from "@/lib/http/db-blob";
 import { getSql } from "@/lib/db";
 import { assertActive } from "@/lib/social/access";
 import { grantAchievement } from "@/lib/social/achievements";
@@ -357,8 +358,10 @@ export async function readCircleFile(request: Request, id: string): Promise<Resp
   const userId = await requireUser(request);
   if (userId instanceof Response) return userId;
   const sql = await getSql();
-  const rows = await sql<{ name: string; mime: string; size: number; room_id: string; blob_path: string | null; data: string }>`
-    select name, mime, size, room_id, blob_path, data
+  // `data` (the base64 file) is NOT selected: HEAD / Range / chunked files never need it,
+  // and the inline case below reads only the slice it answers with.
+  const rows = await sql<{ name: string; mime: string; size: number; room_id: string; blob_path: string | null; chars: number; tail: string | null }>`
+    select name, mime, size, room_id, blob_path, length(data) as chars, right(data, 2) as tail
     from room_files
     where id = ${id}
   `;
@@ -408,19 +411,14 @@ export async function readCircleFile(request: Request, id: string): Promise<Resp
       return json(404, { message: "Файл не найден" });
     }
   }
-  const bytes = Buffer.from(file.data || "", "base64");
-  const size = bytes.length;
-  headers.set("content-length", String(size));
-  const asked = byteRange(request.headers.get("range"), size);
-  if (asked === "bad") {
-    headers.set("content-range", `bytes */${size}`);
-    headers.delete("content-length");
-    return new Response(null, { status: 416, headers });
-  }
-  if (request.method === "HEAD") {
-    return new Response(null, { status: asked ? 206 : 200, headers: asked ? applyRange(headers, asked, size) : headers });
-  }
-  if (!asked) return new Response(bytes, { status: 200, headers });
-  const slice = bytes.subarray(asked.start, asked.end + 1);
-  return new Response(slice, { status: 206, headers: applyRange(headers, asked, size) });
+  return storedBytesResponse({
+    request,
+    headers,
+    sql,
+    table: "room_files",
+    id,
+    chars: file.chars,
+    tail: file.tail,
+    media: /^(video|audio)\//i.test(file.mime),
+  });
 }

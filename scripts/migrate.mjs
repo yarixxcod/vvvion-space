@@ -9,7 +9,8 @@
  * The read is non-recursive, so the opt-in auth schema under migrations/auth/
  * is not applied to an app that never asked for sign-in.
  *
- * No DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
+ * Connects with DATABASE_URL_UNPOOLED when set, else DATABASE_URL.
+ * No database URL (local / preview builds) -> skip; the PGLite fallback applies
  * the same files at startup instead (see src/lib/db.ts).
  */
 import { readdir, readFile } from "node:fs/promises";
@@ -17,8 +18,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
+import { guardPoolErrors, pgOptions } from "./pg-config.mjs";
 
-const databaseUrl = process.env.DATABASE_URL;
+// Migrations (multi-statement files, DDL) go over the direct connection when one is
+// given: DATABASE_URL_UNPOOLED (Neon direct host / a pooler-free server), else DATABASE_URL.
+const databaseUrl = process.env.DATABASE_URL_UNPOOLED?.trim() || process.env.DATABASE_URL?.trim();
 if (!databaseUrl) {
   console.log(
     "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
@@ -42,7 +46,7 @@ async function main() {
     return;
   }
 
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+  const pool = guardPoolErrors(new pg.Pool(pgOptions(databaseUrl, { max: 1 })), "migrate");
   const client = await pool.connect();
   try {
     await client.query(

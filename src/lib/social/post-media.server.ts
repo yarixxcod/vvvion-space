@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
-import { bytesResponse } from "@/lib/http/byte-range";
+import { storedBytesResponse } from "@/lib/http/db-blob";
 import { assertActive } from "@/lib/social/access";
 
 const IMAGE_MAX = 3_000_000;
@@ -27,7 +27,8 @@ const TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
 
 type Kind = "image" | "video" | "file";
 
-type Stored = { data: string; mime: string; name: string; kind: string };
+// `data` (the base64 file) is deliberately not part of the metadata row — see db-blob.ts.
+type Stored = { mime: string; name: string; kind: string; chars: number; tail: string | null };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -87,8 +88,7 @@ async function requireUser(request: Request): Promise<string | Response> {
   return id;
 }
 
-function mediaResponse(request: Request, row: Stored): Response {
-  const bytes = Buffer.from(row.data, "base64");
+async function mediaResponse(request: Request, row: Stored, id: string): Promise<Response> {
   const mime = safeMime(row.mime);
   const inline = row.kind === "image" || row.kind === "video" || row.kind === "audio";
   const ascii = row.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 80) || "file";
@@ -102,7 +102,16 @@ function mediaResponse(request: Request, row: Stored): Response {
     "content-disposition",
     `${inline ? "inline" : "attachment"}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(row.name)}`,
   );
-  return bytesResponse(request, bytes, headers);
+  return storedBytesResponse({
+    request,
+    headers,
+    sql: await getSql(),
+    table: "post_files",
+    id,
+    chars: row.chars,
+    tail: row.tail,
+    media: row.kind === "video" || row.kind === "audio",
+  });
 }
 
 export async function handlePostPublish(request: Request): Promise<Response> {
@@ -198,24 +207,25 @@ export async function handlePostFile(request: Request, id: string): Promise<Resp
   if (userId instanceof Response) return userId;
   const sql = await getSql();
   const rows = await sql<Stored>`
-    select data, mime, name, kind from post_files where id = ${id} limit 1
+    select mime, name, kind, length(data) as chars, right(data, 2) as tail
+    from post_files where id = ${id} limit 1
   `;
   const row = rows[0];
-  if (!row?.data) return json(404, { message: "Файл не найден" });
-  return mediaResponse(request, row);
+  if (!row || !Number(row.chars)) return json(404, { message: "Файл не найден" });
+  return mediaResponse(request, row, id);
 }
 
 export async function handleSharedPostFile(request: Request, token: string, id: string): Promise<Response> {
   if (!TOKEN.test(token) || !UUID.test(id)) return json(404, { message: "Файл не найден" });
   const sql = await getSql();
   const rows = await sql<Stored>`
-    select f.data, f.mime, f.name, f.kind
+    select f.mime, f.name, f.kind, length(f.data) as chars, right(f.data, 2) as tail
     from post_files f
     join post_shares s on s.post_id = f.post_id
     where s.token = ${token} and f.id = ${id}
     limit 1
   `;
   const row = rows[0];
-  if (!row?.data) return json(404, { message: "Файл не найден" });
-  return mediaResponse(request, row);
+  if (!row || !Number(row.chars)) return json(404, { message: "Файл не найден" });
+  return mediaResponse(request, row, id);
 }
