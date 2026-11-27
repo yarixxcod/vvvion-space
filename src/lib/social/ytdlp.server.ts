@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,6 +36,50 @@ function binPath(): string | null {
     join(here, "yt-dlp"),
   ].filter(Boolean);
   return candidates.find((item) => existsSync(item)) ?? null;
+}
+
+// Same pinned release as scripts/prepare-ytdlp.mjs. Slim builds (see vite.config.ts,
+// VVVION_SLIM_YTDLP) do not ship the 41 MB binary inside the function, so it is
+// fetched once per warm instance into /tmp and verified against this digest.
+const YTDLP_VERSION = "2026.10.26";
+const YTDLP_SHA256 = "767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795";
+const YTDLP_TMP = "/tmp/yt-dlp";
+let ytdlpFetch: Promise<string | null> | null = null;
+
+async function fetchYtDlp(): Promise<string | null> {
+  if (process.platform !== "linux" || process.arch !== "x64") return null;
+  const sha = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
+  const cached = await readFile(YTDLP_TMP).catch(() => null);
+  if (cached && sha(cached) === YTDLP_SHA256) return YTDLP_TMP;
+  const urls = [
+    ...(process.env.YTDLP_MIRROR_URLS || "").split(",").map((item) => item.trim()).filter(Boolean),
+    `https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp_linux`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+      if (!res.ok) continue;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (sha(bytes) !== YTDLP_SHA256) continue;
+      await writeFile(`${YTDLP_TMP}.part`, bytes);
+      await chmod(`${YTDLP_TMP}.part`, 0o755);
+      await rename(`${YTDLP_TMP}.part`, YTDLP_TMP);
+      return YTDLP_TMP;
+    } catch {
+      /* next mirror */
+    }
+  }
+  return null;
+}
+
+async function ensureBin(): Promise<string | null> {
+  const local = binPath();
+  if (local) return local;
+  ytdlpFetch ??= fetchYtDlp().then((found) => {
+    if (!found) ytdlpFetch = null;
+    return found;
+  });
+  return ytdlpFetch;
 }
 
 function run(bin: string, args: string[], ms: number, maxOut = 4000, signal?: AbortSignal): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -396,7 +441,7 @@ async function downloadWithYtDlp(bin: string, url: string, mode: GrabMode, extra
 }
 
 export async function grabWithYtDlp(url: string, onProgress?: (tick: GrabTick) => void, mode: GrabMode = "video", signal?: AbortSignal): Promise<{ files: GrabFile[] | null; note: string; ran: boolean }> {
-  const bin = binPath();
+  const bin = await ensureBin();
   if (!bin) {
     console.error("[grab] yt-dlp missing");
     return { files: null, note: "", ran: false };

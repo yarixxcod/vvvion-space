@@ -259,6 +259,9 @@ docker compose up -d --build
 | Переменная | Зачем нужна |
 | --- | --- |
 | `DATABASE_URL` | Подключение к PostgreSQL |
+| `DATABASE_URL_UNPOOLED` | Необязательно. Прямая строка к базе: ею `npm run db:migrate` пользуется вместо `DATABASE_URL` |
+| `PG_POOL_MAX` | Необязательно. Размер пула соединений на экземпляр (по умолчанию 3) |
+| `DATABASE_SSL_NO_VERIFY` | Необязательно. `1` — шифровать, но не проверять сертификат (самоподписанный сервер). То же, что `?sslmode=no-verify` в строке |
 | `POSTGRES_PASSWORD` | Пароль пользователя базы в Docker Compose |
 | `BETTER_AUTH_SECRET` | Секрет сессий. Если сменить, все выйдут из аккаунтов, сами аккаунты останутся |
 | `BETTER_AUTH_URL` | Публичный URL приложения для better-auth |
