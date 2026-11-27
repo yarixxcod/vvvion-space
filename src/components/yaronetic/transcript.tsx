@@ -204,7 +204,7 @@ export function Transcript({
               const selfActor: ReactionActor = { id: "self", label: selfName, image: selfImage };
               const actors: ReactionActor[] = [
                 ...(message.liked ? [selfActor] : []),
-                ...(praised ? [{ id: "assistant", label: assistantName || "ИИ", node: personaId ? <CatalogArt kind="personas" id={personaId} className="size-6 rounded-full" /> : <ModelFace name={next?.model || "vvvion"} mood="happy" size={24} variant={face} /> }] : []),
+                ...(praised ? [{ id: "assistant", label: assistantName || "ИИ", node: personaId ? <CatalogArt kind="personas" id={personaId} className="size-6 rounded-full" sizes="24px" /> : <ModelFace name={next?.model || "vvvion"} mood="happy" size={24} variant={face} /> }] : []),
               ];
               return (
                 <motion.article
@@ -630,12 +630,12 @@ function AssistantBubble({
   return (
     <div className="group/msg flex sm:gap-3" {...swipe}>
       <div className="hidden sm:block">
-        {personaId ? <CatalogArt kind="personas" id={personaId} className="size-10 rounded-full" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={40} variant={face} />}
+        {personaId ? <CatalogArt kind="personas" id={personaId} className="size-10 rounded-full" sizes="40px" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={40} variant={face} />}
       </div>
       <div ref={box} className="relative min-w-0 flex-1 pb-3" {...hold}>
         <div className="mb-1 flex items-center gap-2 text-xs text-faint">
           <span className="sm:hidden">
-            {personaId ? <CatalogArt kind="personas" id={personaId} className="size-6 rounded-full" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={24} variant={face} />}
+            {personaId ? <CatalogArt kind="personas" id={personaId} className="size-6 rounded-full" sizes="24px" /> : <ModelFace name={message.model || message.providerName || "vvvion"} mood={mood} size={24} variant={face} />}
           </span>
           <span>{assistantName.trim() || message.providerName || "vvvion.space"}</span>
           {label ? <span className="max-w-[14rem] truncate">{label}</span> : null}

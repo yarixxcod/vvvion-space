@@ -14,6 +14,7 @@ import { getMegaOffer, type MegaOffer } from "@/lib/social/mega";
 import { getVpnShowcase, type VpnShowcase } from "@/lib/social/vpn";
 import { fmtRubApprox, fmtVub } from "@/lib/pay/format";
 import { CatalogArt } from "@/components/yaronetic/catalog-art";
+import { artSrcSet } from "@/lib/art-srcset";
 import { writeLivePersona } from "@/lib/social/persona-live";
 import { GiftDesk } from "@/components/yaronetic/gift-desk";
 import { getShopShelf } from "@/lib/social/prices";
@@ -205,7 +206,7 @@ export function Shop() {
             <ul className="mx-auto grid w-full max-w-[960px] grid-cols-2 gap-2 md:grid-cols-3">
               {shop.items.map((item) => (
                 <li key={item.id} className="catalog-card flex min-w-0 flex-col rounded-3xl border border-line bg-elev p-3">
-                  <CatalogArt kind="personas" id={item.id} alt={item.name} className="aspect-square w-full rounded-2xl" />
+                  <CatalogArt kind="personas" id={item.id} alt={item.name} className="aspect-square w-full rounded-2xl" sizes="(min-width: 768px) 300px, 45vw" />
                   <p className="mt-2 text-sm font-medium">{item.name}</p>
                   <p className="mt-0.5 min-h-8 text-xs text-faint">{item.role}</p>
                   {item.free ? <p className="mt-2 text-sm text-muted">Бесплатно</p> : <><p className="mt-2 font-serif text-lg tabular-nums">{fmtVub(item.price)}</p><p className="text-xs text-faint">{fmtRubApprox(item.price)}</p></>}
@@ -364,7 +365,7 @@ export function Shop() {
           <button type="button" className="press mt-3 flex w-full items-center gap-3 rounded-3xl border border-line bg-bg px-3 py-3 text-left" onClick={() => setPeople(true)}>
             <span className="flex -space-x-2" aria-hidden="true">
               {(shop?.items ?? []).slice(0, 4).map((item) => (
-                <img key={item.id} src={item.face} alt="" className="size-10 rounded-full border-2 border-bg bg-subtle" />
+                <img key={item.id} src={item.face} srcSet={artSrcSet(item.face)} sizes="40px" width={40} height={40} loading="lazy" decoding="async" alt="" className="size-10 rounded-full border-2 border-bg bg-subtle" />
               ))}
             </span>
             <span className="min-w-0 flex-1">

@@ -167,6 +167,8 @@ export function VoiceCallDialog({
                 id={personaId}
                 alt={name}
                 className="size-full rounded-full"
+                sizes="(min-width: 640px) 192px, 144px"
+                priority
               />
             ) : (
               <div className="voice-call-face size-full">

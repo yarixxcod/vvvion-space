@@ -9,7 +9,7 @@ import { haptic } from "@/lib/haptic";
 import { CatalogArt, giftRarity } from "@/components/yaronetic/catalog-art";
 
 function GiftArt({ sku, compact = false }: { sku: string; compact?: boolean }) {
-  return <CatalogArt kind="gifts" id={sku.replace(/^gift:/, "")} className={compact ? "size-14 rounded-xl" : "aspect-square w-full rounded-2xl"} />;
+  return <CatalogArt kind="gifts" id={sku.replace(/^gift:/, "")} className={compact ? "size-14 rounded-xl" : "aspect-square w-full rounded-2xl"} sizes={compact ? "56px" : "(min-width: 1024px) 300px, 45vw"} />;
 }
 
 export function GiftDesk({ balance, verified, onDone, onNeed }: { balance: number; verified: boolean; onDone: () => void; onNeed: (missing: number) => void }) {
