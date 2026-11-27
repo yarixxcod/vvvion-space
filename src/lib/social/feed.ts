@@ -3,7 +3,6 @@ import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { grantAchievement } from "@/lib/social/achievements";
 import { assertActive } from "@/lib/social/access";
-import { preparePostSource } from "@/lib/social/post-rich";
 
 export type FeedFile = {
   id: string;
@@ -173,12 +172,11 @@ export const createPost = createServerFn({ method: "POST" })
           ? (input as { body?: unknown; parentId?: unknown })
           : {};
     if (typeof raw.body !== "string") throw new Error("Напишите текст");
-    const prepared = preparePostSource(raw.body);
-    if (prepared.error) throw new Error(prepared.error);
-    if (!prepared.text) throw new Error("Напишите текст");
+    const text = raw.body.replace(/\s+/g, " ").trim();
+    if (!text || text.length > 500) throw new Error("От 1 до 500 символов");
     const parentId = typeof raw.parentId === "string" ? raw.parentId.trim() : "";
     if (parentId && !/^[0-9a-f-]{16,40}$/i.test(parentId)) throw new Error("Запись не найдена");
-    return { body: prepared.text, parentId };
+    return { body: text, parentId };
   })
   .handler(async ({ context, data }) => {
     await assertActive(context.userId);
@@ -223,8 +221,7 @@ export const createPost = createServerFn({ method: "POST" })
       void import("@/lib/social/telegram.server")
         .then(async ({ notifyUser, senderName }) => {
           const name = await senderName(from);
-          const preview = body.replace(/\s+/g, " ").trim().slice(0, 400);
-          await notifyUser(to, `Ответ в ленте от ${name}:\n${preview}`);
+          await notifyUser(to, `Ответ в ленте от ${name}:\n${body}`);
         })
         .catch(() => undefined);
     }

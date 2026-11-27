@@ -530,35 +530,3 @@ html.light .image-plate{background:#e7e1d8}
 /* Exo 2 headings: Instrument Serif was used at 400; Exo 2 needs 600 to read as a heading. */
 .font-serif { font-weight: 600; }
 .person-letter { font-weight: 700; }
-
-/* Designer posts: markup stays inside the card and cannot cover the rest of the page. */
-.post-rich { min-width: 0; }
-.post-content {
-  contain: paint;
-  overflow: hidden;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  color: var(--fg);
-  font-size: 1rem;
-  line-height: 1.5;
-}
-.post-content, .post-content * { position: static !important; z-index: auto !important; float: none !important; }
-.post-content-clip { max-height: 22rem; }
-.post-content :where(h1, h2, h3, h4) { font-weight: 600; line-height: 1.25; margin: 0.7em 0 0.3em; }
-.post-content :where(h1) { font-size: 1.35rem; }
-.post-content :where(h2) { font-size: 1.2rem; }
-.post-content :where(h3, h4) { font-size: 1.05rem; }
-.post-content :where(p, ul, ol, blockquote, pre, table, figure) { margin: 0.55em 0; }
-.post-content :where(ul, ol) { padding-left: 1.2em; }
-.post-content :where(li) { margin: 0.2em 0; }
-.post-content :where(a) { color: inherit; text-decoration: underline; text-underline-offset: 0.15em; }
-.post-content :where(img) { display: block; max-width: 100%; height: auto; border-radius: 12px; }
-.post-content :where(pre, code) { font-family: var(--font-mono, ui-monospace, monospace); }
-.post-content :where(pre) { overflow-x: auto; padding: 0.7rem 0.8rem; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
-.post-content :where(code) { font-size: 0.9em; }
-.post-content :where(blockquote) { border-left: 2px solid var(--line); padding-left: 0.8rem; color: var(--muted); }
-.post-content :where(table) { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
-.post-content :where(th, td) { border: 1px solid var(--line); padding: 0.35rem 0.5rem; vertical-align: top; }
-.post-content :where(hr) { border: 0; border-top: 1px solid var(--line); margin: 0.8rem 0; }
-.post-check { margin-right: 0.35rem; }

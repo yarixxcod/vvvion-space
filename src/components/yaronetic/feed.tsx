@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, Bold, Code, Eye, Heading2, Heart, Italic, Library, Link2, List, MessageCircle, Paperclip, Quote, Share2, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowLeft, Heart, Library, MessageCircle, Paperclip, Share2, Trash2, X } from "lucide-react";
 import { PersonFace } from "@/components/yaronetic/person-face";
 import { PostAttachments } from "@/components/yaronetic/post-media";
 import { ScreenClip } from "@/components/yaronetic/screen-clip";
@@ -24,8 +24,6 @@ import { useEdgeBack } from "@/lib/gestures/use-edge-back";
 import { HoldSheet } from "@/components/yaronetic/hold-sheet";
 import { ReportDialog } from "@/components/yaronetic/report-dialog";
 import { useLongPress } from "@/lib/gestures/use-long-press";
-import { PostBody } from "@/components/yaronetic/post-body";
-import { POST_SOURCE_MAX } from "@/lib/social/post-rich";
 
 const MAX_FILES = 4;
 
@@ -361,24 +359,7 @@ function Composer({
   const [fromCircle, setFromCircle] = useState(false);
   const [clips, setClips] = useState<{ id: string; title: string }[]>([]);
   const [megas, setMegas] = useState<{ id: string; name: string }[]>([]);
-  const [preview, setPreview] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const areaRef = useRef<HTMLTextAreaElement>(null);
-
-  function insert(before: string, after = "", placeholder = "текст") {
-    const el = areaRef.current;
-    const start = el?.selectionStart ?? value.length;
-    const end = el?.selectionEnd ?? value.length;
-    const selected = value.slice(start, end) || placeholder;
-    const next = `${value.slice(0, start)}${before}${selected}${after}${value.slice(end)}`.slice(0, POST_SOURCE_MAX);
-    setValue(next);
-    setPreview(false);
-    const caret = Math.min(start + before.length + selected.length, next.length);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(caret, caret);
-    });
-  }
 
   function addFiles(list: FileList | null) {
     if (!list?.length) return;
@@ -390,7 +371,7 @@ function Composer({
   async function submit(event: FormEvent) {
     event.preventDefault();
     const marks = [...clips.map((clip) => screenMark(clip.id)), ...megas.map((file) => megaMark(file.id))].join("\n");
-    const room = Math.max(0, POST_SOURCE_MAX - marks.length - (marks ? 1 : 0));
+    const room = Math.max(0, 500 - marks.length - (marks ? 1 : 0));
     const body = [value.trim().slice(0, room), marks].filter(Boolean).join("\n");
     if (busy || (!body && files.length === 0)) return;
     try {
@@ -422,7 +403,7 @@ function Composer({
         open={fromCircle}
         onClose={() => setFromCircle(false)}
         onBook={(_id, title) => {
-          setValue((current) => `${current}${current ? "\n" : ""}Читальня: ${title}`.slice(0, POST_SOURCE_MAX));
+          setValue((current) => `${current}${current ? "\n" : ""}Читальня: ${title}`.slice(0, 500));
           setFromCircle(false);
         }}
         onVideo={(id, title) => {
@@ -476,63 +457,18 @@ function Composer({
           ))}
         </div>
       ) : null}
-      <div className="mb-2 flex flex-wrap items-center gap-1">
-        <button type="button" className={cn("press h-11 rounded-xl px-3 text-sm", !preview ? "bg-subtle text-fg" : "text-muted")} onClick={() => setPreview(false)}>
-          Текст
-        </button>
-        <button type="button" className={cn("press inline-flex h-11 items-center gap-1 rounded-xl px-3 text-sm", preview ? "bg-subtle text-fg" : "text-muted")} onClick={() => setPreview(true)}>
-          <Eye className="size-4" />
-          Превью
-        </button>
-        {preview ? null : (
-          <>
-            <span className="mx-1 hidden h-6 w-px bg-line sm:inline" aria-hidden="true" />
-            <Tool label="Жирный" onClick={() => insert("**", "**")}>
-              <Bold className="size-4" />
-            </Tool>
-            <Tool label="Курсив" onClick={() => insert("*", "*")}>
-              <Italic className="size-4" />
-            </Tool>
-            <Tool label="Заголовок" onClick={() => insert("## ", "", "Заголовок")}>
-              <Heading2 className="size-4" />
-            </Tool>
-            <Tool label="Список" onClick={() => insert("- ", "", "пункт")}>
-              <List className="size-4" />
-            </Tool>
-            <Tool label="Ссылка" onClick={() => insert("[", "](https://)", "ссылка")}>
-              <Link2 className="size-4" />
-            </Tool>
-            <Tool label="Цитата" onClick={() => insert("> ", "", "цитата")}>
-              <Quote className="size-4" />
-            </Tool>
-            <Tool label="Код" onClick={() => insert("`", "`", "код")}>
-              <Code className="size-4" />
-            </Tool>
-          </>
-        )}
-      </div>
-      {preview ? (
-        <div className="max-h-[40dvh] min-h-[5rem] overflow-auto rounded-2xl border border-line bg-bg px-3 py-2">
-          {value.trim() ? <PostBody text={value.trim()} /> : <p className="text-sm text-faint">Здесь будет запись</p>}
-        </div>
-      ) : (
-        <textarea
-          ref={areaRef}
-          id="feed-composer"
-          value={value}
-          maxLength={POST_SOURCE_MAX}
-          rows={4}
-          placeholder={placeholder}
-          aria-label={placeholder}
-          className="max-h-[40dvh] min-h-[5rem] w-full resize-none rounded-2xl border border-line bg-bg px-3 py-2 text-base leading-6 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
-          onChange={(event) => setValue(event.target.value)}
-        />
-      )}
-      <p className="mt-1 flex items-center justify-between gap-2 text-xs text-faint">
-        <span>Поддерживается Markdown и HTML</span>
-        <span className="tabular-nums" aria-live={value.length >= POST_SOURCE_MAX - 500 ? "polite" : "off"}>
-          {value.length}/{POST_SOURCE_MAX}
-        </span>
+      <textarea
+        id="feed-composer"
+        value={value}
+        maxLength={500}
+        rows={3}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="max-h-[40dvh] min-h-[5rem] w-full resize-none rounded-2xl border border-line bg-bg px-3 py-2 text-base leading-6 outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <p className="mt-1 text-right text-xs tabular-nums text-faint" aria-live={value.trim().length >= 450 ? "polite" : "off"}>
+        {value.trim().length}/500
       </p>
       <div className="mt-2 flex items-center gap-2">
         <button
@@ -576,14 +512,6 @@ function Composer({
   );
 }
 
-function Tool({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" className="press inline-flex size-11 items-center justify-center rounded-xl border border-line text-muted" aria-label={label} title={label} onClick={onClick}>
-      {children}
-    </button>
-  );
-}
-
 function PickedFile({ file, onRemove }: { file: File; onRemove: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -615,7 +543,7 @@ function PostText({ body }: { body: string }) {
   const clip = splitChat(body);
   return (
     <>
-      {clip.text ? <PostBody text={clip.text} /> : null}
+      {clip.text ? <p className="mt-1 max-w-[68ch] whitespace-pre-wrap text-base leading-6 text-pretty">{clip.text}</p> : null}
       {clip.screen.map((id) => (
         <ScreenClip key={id} id={id} />
       ))}

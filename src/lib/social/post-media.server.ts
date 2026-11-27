@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
 import { storedBytesResponse } from "@/lib/http/db-blob";
 import { assertActive } from "@/lib/social/access";
-import { preparePostSource } from "@/lib/social/post-rich";
 
 const IMAGE_MAX = 3_000_000;
 const VIDEO_MAX = 12_000_000;
@@ -125,9 +124,9 @@ export async function handlePostPublish(request: Request): Promise<Response> {
     return json(400, { message: "Запись не дошла" });
   }
   const body = typeof form.get("body") === "string" ? (form.get("body") as string) : "";
-  const preparedSource = preparePostSource(body);
-  if (preparedSource.error) return json(400, { message: preparedSource.error });
-  const text = preparedSource.text;
+  // eslint-disable-next-line no-control-regex -- Strip forbidden control bytes from untrusted input.
+  const text = body.replace(/\u0000/g, "").replace(/\r\n/g, "\n").trim();
+  if (text.length > 500) return json(400, { message: "Не больше 500 символов" });
   const parentRaw = typeof form.get("parentId") === "string" ? (form.get("parentId") as string).trim() : "";
   if (parentRaw && !UUID.test(parentRaw)) return json(400, { message: "Запись не найдена" });
   const incoming = form.getAll("file").filter((item): item is File => item instanceof File && item.size > 0);
