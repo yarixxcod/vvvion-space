@@ -106,7 +106,7 @@ function PersonSheet({ userId, onClose }: { userId: string; onClose: () => void 
                 <ul className="mt-3 flex gap-2 overflow-x-auto pb-1">
                   {person.gifts.map((gift) => (
                     <li key={gift.sku} className="w-28 shrink-0 rounded-2xl border border-line bg-bg p-2 text-center">
-                      <CatalogArt kind="gifts" id={gift.sku.replace(/^gift:/, "")} className="aspect-square w-full rounded-xl" />
+                      <CatalogArt kind="gifts" id={gift.sku.replace(/^gift:/, "")} className="aspect-square w-full rounded-xl" sizes="96px" />
                       <p className="mt-2 truncate text-xs font-medium">{gift.title}</p>
                       {gift.count > 1 ? <p className="text-[11px] text-muted">×{gift.count}</p> : null}
                     </li>

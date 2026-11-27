@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Check, LoaderCircle, Sparkles } from "lucide-react";
 import type { PersonaCard } from "@/lib/social/personas";
+import { artSrcSet } from "@/lib/art-srcset";
 export function RolePicker({
   items,
   activeId,
@@ -56,7 +57,7 @@ export function RolePicker({
               onClick={() => void select(item.id)}
               className={`flex min-h-24 items-start gap-3 rounded-2xl border p-3 text-left disabled:opacity-50 ${activeId === item.id ? "border-accent bg-subtle" : "border-line hover:bg-subtle"}`}
             >
-              <img src={item.face} alt="" className="size-12 shrink-0 rounded-2xl object-cover" />
+              <img src={item.face} srcSet={artSrcSet(item.face)} sizes="48px" width={48} height={48} loading="lazy" decoding="async" alt="" className="size-12 shrink-0 rounded-2xl object-cover" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{item.name}</span>
@@ -103,7 +104,7 @@ export function RolePicker({
             onClick={() => void select(item.id)}
             className={`flex min-h-14 w-full items-center gap-3 rounded-xl border p-2 text-left ${activeId === item.id ? "border-accent bg-subtle" : "border-transparent hover:bg-subtle"}`}
           >
-            <img src={item.face} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
+            <img src={item.face} srcSet={artSrcSet(item.face)} sizes="40px" width={40} height={40} loading="lazy" decoding="async" alt="" className="size-10 shrink-0 rounded-xl object-cover" />
             <span className="min-w-0 flex-1">
               <span className="block text-sm">{item.name}</span>
               <span className="block text-xs text-muted">{item.role}</span>

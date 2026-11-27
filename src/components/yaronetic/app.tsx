@@ -15,6 +15,7 @@ import { Sidebar } from "@/components/yaronetic/sidebar";
 import { copyText } from "@/lib/copy-text";
 import { useStudio } from "@/components/yaronetic/use-studio";
 import { Wordmark } from "@/components/yaronetic/wordmark";
+import { artSrcSet } from "@/lib/art-srcset";
 import { useCircleUnread } from "@/components/yaronetic/use-circle-unread";
 import { GUEST_QUESTION_LIMIT } from "@/lib/ai/guest-limit";
 import { personalSuggestions, topicLabel } from "@/lib/ai/interest-topics";
@@ -1061,7 +1062,7 @@ function EmptyChat({
                 className={`press flex min-h-32 flex-col items-center justify-center gap-1.5 rounded-3xl border px-3 py-3 text-center disabled:opacity-40 ${on ? "border-accent bg-elev shadow-sm" : "border-line bg-elev/90 hover:bg-subtle"}`}
                 onClick={() => onRole(item.id)}
               >
-                <img src={`/personas/${item.id}-v2.webp`} alt="" className="size-12 rounded-2xl object-cover" />
+                <img src={`/personas/${item.id}-v2.webp`} srcSet={artSrcSet(`/personas/${item.id}-v2.webp`)} sizes="48px" width={48} height={48} decoding="async" alt="" className="size-12 rounded-2xl object-cover" />
                 <span className="text-sm font-medium">{item.name}</span>
                 <span className="text-[11px] leading-tight text-muted">{item.role}</span>
               </button>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
+import { artSrcSet } from "@/lib/art-srcset";
 
 export function giftRarity(price: number) {
   if (price >= 5000) return { tier: "legendary", label: "Легендарный" };
@@ -14,11 +15,17 @@ export function CatalogArt({
   id,
   alt = "",
   className = "",
+  sizes = "(min-width: 768px) 240px, 45vw",
+  priority = false,
 }: {
   kind: "gifts" | "personas";
   id: string;
   alt?: string;
   className?: string;
+  /** CSS width the image is shown at, e.g. "40px"; picks the right file from srcSet. */
+  sizes?: string;
+  /** Above-the-fold image: load eagerly with high priority. */
+  priority?: boolean;
 }) {
   const src = /^[a-z0-9-]+$/.test(id) ? `/${kind}/${id}-v2.webp` : "";
   const [failed, setFailed] = useState("");
@@ -28,8 +35,11 @@ export function CatalogArt({
       {src && failed !== src ? (
         <img
           src={src}
+          srcSet={artSrcSet(src)}
+          sizes={sizes}
           alt={alt}
-          loading="lazy"
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : undefined}
           decoding="async"
           width={768}
           height={768}
