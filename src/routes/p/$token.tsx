@@ -5,6 +5,7 @@ import { ScreenClip } from "@/components/yaronetic/screen-clip";
 import { splitChat } from "@/lib/screen/mark";
 import { Mark } from "@/components/yaronetic/mark";
 import { Wordmark } from "@/components/yaronetic/wordmark";
+import { PostBody } from "@/components/yaronetic/post-body";
 import { readSharedPost } from "@/lib/social/feed";
 
 const ROBOTS = "noindex, nofollow, noarchive, nosnippet, noimageindex";
@@ -42,7 +43,7 @@ function SharedBody({ body }: { body: string }) {
   const clip = splitChat(body);
   return (
     <>
-      {clip.text ? <p className="mt-4 whitespace-pre-wrap text-pretty">{clip.text}</p> : null}
+      {clip.text ? <PostBody text={clip.text} /> : null}
       {clip.screen.map((id) => (
         <ScreenClip key={id} id={id} />
       ))}
