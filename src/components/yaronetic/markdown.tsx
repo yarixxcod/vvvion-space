@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, Eye, X } from "lucide-react";
-import { toast } from "sonner";
+import { copyText } from "@/lib/copy-text";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { QuestionCard } from "@/components/yaronetic/question-card";
 import { evaluate, formatCalc } from "@/lib/ai/calc";
@@ -148,36 +148,7 @@ function languageLabel(lang?: string) {
   return names[key] || (key ? key : "код");
 }
 
-export async function copyText(value: string) {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(value);
-      toast("Скопировано");
-      return true;
-    }
-  } catch {
-    /* fall through */
-  }
-  try {
-    const area = document.createElement("textarea");
-    area.value = value;
-    area.setAttribute("readonly", "");
-    area.style.position = "fixed";
-    area.style.top = "0";
-    area.style.left = "-9999px";
-    document.body.appendChild(area);
-    area.focus();
-    area.select();
-    const ok = document.execCommand("copy");
-    area.remove();
-    if (!ok) throw new Error("copy");
-    toast("Скопировано");
-    return true;
-  } catch {
-    toast.error("Не удалось скопировать");
-    return false;
-  }
-}
+export { copyText } from "@/lib/copy-text";
 
 function previewDoc(code: string) {
   if (/<html[\s>]/i.test(code) || /<!doctype/i.test(code)) return code;

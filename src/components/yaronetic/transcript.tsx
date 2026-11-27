@@ -11,7 +11,7 @@ import { AlertCircle, ArrowDown, Check, ChevronDown, Copy, FileSearch, FileText,
 import { loadableImageUrl } from "@/lib/social/disk-path";
 import type { ChatMessage, Usage } from "@/lib/ai/types";
 import { Markdown } from "@/components/yaronetic/markdown";
-import { copyText } from "@/components/yaronetic/markdown";
+import { copyText } from "@/lib/copy-text";
 import { SelectText } from "@/components/yaronetic/select-text";
 import { looksLikeAscii } from "@/lib/ascii";
 import { replaceStickerTokens } from "@/lib/stickers";

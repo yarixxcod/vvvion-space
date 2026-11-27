@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { Circle } from "@/components/yaronetic/circle";
 import { PublicPage, ShareLink } from "@/components/yaronetic/public-page";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { langOf, normalizeLang, placeCopy, ui, type Lang } from "@/lib/i18n";
@@ -8,6 +7,8 @@ import { useLang } from "@/lib/lang";
 import { PLACES, absoluteUrl, placeBySlug, placePath } from "@/lib/places";
 import { serviceView, type ServiceView } from "@/lib/service-view";
 import { appsJsonLd, seoHead } from "@/lib/seo";
+
+const Circle = lazy(() => import("@/components/yaronetic/circle").then((mod) => ({ default: mod.Circle })));
 
 export const Route = createFileRoute("/c/$section")({
   validateSearch: (search: Record<string, unknown>): { lang?: Lang; svc?: ServiceView; event?: string } => {
@@ -52,7 +53,9 @@ function SectionPage() {
   if (place.slug === "apps" || (ready && !isPending && user)) {
     return (
       <div className="h-dvh">
-        <Circle tab={place.tab} svc={svc} eventId={event} />
+        <Suspense fallback={<div className="grid h-full place-items-center"><span className="vv-loader" /></div>}>
+          <Circle tab={place.tab} svc={svc} eventId={event} />
+        </Suspense>
       </div>
     );
   }

@@ -9,15 +9,13 @@ import { AuthForm } from "@/components/yaronetic/auth-form";
 import { Composer } from "@/components/yaronetic/composer";
 import { InterestSurvey } from "@/components/yaronetic/interests";
 import { Mark } from "@/components/yaronetic/mark";
-import { SettingsDialog } from "@/components/yaronetic/settings";
-import { McpDialog } from "@/components/yaronetic/mcp-dialog";
 import { ModelMenu } from "@/components/yaronetic/model-menu";
 import { MusicDock } from "@/components/yaronetic/music-dock";
 import { Sidebar } from "@/components/yaronetic/sidebar";
-import { copyText } from "@/components/yaronetic/markdown";
+import { copyText } from "@/lib/copy-text";
 import { useStudio } from "@/components/yaronetic/use-studio";
 import { Wordmark } from "@/components/yaronetic/wordmark";
-import { useCircleUnread } from "@/components/yaronetic/messenger";
+import { useCircleUnread } from "@/components/yaronetic/use-circle-unread";
 import { GUEST_QUESTION_LIMIT } from "@/lib/ai/guest-limit";
 import { personalSuggestions, topicLabel } from "@/lib/ai/interest-topics";
 import { suggestionsFor, showChatTitle } from "@/lib/ai/defaults";
@@ -50,6 +48,8 @@ import { dayPart, FREE_ROLES, nickOf } from "@/lib/social/persona-free";
 const VoiceCallDialog = lazy(() => import("./voice-call-dialog").then(mod => ({ default: mod.VoiceCallDialog })));
 const Transcript = lazy(() => import("@/components/yaronetic/transcript").then((mod) => ({ default: mod.Transcript })));
 const Circle = lazy(() => import("@/components/yaronetic/circle").then((mod) => ({ default: mod.Circle })));
+const SettingsDialog = lazy(() => import("@/components/yaronetic/settings").then((mod) => ({ default: mod.SettingsDialog })));
+const McpDialog = lazy(() => import("@/components/yaronetic/mcp-dialog").then((mod) => ({ default: mod.McpDialog })));
 
 export function App({
   initialModels,
@@ -74,6 +74,8 @@ export function App({
   const [sidebar, setSidebar] = useState(false);
   const [narrow, setNarrow] = useState(false);
   const [settings, setSettings] = useState(false);
+  const settingsHeld = useRef(false);
+  if (settings) settingsHeld.current = true;
   const [voiceCall, setVoiceCall] = useState(false);
   const [headerMenu, setHeaderMenu] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -727,6 +729,8 @@ export function App({
           </aside>
         </>
       ) : null}
+      {settingsHeld.current ? (
+        <Suspense fallback={null}>
       <SettingsDialog
         chatId={studio.activeChatId}
         open={settings}
@@ -781,6 +785,10 @@ export function App({
         }
         onClear={studio.clearLocal}
       />
+        </Suspense>
+      ) : null}
+      {mcpOpen ? (
+        <Suspense fallback={null}>
       <McpDialog
         open={mcpOpen}
         onClose={() => setMcpOpen(false)}
@@ -789,6 +797,8 @@ export function App({
           setSettings(true);
         }}
       />
+        </Suspense>
+      ) : null}
       <InterestSurvey
         open={askInterests && Boolean(user)}
         initialTopics={interests?.topics ?? []}

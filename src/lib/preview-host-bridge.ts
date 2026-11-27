@@ -5,7 +5,6 @@
  * Top-level runs (download/export, local `npm run dev`, deployed sites) noop.
  */
 
-import { z } from "zod";
 import { CONNECTOR_TOKEN_READY_EVENT } from "./app-data/types";
 import { resolveParentEmbedderOrigin } from "./preview-embedder-origin";
 
@@ -18,29 +17,49 @@ export {
 export const PREVIEW_BRIDGE_CHANNEL = "grok-preview-bridge" as const;
 export const PREVIEW_BRIDGE_VERSION = 1 as const;
 
-const EnvelopeSchema = z.object({
-  channel: z.literal(PREVIEW_BRIDGE_CHANNEL),
-  version: z.number().int().positive(),
-  type: z.string().min(1),
-});
+type Envelope = {
+  channel: typeof PREVIEW_BRIDGE_CHANNEL;
+  version: number;
+  type: string;
+};
 
-const HelloSchema = EnvelopeSchema.extend({
-  type: z.literal("hello"),
-});
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
 
-const NavigateSchema = EnvelopeSchema.extend({
-  type: z.literal("navigate"),
-  path: z.string().min(1),
-});
+function parseEnvelope(data: unknown): { success: true; data: Envelope } | { success: false } {
+  if (!isRecord(data)) return { success: false };
+  if (data.channel !== PREVIEW_BRIDGE_CHANNEL) return { success: false };
+  if (typeof data.version !== "number" || !Number.isInteger(data.version) || data.version < 1) return { success: false };
+  if (typeof data.type !== "string" || data.type.length < 1) return { success: false };
+  return { success: true, data: data as Envelope };
+}
 
-const HistorySchema = EnvelopeSchema.extend({
-  type: z.literal("history"),
-  delta: z.union([z.literal(-1), z.literal(1)]),
-});
+function isHello(data: unknown) {
+  const parsed = parseEnvelope(data);
+  return parsed.success && parsed.data.type === "hello";
+}
 
-const ConnectorTokenReadySchema = EnvelopeSchema.extend({
-  type: z.literal("connector-token-ready"),
-});
+function parseNavigate(data: unknown): { success: true; data: Envelope & { path: string } } | { success: false } {
+  const parsed = parseEnvelope(data);
+  if (!parsed.success || parsed.data.type !== "navigate") return { success: false };
+  if (!isRecord(data) || typeof data.path !== "string" || data.path.length < 1) return { success: false };
+  return { success: true, data: { ...parsed.data, path: data.path } };
+}
+
+function parseHistory(data: unknown): { success: true; data: Envelope & { delta: -1 | 1 } } | { success: false } {
+  const parsed = parseEnvelope(data);
+  if (!parsed.success || parsed.data.type !== "history") return { success: false };
+  if (!isRecord(data)) return { success: false };
+  const delta = data.delta;
+  if (delta !== -1 && delta !== 1) return { success: false };
+  return { success: true, data: { ...parsed.data, delta } };
+}
+
+function isConnectorTokenReady(data: unknown) {
+  const parsed = parseEnvelope(data);
+  return parsed.success && parsed.data.type === "connector-token-ready";
+}
 
 export type PreviewHostBridgeOptions = {
   /** Prefer the app router when available; falls back to history.pushState. */
@@ -183,12 +202,12 @@ export function installPreviewHostBridge(
   // Host re-handshake: it may have (re)mounted after our install-time
   // announce, or asked before we hydrated. Announce again.
   const onHello = (data: unknown) => {
-    if (!HelloSchema.safeParse(data).success) return;
+    if (!isHello(data)) return;
     announce();
   };
 
   const onNavigate = (data: unknown) => {
-    const parsed = NavigateSchema.safeParse(data);
+    const parsed = parseNavigate(data);
     if (!parsed.success) return;
     navigate(parsed.data.path);
     // Router navigations often update location asynchronously; report after a tick.
@@ -196,7 +215,7 @@ export function installPreviewHostBridge(
   };
 
   const onHistory = (data: unknown) => {
-    const parsed = HistorySchema.safeParse(data);
+    const parsed = parseHistory(data);
     if (!parsed.success) return;
     // Do not history.go(-1) off the first entry — that leaves the preview.
     if (parsed.data.delta === -1 && isAtHistoryRoot()) return;
@@ -205,7 +224,7 @@ export function installPreviewHostBridge(
   };
 
   const onConnectorTokenReady = (data: unknown) => {
-    if (!ConnectorTokenReadySchema.safeParse(data).success) return;
+    if (!isConnectorTokenReady(data)) return;
     window.dispatchEvent(new Event(CONNECTOR_TOKEN_READY_EVENT));
   };
 
@@ -220,7 +239,7 @@ export function installPreviewHostBridge(
     if (event.source !== window.parent) return;
     if (event.origin !== parentOrigin) return;
 
-    const envelope = EnvelopeSchema.safeParse(event.data);
+    const envelope = parseEnvelope(event.data);
     if (!envelope.success || envelope.data.version !== PREVIEW_BRIDGE_VERSION) return;
     hostMessageHandlers.get(envelope.data.type)?.(event.data);
   };

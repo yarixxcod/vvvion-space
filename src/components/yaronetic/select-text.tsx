@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { copyText } from "@/components/yaronetic/markdown";
+import { copyText } from "@/lib/copy-text";
 
 export function SelectText({ text, onClose }: { text: string; onClose: () => void }) {
   const [node, setNode] = useState<HTMLElement | null>(null);
