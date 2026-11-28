@@ -163,3 +163,5 @@ export function makeTitle(text: string): string {
 export function showChatTitle(title: string): string {
   return stickerChatTitle(title) ?? title;
 }
+
+export const PREF_SCENARIO = "yaronetic.scenario";

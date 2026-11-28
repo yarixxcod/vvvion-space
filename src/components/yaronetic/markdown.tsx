@@ -1,3 +1,4 @@
+import {markdownChunks,stabilizeMarkdown} from "@/lib/ai/stream-markdown";
 import type { Source } from "@/lib/ai/types";
 import { httpUrl, sourceKey } from "@/lib/ai/search-rank";
 import { createContext, useContext, memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -12,7 +13,7 @@ import { evaluate, formatCalc } from "@/lib/ai/calc";
 import { prepareMath, type MathSlot } from "@/lib/ai/math";
 import { parseQuestionBlock, splitQuestionText } from "@/lib/ai/question";
 import { splitRich, type StepCard } from "@/lib/ai/steps";
-import { fenceAscii, isAsciiLang, looksLikeAscii, looksLikeMarkdown } from "@/lib/ascii";
+import { fenceAscii, isAsciiLang, looksLikeAscii } from "@/lib/ascii";
 import { pushBackLayer } from "@/lib/app-back";
 
 const EMPTY_SOURCES: Source[] = [];
@@ -91,11 +92,8 @@ function sanitizeHighlight(value: string) {
 
 async function highlight(code: string, lang?: string) {
   if (code.length > 40_000) return escapeHtml(code);
+  if(!lang || ["plain","text","txt","plaintext"].includes(lang.toLowerCase()))return escapeHtml(code);
   const hljs = await loadHighlighter();
-  if (!lang || lang === "text" || lang === "txt" || lang === "plaintext") {
-    if (lang) return escapeHtml(code);
-    return sanitizeHighlight(hljs.highlightAuto(code, ["typescript", "javascript", "python", "bash", "json", "css", "xml", "sql", "go", "rust", "java", "cpp", "yaml", "php", "markdown"]).value);
-  }
   if (hljs.getLanguage(lang)) return sanitizeHighlight(hljs.highlight(code, { language: lang }).value);
   return escapeHtml(code);
 }
@@ -117,6 +115,7 @@ function nodeText(value: ReactNode): string {
 function languageLabel(lang?: string) {
   const key = (lang || "").toLowerCase();
   const names: Record<string, string> = {
+    plain:"текст",text:"текст",txt:"текст",plaintext:"текст",
     ts: "TypeScript",
     tsx: "TSX",
     typescript: "TypeScript",
@@ -145,7 +144,7 @@ function languageLabel(lang?: string) {
     md: "Markdown",
     markdown: "Markdown",
   };
-  return names[key] || (key ? key : "код");
+  return names[key] || (key ? key : "текст");
 }
 
 export { copyText } from "@/lib/copy-text";
@@ -159,14 +158,6 @@ function isHtmlBlock(lang: string | undefined, code: string) {
   const key = (lang || "").toLowerCase();
   if (key === "html" || key === "htm" || key === "svg") return true;
   return !key && /^\s*(<!doctype html|<html|<svg)/i.test(code);
-}
-
-function dedent(raw: string): string {
-  const lines = raw.replace(/\s+$/u, "").split("\n");
-  const widths = lines.filter((line) => line.trim()).map((line) => /^\t+$/.test(line) ? 0 : (line.match(/^[ ]*/)?.[0].length ?? 0));
-  const min = widths.length ? Math.min(...widths) : 0;
-  if (min < 1) return raw;
-  return lines.map((line) => line.slice(min)).join("\n");
 }
 
 function AsciiBlock({ code }: { code: string }) {
@@ -298,7 +289,16 @@ function CodeBlock({ code, lang, live }: { code: string; lang?: string; live?: b
 
 function markdownComponents(live: boolean | undefined, slots: MathSlot[], sources: Source[] = []): Components {
   return {
-    pre: ({ children }) => <>{children}</>,
+    pre({node,children}) {
+      const code=node?.children.find(child=>child.type==="element"&&child.tagName==="code");
+      const classes=code?.type==="element"?code.properties.className:undefined;
+      const className=Array.isArray(classes)?classes.join(" "):String(classes||"");
+      const lang=/language-([\w#+.-]+)/.exec(className)?.[1];
+      const raw=nodeText(children).replace(/\n$/,"");
+      if(lang==="calc")return <CalcBlock code={raw}/>;
+      if(isAsciiLang(lang)||(!lang&&looksLikeAscii(raw)))return <AsciiBlock code={raw}/>;
+      return <CodeBlock code={raw} lang={lang||(isHtmlBlock(lang,raw)?"html":undefined)} live={live}/>;
+    },
     span({ className, children }) {
       const name = Array.isArray(className) ? className.join(" ") : className || "";
       const index = /math-i-(\d+)/.exec(name);
@@ -308,26 +308,15 @@ function markdownComponents(live: boolean | undefined, slots: MathSlot[], source
       }
       return <span className={name}>{children}</span>;
     },
-    code({ className, children }) {
-      const raw = nodeText(children).replace(/\n$/, "");
-      const lang = /language-([\w#+.-]+)/.exec(className || "")?.[1];
-      if (!(lang || raw.includes("\n"))) return <code>{raw}</code>;
-      if (lang === "calc") return <CalcBlock code={raw} />;
-      const plain = (lang || "").toLowerCase();
-      if (plain === "text" || plain === "txt" || plain === "plain" || plain === "plaintext" || plain === "md" || plain === "markdown" || (!lang && looksLikeMarkdown(raw))) {
-        return <MarkdownBody text={dedent(raw)} live={live} />;
-      }
-      if (isHtmlBlock(lang, raw)) return <CodeBlock code={raw} lang={lang || "html"} live={live} />;
-      if (isAsciiLang(lang) || (!lang && looksLikeAscii(raw))) return <AsciiBlock code={raw} />;
-      return <CodeBlock code={raw} lang={lang} live={live} />;
-    },
+    code({children}) {return <code>{children}</code>;},
     a({ href, children }) {
       const target = httpUrl(href);
+      if(!target)return <span>{children}</span>;
       const index = target ? sources.findIndex(source => sourceKey(source.url) === sourceKey(target)) : -1;
       const numeric = /^\d+$/.test(String(children).trim());
-      if (index >= 0 && numeric) return <a className="search-citation" href={target} target="_blank" rel="noreferrer noopener" title={sources[index].title} aria-label={`Источник ${index + 1}: ${sources[index].title}`}>{index + 1}</a>;
+      if (index >= 0 && numeric) return <a className="search-citation" href={target} target="_blank" rel="noreferrer noopener nofollow" title={sources[index].title} aria-label={`Источник ${index + 1}: ${sources[index].title}`}>{index + 1}</a>;
       return (
-        <a href={href} target="_blank" rel="noreferrer noopener">
+        <a href={target} target="_blank" rel="noreferrer noopener nofollow">
           {children}
         </a>
       );
@@ -559,17 +548,9 @@ export function Markdown({
   );
 }
 
-function SettledMarkdown({ text, live }: { text: string; live?: boolean }) {
-  if (!live) return <MarkdownBody text={text} />;
-  const at = text.lastIndexOf("\n\n");
-  if (at < 24) return <MarkdownBody text={text} live />;
-  const tail = text.slice(at + 2);
-  return (
-    <>
-      <MarkdownBody text={text.slice(0, at)} />
-      {tail ? <MarkdownBody text={tail} live /> : null}
-    </>
-  );
+function SettledMarkdown({text,live}:{text:string;live?:boolean}){
+  const chunks=markdownChunks(text);
+  return <>{chunks.map((chunk,index)=>{const tail=Boolean(live)&&index===chunks.length-1;return <MarkdownBody key={index} text={tail?stabilizeMarkdown(chunk):chunk} live={tail}/>;})}</>;
 }
 
 const MarkdownBody = memo(function MarkdownBody({ text, live }: { text: string; live?: boolean }) {

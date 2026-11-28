@@ -19,6 +19,9 @@ export function explicitLangFromSearch(search: string): Lang | undefined {
 }
 
 const UI = {
+  scenario:{ru:"Сценарий",en:"Script",kk:"Сценарий"},
+  scenarioHint:{ru:"Сценарии для нейрорилсов",en:"Scripts for AI reels",kk:"Нейрорилстерге сценарий"},
+  writeScenario:{ru:"Опишите ролик или тему",en:"Describe the reel or the topic",kk:"Роликті немесе тақырыпты сипаттаңыз"},
   menuProfile: { ru: "Мой профиль", en: "My profile", kk: "Менің профилім" },
   soundOn: { ru: "Звук включён", en: "Sound on", kk: "Дыбыс қосулы" },
   soundOff: { ru: "Звук выключен", en: "Sound off", kk: "Дыбыс өшірулі" },

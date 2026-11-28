@@ -1,3 +1,4 @@
+import {SCENARIO_PROMPT,readScenarioFlag} from "@/lib/ai/scenario-prompt.server";
 import { MAX_MODEL_PROVIDERS, PREMIUM_MODEL_MESSAGE } from "@/lib/ai/model-access";
 import { tagProvider, measuredProviderFetch } from "@/lib/ai/provider-usage.server";
 import {stickerReplyGuide, stickerReplyPolicy, normalizeStickerReply, StickerTextGate, stickersAllowed, type StickerReplyPolicy} from "@/lib/stickers";
@@ -34,6 +35,7 @@ import type { ChatPart, Source, Usage } from "@/lib/ai/types";
 type HeaderIn = { name?: string; value?: string };
 type MessageIn = { role?: string; content?: unknown; reasoning?: string };
 type ChatBody = {
+  scenario?: unknown;
   kind?: unknown;
   mode?: unknown;
   model?: unknown;
@@ -1192,6 +1194,7 @@ async function handleChatRequest(request: Request): Promise<Response> {
           mcpUrlsOf(body.mcp).length ? "mcp" : "",
         ].filter(Boolean).join("; ") || "нет";
         const builtPrompt = buildSystemPrompt({
+          scenario: readScenarioFlag(body) ? SCENARIO_PROMPT : undefined,
           core: profile.core === "lite" ? AGENT_CORE_LITE : AGENT_CORE,
           catalogPrompt: kind === "builtin" ? catalogPrompt : "",
           userPrompt: kind === "builtin" && catalogPrompt ? "" : userPrompt,
@@ -1215,7 +1218,7 @@ async function handleChatRequest(request: Request): Promise<Response> {
                 const remote = mcpUrls.length ? await prepareMcp(mcpUrls) : null;
                 const noteMcp = (line: string) => {
                   const sys = messages[0];
-                  if (sys && sys.role === "system" && typeof sys.content === "string") sys.content = `${sys.content}\n\n${line}`.slice(0, 24000);
+                  if (sys && sys.role === "system" && typeof sys.content === "string") sys.content = `${sys.content}\n\n${line}`.slice(0, builtPrompt.limit);
                 };
                 if (remote) noteMcp(`Подключённые MCP. Вызывай по имени, если описание подходит: ${remote.tools.map((tool) => `${tool.function.name}: ${tool.function.description}`).join("; ").slice(0, 2500)}`);
                 else if (mcpUrls.length) noteMcp("Серверы MCP сейчас не ответили. Не выдумывай их результат.");
@@ -1379,7 +1382,7 @@ async function handleChatRequest(request: Request): Promise<Response> {
                           if (wire.some((item) => item.role === "tool")) {
                             const note = "Ниже результаты инструментов файлового агента/MCP. Ответь пользователю по ним и не выдумывай то, чего в результатах нет.";
                             const sys = wire.findIndex((item) => item.role === "system");
-                            if (sys >= 0) wire[sys] = { role: "system", content: `${contentToText(wire[sys]?.content)}\n\n${note}`.slice(0, 20000) };
+                            if (sys >= 0) wire[sys] = { role: "system", content: `${contentToText(wire[sys]?.content)}\n\n${note}`.slice(0, builtPrompt.limit) };
                             else wire.unshift({ role: "system", content: note });
                           }
                           providerRouter.clearSoftFailures();

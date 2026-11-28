@@ -76,6 +76,7 @@ export type ChatMessage = {
   brief?: boolean;
   translate?: boolean;
   ask?: boolean;
+  scenario?: boolean;
   imageUrl?: string;
   sources?: Source[];
   search?: SearchSummary;

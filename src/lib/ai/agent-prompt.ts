@@ -70,6 +70,7 @@ export const AGENT_CORE_LITE = `Ты агент. Инструменты вызы
 
 export type PromptInput = {
   core: string;
+  scenario?: string;
   catalogPrompt?: string;
   userPrompt?: string;
   persona?: string;
@@ -79,33 +80,24 @@ export type PromptInput = {
   searchNote?: string;
 };
 
-const CAP = 24_000;
+export const SYSTEM_PROMPT_CAP = 24_000;
+export const SCENARIO_SYSTEM_CAP = 56_000;
 
-/** One system string. Core and model style are kept; later layers are cut first. */
-export function buildSystemPrompt(input: PromptInput): { text: string; cut: boolean } {
+/** The server-owned core and scenario are protected. Lower-priority tails are cut first. */
+export function buildSystemPrompt(input: PromptInput): { text: string; cut: boolean; limit: number } {
+  const core=input.core.trim(),scenario=input.scenario?.trim()||"";
+  const limit=scenario?Math.max(SCENARIO_SYSTEM_CAP,core.length+scenario.length+6002):SYSTEM_PROMPT_CAP;
   const style = [input.catalogPrompt?.trim() || "", input.userPrompt?.trim() || ""].filter(Boolean).join("\n\n");
   const data = [input.memoryNote?.trim() || "", input.searchNote?.trim() || ""].filter(Boolean).join("\n\n");
-  const parts = [
-    input.core.trim(),
-    style,
-    input.persona?.trim() || "",
-    input.protocols?.trim() || "",
-    input.runtime?.trim() || "",
-    data,
-  ];
-  let cut = false;
-  const size = () => parts.reduce((sum, part) => sum + part.length, 0) + Math.max(0, parts.filter(Boolean).length - 1) * 2;
-  for (let index = parts.length - 1; index >= 2 && size() > CAP; index -= 1) {
-    const overflow = size() - CAP;
-    if (!parts[index]) continue;
-    if (parts[index].length <= overflow + 2) {
-      parts[index] = "";
-    } else {
-      parts[index] = parts[index].slice(0, Math.max(0, parts[index].length - overflow));
-    }
-    cut = true;
+  const parts = [core,scenario,style,input.persona?.trim()||"",input.protocols?.trim()||"",input.runtime?.trim()||"",data];
+  let cut=false;
+  const size=()=>parts.filter(Boolean).join("\n\n").length;
+  // Preserve ordinary-chat style as before; scenario may trim style after the data.
+  for(let index=parts.length-1;index>=(scenario?2:3)&&size()>limit;index--){
+    if(!parts[index])continue;const overflow=size()-limit;
+    parts[index]=parts[index].length<=overflow+2?"":parts[index].slice(0,parts[index].length-overflow);
+    cut=true;
   }
-  const text = parts.filter(Boolean).join("\n\n");
-  if (text.length > CAP) return { text: text.slice(0, CAP), cut: true };
-  return { text, cut };
+  const text=parts.filter(Boolean).join("\n\n");
+  return {text:text.length>limit?text.slice(0,limit):text,cut:cut||text.length>limit,limit};
 }

@@ -626,6 +626,7 @@ export function App({
                   void studio.send(text, {
                     web: studio.webMode,
                     ask: studio.askMode,
+                    scenario: studio.scenarioMode,
                   })
                 }
                 onQuote={(text) => {
@@ -661,12 +662,14 @@ export function App({
                 disabled={builtinLocked}
                 imageMode={studio.imageMode}
                 webMode={studio.webMode}
+                scenarioMode={studio.scenarioMode}
+                onScenarioMode={studio.setScenarioMode}
                 onImageMode={studio.setImageMode}
                 onWebMode={studio.setWebMode}
                 files={studio.attachments}
                 onFiles={studio.setAttachments}
                 placeholder={
-                  builtinLocked ? ui(lang, "chatClosed") : studio.imageMode ? ui(lang, "describeImage") : studio.webMode ? ui(lang, "askWeb") : ui(lang, "writeMessage")
+                  builtinLocked ? ui(lang, "chatClosed") : studio.imageMode ? ui(lang, "describeImage") : studio.scenarioMode ? ui(lang, "writeScenario") : studio.webMode ? ui(lang, "askWeb") : ui(lang, "writeMessage")
                 }
                 onStop={studio.stop}
                 reasoning={studio.reasoning}
@@ -696,8 +699,8 @@ export function App({
                     />
                   </span>
                 }
-                onSend={() => void studio.send(studio.draft, { image: studio.imageMode, web: studio.webMode, ask: studio.askMode })}
-                onSticker={(body) => void studio.send(body, { image: false, web: false, ask: false })}
+                onSend={() => void studio.send(studio.draft, { image: studio.imageMode, web: studio.webMode, ask: studio.askMode, scenario: studio.scenarioMode })}
+                onSticker={(body) => void studio.send(body, { image: false, web: false, ask: false, scenario:false })}
                 onCall={() => setVoiceCall(true)}
                 captureFiles={!circle}
               />
@@ -714,7 +717,7 @@ export function App({
           personaId={personaShop?.activeId}
           userName={user?.displayName || "Вы"}
           userImage={user?.profileImageUrl}
-          onTurn={text => studio.send(text, { voice: true, image: false, web: studio.webMode, ask: false })}
+          onTurn={text => studio.send(text, { voice: true, image: false, web: studio.webMode, ask: false, scenario:false })}
           onStop={studio.stop}
           onClose={() => setVoiceCall(false)}
         />

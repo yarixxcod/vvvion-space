@@ -49,6 +49,7 @@ function asMessage(value: unknown): ChatMessage | null {
   if (typeof raw.sync === "number" && Number.isFinite(raw.sync)) message.sync = raw.sync;
   if (raw.image) message.image = true;
   if (raw.web) message.web = true;
+  if (raw.scenario === true) message.scenario = true;
   if (raw.calc) message.calc = true;
   if (raw.clock) message.clock = true;
   if (raw.brief) message.brief = true;

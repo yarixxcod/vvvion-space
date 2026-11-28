@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ClipboardPaste,
+  Clapperboard,
   Smile,
   ArrowUp,
   AudioLines,
@@ -46,6 +47,8 @@ export function Composer({
   placeholder,
   imageMode,
   webMode,
+  scenarioMode=false,
+  onScenarioMode,
   onImageMode,
   onWebMode,
   files,
@@ -72,6 +75,8 @@ export function Composer({
   placeholder: string;
   imageMode: boolean;
   webMode: boolean;
+  scenarioMode?:boolean;
+  onScenarioMode?:(value:boolean)=>void;
   onImageMode: (value: boolean) => void;
   onWebMode: (value: boolean) => void;
   files: ChatFile[];
@@ -327,7 +332,7 @@ export function Composer({
           <UploadMeter view={upload} />
         </div>
       ) : null}
-      {imageMode || webMode ? (
+      {imageMode || webMode || scenarioMode ? (
         <div className="mb-1 flex flex-wrap gap-1 px-1 lg:hidden">
           {webMode ? (
             <button
@@ -339,6 +344,7 @@ export function Composer({
               <X className="size-3" />
             </button>
           ) : null}
+          {scenarioMode?<button type="button" className="press inline-flex min-h-8 items-center gap-1 rounded-full border border-accent bg-subtle px-2 text-xs" onClick={()=>onScenarioMode?.(false)}><Clapperboard className="size-3.5"/>{ui(lang,"scenario")}<X className="size-3"/></button>:null}
           {imageMode ? (
             <button
               type="button"
@@ -521,6 +527,7 @@ export function Composer({
                 <MessageCircleQuestion className="size-5" strokeWidth={1.8} />
               </ModeButton>
             ) : null}
+            {onScenarioMode?<ModeButton pressed={scenarioMode} disabled={locked} label={ui(lang,"scenario")} onClick={()=>onScenarioMode(!scenarioMode)}><Clapperboard className="size-5" strokeWidth={1.8}/></ModeButton>:null}
           </div>
         </div>
         <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1.5">
@@ -649,6 +656,7 @@ export function Composer({
               onClick={() => onAsk(!ask)}
             />
           ) : null}
+          {onScenarioMode?<ToolRow icon={<Clapperboard className="size-4"/>} title={ui(lang,"scenario")} hint={ui(lang,"scenarioHint")} pressed={scenarioMode} disabled={locked} onClick={()=>onScenarioMode(!scenarioMode)}/>:null}
           {modelSlot ? (
             <div className="mt-1 border-t border-line pt-1">
               <p className="px-2 pt-2 text-[11px] font-medium tracking-[0.14em] text-faint uppercase">

@@ -17,6 +17,7 @@ import {
   PREF_FACE,
   PREF_SEARCH,
   PREF_REASON,
+  PREF_SCENARIO,
   PREF_NAME,
   PREF_PROVIDER,
   PREF_THEME,
@@ -296,6 +297,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   const [needAccount, setNeedAccount] = useState(false);
   const [imageMode, setImageMode] = useState(false);
   const [webMode, setWebMode] = useState(false);
+  const [scenarioMode,setScenarioMode]=useState(false);
+  const scenarioRef=useRef(false);
   const [askMode, setAskMode] = useState(true);
   const [attachments, setAttachments] = useState<ChatFile[]>([]);
   const [modelLabels, setModelLabels] = useState<Record<string, string>>(() =>
@@ -354,6 +357,8 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   }, []);
 
   useEffect(() => {
+    scenarioRef.current=localStorage.getItem(PREF_SCENARIO)==="1";
+    setScenarioMode(scenarioRef.current);
     setAskMode(localStorage.getItem("vvvion.plugin.ask") == null ? true : localStorage.getItem("vvvion.plugin.ask") === "1");
   }, []);
 
@@ -744,7 +749,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
   persistRef.current = persistChat;
 
   const send = useCallback(
-    async (text: string, opts?: { history?: ChatMessage[]; reuseUser?: ChatMessage; image?: boolean; web?: boolean; ask?: boolean; voice?: boolean }) => {
+    async (text: string, opts?: { history?: ChatMessage[]; reuseUser?: ChatMessage; image?: boolean; web?: boolean; ask?: boolean; scenario?: boolean; voice?: boolean }) => {
       const trimmed = text.trim();
       const pending = opts?.voice ? [] : opts?.reuseUser ? opts.reuseUser.files ?? [] : attachmentsRef.current;
       let voiceReply: { text: string; error?: string } | undefined;
@@ -759,6 +764,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       const wantImage = Boolean(opts?.reuseUser?.image || opts?.image);
       const wantWeb = Boolean(opts?.reuseUser?.web || opts?.web) && !wantImage;
       const wantAsk = Boolean(opts?.ask ?? opts?.reuseUser?.ask) && !wantImage;
+      const wantScenario=!opts?.voice && !wantImage && (opts?.scenario ?? (opts?.reuseUser ? opts.reuseUser.scenario===true : scenarioRef.current))===true;
       if (wantImage && !trimmed) {
         toast.error("Опишите картинку");
         return;
@@ -818,6 +824,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         image: wantImage || undefined,
         web: wantWeb || undefined,
         ask: wantAsk || undefined,
+        scenario: wantScenario || undefined,
         files: pending.length ? pending : undefined,
       };
       const asstId = crypto.randomUUID();
@@ -994,6 +1001,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
             maxTokens: provider.maxTokens,
             mode: wantImage ? "image" : "chat",
             webSearch: wantWeb,
+            scenario: wantScenario,
             searchEngine: searchEngineRef.current,
             reasoning: reasoningRef.current,
             track: userIdRef.current ? { chatId, messageId: asstId } : undefined,
@@ -1187,7 +1195,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         if (history.at(-1)?.role === "assistant") history = history.slice(0, -1);
         const last = history.at(-1);
         if (!last || last.role !== "user") return;
-        void send(last.content, { history: history.slice(0, -1), reuseUser: last, image: last.image, web: last.web, ask: last.ask });
+        void send(last.content, { history: history.slice(0, -1), reuseUser: last, image: last.image, web: last.web, ask: last.ask, scenario: last.scenario===true });
         return;
       }
       const index = current.findIndex((item) => item.id === messageId);
@@ -1196,7 +1204,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
       while (userIndex >= 0 && current[userIndex]?.role !== "user") userIndex -= 1;
       const last = current[userIndex];
       if (!last || last.role !== "user") return;
-      void send(last.content, { history: current.slice(0, userIndex), reuseUser: last, image: last.image, web: last.web, ask: last.ask });
+      void send(last.content, { history: current.slice(0, userIndex), reuseUser: last, image: last.image, web: last.web, ask: last.ask, scenario: last.scenario===true });
     },
     [send],
   );
@@ -1253,6 +1261,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
         image: messagesRef.current[index]?.image,
         web: messagesRef.current[index]?.web,
         ask: messagesRef.current[index]?.ask,
+        scenario: messagesRef.current[index]?.scenario===true,
       });
     },
     [send],
@@ -1550,7 +1559,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     abortRef.current?.abort();
     await wipeDatabase();
     try {
-      for (const key of [PREF_CHAT, PREF_CHAT_OWNER, PREF_NAME, PREF_PROVIDER, PREF_THEME, PREF_PAPER, PREF_FACE, PREF_SEARCH, PREF_REASON]) localStorage.removeItem(key);
+      for (const key of [PREF_CHAT, PREF_CHAT_OWNER, PREF_NAME, PREF_PROVIDER, PREF_THEME, PREF_PAPER, PREF_FACE, PREF_SEARCH, PREF_REASON, PREF_SCENARIO]) localStorage.removeItem(key);
     } catch {
       /* ignore */
     }
@@ -1569,6 +1578,7 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     setFace("pebble");
     setSearchEngine("duck");
     setReasoning(true);
+    setScenarioMode(false);scenarioRef.current=false;
     if (userIdRef.current) {
       writeOwner(userIdRef.current);
       const remote = await listCloudChats().catch(() => [] as Chat[]);
@@ -1625,10 +1635,13 @@ export function useStudio(initialModels?: { name: string; displayName: string; i
     needAccount,
     imageMode,
     webMode,
+    scenarioMode,
+    setScenarioMode:(value:boolean)=>{setScenarioMode(value);scenarioRef.current=value;try{localStorage.setItem(PREF_SCENARIO,value?"1":"0");}catch{/* Storage may be disabled. */}if(value)setImageMode(false);},
     setImageMode: (value: boolean) => {
       setImageMode(value);
       if (value) {
         setWebMode(false);
+        setScenarioMode(false);scenarioRef.current=false;try{localStorage.setItem(PREF_SCENARIO,"0");}catch{/* optional */}
         setAttachments([]);
       }
     },

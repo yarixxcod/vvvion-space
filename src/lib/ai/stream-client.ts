@@ -16,6 +16,7 @@ export type StreamPayload = {
   maxTokens: number | null;
   mode?: "chat" | "image";
   webSearch?: boolean;
+  scenario?: boolean;
   searchEngine?: "duck" | "tinyfish" | "freeserp";
   reasoning?: boolean;
   track?: { chatId: string; messageId: string };

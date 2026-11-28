@@ -1,3 +1,4 @@
+import {markdownPlainText} from "@/lib/ai/plain-text";
 import { ChatImage } from "./chat-image";
 import {StickerImage} from "@/components/yaronetic/sticker-picker";
 import { LikePin, type ReactionActor } from "@/components/yaronetic/message-like";
@@ -700,7 +701,7 @@ function AssistantBubble({
             {message.content ? <SpeakButton text={message.content} /> : null}
             {message.content ? <SelectToggle text={message.content} /> : null}
             {message.content ? (
-              <Ghost label="Скопировать всё" onClick={() => void copyText(replaceStickerTokens(message.content))}>
+              <Ghost label="Скопировать всё" onClick={() => void copyText(markdownPlainText(replaceStickerTokens(message.content)))}>
                 <Copy className="size-4" />
               </Ghost>
             ) : null}
@@ -741,7 +742,7 @@ function AssistantBubble({
                 label="Скопировать всё"
                 onClick={() => {
                   setMore(false);
-                  void copyText(replaceStickerTokens(message.content));
+                  void copyText(markdownPlainText(replaceStickerTokens(message.content)));
                 }}
               />
             ) : null}
