@@ -1,3 +1,4 @@
+import { ConnectInstaller } from "./connect-installer";
 import { useEffect, useState } from "react";
 import { useTx } from "@/lib/lang";
 import { toast } from "sonner";
@@ -48,7 +49,7 @@ export function VpnDeskCard() {
         setTraffic(gb(next.trafficBytes));
       })
       .catch((err: unknown) =>
-        toast.error(err instanceof Error ? err.message : "VPN сейчас не открылся"),
+        toast.error(err instanceof Error ? err.message : "Connect сейчас не открылся"),
       );
   }, []);
 
@@ -69,8 +70,9 @@ export function VpnDeskCard() {
 
   return (
     <section className="mt-6">
-      <h3 className="text-sm font-medium">VVVION VPN</h3>
-      <p className="mt-1 text-[13px] text-muted">Название и ссылка vless:// или hy2://.</p>
+      <h3 className="text-sm font-medium">VVVion Connect</h3>
+      <p className="mt-1 text-[13px] text-muted">Серверы, подписки и защищённое подключение.</p>
+      <ConnectInstaller onDesk={setDesk}/>
       {desk ? (
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <Stat label="Действует" value={String(desk.activeLinks)} />
@@ -449,9 +451,9 @@ function VpnPlanEditor({
     <div className="mt-4 space-y-3">
       <p className="text-xs text-muted">
         {t(
-          "Цена Базового тарифа берётся из общей настройки цены VPN. Его действующая квота сохраняется из прежней настройки трафика.",
-          "The Base price comes from the global VPN price setting. Its active quota follows the legacy traffic setting.",
-          "Негізгі тариф бағасы жалпы VPN баптауынан алынады. Квотасы бұрынғы трафик баптауына сәйкес.",
+          "Цена Базового тарифа берётся из общей настройки цены Connect. Его действующая квота сохраняется из прежней настройки трафика.",
+          "The Base price comes from the global Connect price setting. Its active quota follows the legacy traffic setting.",
+          "Негізгі тариф бағасы жалпы Connect баптауынан алынады. Квотасы бұрынғы трафик баптауына сәйкес.",
         )}
       </p>
       {desk.plans.map((plan) => (
@@ -563,9 +565,9 @@ function VpnPlanEditor({
                     if (
                       window.confirm(
                         t(
-                          "Приостановить VPN для этого пользователя?",
-                          "Pause this user's VPN?",
-                          "Осы пайдаланушының VPN қызметін тоқтату керек пе?",
+                          "Приостановить Connect для этого пользователя?",
+                          "Pause this user's Connect?",
+                          "Осы пайдаланушының Connect қызметін тоқтату керек пе?",
                         ),
                       )
                     )
@@ -610,7 +612,7 @@ function VpnPlanEditor({
       </details>
       <details className="rounded-2xl border border-line p-3">
         <summary className="min-h-11 cursor-pointer py-3">
-          {t("Журнал VPN · последние 50", "VPN log · latest 50", "VPN журналы · соңғы 50")}
+          {t("Журнал Connect · последние 50", "Connect log · latest 50", "Connect журналы · соңғы 50")}
         </summary>
         <input
           className="field my-2"

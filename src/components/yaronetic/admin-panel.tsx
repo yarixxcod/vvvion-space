@@ -1,3 +1,5 @@
+import { testServiceModel } from "@/lib/ai/service-runtime";
+import { isServiceModel, servicePurpose, serviceModelName, type ServicePurpose } from "@/lib/ai/service-model";
 import { MAX_MODEL_PROVIDERS } from "@/lib/ai/model-access";
 import { ProviderStats } from "./provider-stats";
 import { useEffect, useState } from "react";
@@ -49,7 +51,7 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "telegram", label: "Telegram", icon: Send },
   { id: "models", label: "Модели", icon: Cpu },
   { id: "images", label: "Картинки", icon: Image },
-  { id: "voice", label: "Голос", icon: Mic },
+  { id: "service", label: "Служебное", icon: Mic },
   { id: "desk", label: "Поддержка", icon: LifeBuoy },
   { id: "stats", label: "Статистика", icon: BarChart3 },
   { id: "servers", label: "Серверы", icon: Server },
@@ -59,11 +61,12 @@ const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: "backup", label: "Бэкап", icon: Archive },
 ];
 
-type TabId = "people" | "telegram" | "models" | "images" | "voice" | "desk" | "stats" | "servers" | "release" | "prices" | "api" | "backup";
+type TabId = "people" | "telegram" | "models" | "images" | "service" | "desk" | "stats" | "servers" | "release" | "prices" | "api" | "backup";
 
 type DraftProvider = AdminProvider;
 
 type ModelDraft = {
+  purpose: ServicePurpose;
   name: string;
   previousName: string;
   displayName: string;
@@ -107,8 +110,8 @@ function slugKey(value: string) {
 }
 
 function catalogKey(draft: ModelDraft) {
-  if (draft.previousName) return draft.name;
-  return slugKey(draft.displayName) || slugKey(draft.providers[0]?.model || "");
+  const base = draft.previousName ? draft.name : slugKey(draft.displayName) || slugKey(draft.providers[0]?.model || "");
+  return base ? serviceModelName(base,draft.purpose) : "";
 }
 
 function fromModel(model: AdminModel): ModelDraft {
@@ -119,6 +122,7 @@ function fromModel(model: AdminModel): ModelDraft {
     model: item.model || model.name,
   }));
   return {
+    purpose:servicePurpose(model.name),
     name: model.name,
     previousName: model.name,
     displayName: model.displayName,
@@ -130,7 +134,7 @@ function fromModel(model: AdminModel): ModelDraft {
 }
 
 function blankModel(): ModelDraft {
-  return { name: "", previousName: "", displayName: "", icon: "", prompt: "", premiumOnly: false, providers: [blankProvider()] };
+  return { purpose:"chat", name: "", previousName: "", displayName: "", icon: "", prompt: "", premiumOnly: false, providers: [blankProvider()] };
 }
 
 function fromImage(model: AdminImageModel): ImageDraft {
@@ -231,7 +235,7 @@ export function AdminPanel() {
   }, [tab, members]);
 
   useEffect(() => {
-    if (tab !== "models" || models) return;
+    if ((tab !== "models" && tab !== "service") || models) return;
     void listAdminModels()
       .then(setModels)
       .catch((error: unknown) => toast.error(messageOf(error, "Модели не открылись")));
@@ -248,7 +252,7 @@ export function AdminPanel() {
   }, [tab, images]);
 
   useEffect(() => {
-    if (tab !== "voice" || voices) return;
+    if (tab !== "service" || voices) return;
     void listAdminTtsModels()
       .then(setVoices)
       .catch((error: unknown) => toast.error(messageOf(error, "Голос не открылся")));
@@ -279,9 +283,9 @@ export function AdminPanel() {
       </div>
       {tab === "telegram" ? <TelegramAdmin /> : null}
       {tab === "people" ? <People members={members} onChange={setMembers} /> : null}
-      {tab === "models" ? <Models models={models} policy={policy} onModels={setModels} onPolicy={setPolicy} /> : null}
+      {tab === "models" ? <Models key="chat" models={models} policy={policy} onModels={setModels} onPolicy={setPolicy} /> : null}
       {tab === "images" ? <Images models={images} onChange={setImages} /> : null}
-      {tab === "voice" ? <Voices models={voices} onChange={setVoices} /> : null}
+      {tab === "service" ? <div className="mt-4 space-y-5"><p className="text-sm text-muted">Внутренние модели сайта. Whisper и TTS используются в голосе и звонках; служебные модели скрыты из чата и публичного API.</p><WhisperCard/><Voices models={voices} onChange={setVoices}/><Models key="service" service models={models} policy={policy} onModels={setModels} onPolicy={setPolicy}/></div> : null}
       {tab === "desk" ? <ModerationDesk journal={<Journal />} /> : null}
       {tab === "stats" ? <Stats /> : null}
       {tab === "release" ? <AppReleaseCard /> : null}
@@ -290,7 +294,6 @@ export function AdminPanel() {
       {tab === "backup" ? <BackupAdmin /> : null}
       {tab === "servers" ? (
         <div className="mt-4">
-          <WhisperCard />
           <VpnDeskCard />
           <div className="mt-6">
             <MegaAdmin />
@@ -379,23 +382,26 @@ function People({ members, onChange }: { members: MemberRow[] | null; onChange: 
   );
 }
 
-function Models({
+export function Models({
+  service=false,
   models,
   policy,
   onModels,
   onPolicy,
 }: {
+  service?:boolean;
   models: AdminModel[] | null;
   policy: UsagePolicy | null;
   onModels: (rows: AdminModel[]) => void;
   onPolicy: (row: UsagePolicy) => void;
 }) {
-  const [fresh, setFresh] = useState<ModelDraft>(blankModel);
+  const freshModel=():ModelDraft=>({...blankModel(),purpose:service?"embedding":"chat",providers:[{...blankProvider(),baseUrl:service?"https://api.openai.com/v1":"https://api.x.ai/v1"}]});
+  const [fresh, setFresh] = useState<ModelDraft>(freshModel);
   if (!models) return <PageLoader />;
   return (
     <div className="mt-4 space-y-3">
-      <Limits policy={policy} onChange={onPolicy} />
-      {models.map((model) => (
+      {!service?<Limits policy={policy} onChange={onPolicy} />:null}
+      {models.filter(model=>isServiceModel(model.name)===service).map((model) => (
         <ModelCard key={model.name} model={model} onSaved={onModels} onRemoved={onModels} />
       ))}
       <ModelForm
@@ -404,7 +410,7 @@ function Models({
         onChange={(patch) => setFresh((current) => ({ ...current, ...patch, providers: patch.providers ?? current.providers }))}
         onSaved={(rows) => {
           onModels(rows);
-          setFresh(blankModel());
+          setFresh(freshModel());
         }}
       />
     </div>
@@ -550,9 +556,11 @@ function ModelForm({
   return (
     <section className="rounded-2xl border border-line bg-elev p-3">
       <h4 className="text-sm font-medium">{title}</h4>
-      <p className="mt-1 text-[13px] text-muted">В списке чата видно название. У каждого провайдера свой адрес, ключ и имя модели — запрос уходит именно с ним. Если первый молчит, пробуем следующий. Пустой ключ берёт ключ сервера.</p>
+      {draft.previousName && draft.purpose!=="chat"?<button type="button" className="press mt-2 min-h-11 rounded-xl border border-line px-3 text-sm" disabled={busy} onClick={()=>{setBusy(true);void testServiceModel({data:draft.previousName}).then(()=>toast.success("Служебная модель отвечает")).catch(error=>toast.error(messageOf(error,"Проверка не прошла"))).finally(()=>setBusy(false));}}>Проверить сохранённую модель</button>:null}
+      <label className="mt-3 block text-xs text-muted">Назначение<select className="field mt-1" value={draft.purpose} onChange={event=>onChange({purpose:event.target.value as ServicePurpose})}><option value="chat">Модель чата и API</option><option value="embedding">Служебное · Эмбеддинги</option><option value="rerank">Служебное · Ранжирование</option><option value="internal">Служебное · Внутренние задачи</option></select></label>
+      <p className="mt-1 text-[13px] text-muted">{draft.purpose==="chat"?"В списке чата видно название. У каждого провайдера свой адрес, ключ и имя модели. При ошибке пробуем следующий. Пустой ключ берёт ключ сервера.":"Служебная модель скрыта из чата и API. Укажите адрес, ключ и имя модели у провайдера. Внутренние текстовые модели используются для советов сайта; эмбеддинги и ранжирование проверяются своим методом API."}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr] sm:items-end">
-        <label className="block text-xs text-faint">
+        {draft.purpose==="chat"?<label className="block text-xs text-faint">
           Иконка
           <span className="mt-1 flex items-center gap-2">
             {draft.icon ? <img src={draft.icon} alt="" className="size-11 rounded-xl object-cover" /> : <span className="grid size-11 place-items-center rounded-xl border border-line text-xs text-faint">нет</span>}
@@ -573,7 +581,7 @@ function ModelForm({
               />
             </label>
           </span>
-        </label>
+        </label>:null}
         <label className="block text-xs text-faint">
           Название в списке
           <input
@@ -585,6 +593,7 @@ function ModelForm({
           />
         </label>
       </div>
+      {draft.purpose==="chat"?<>
       <label className="mt-2 block text-xs text-faint">
         Стиль и особенности модели
         <textarea className="field mt-1 min-h-20 resize-y" value={draft.prompt} maxLength={8000} onChange={(event) => onChange({ prompt: event.target.value })} />
@@ -594,6 +603,7 @@ function ModelForm({
         <input type="checkbox" className="mt-1 size-5 accent-[var(--accent)]" checked={draft.premiumOnly} onChange={event => onChange({ premiumOnly: event.target.checked })} />
         <span><span className="block text-sm font-semibold">Только VVVion Premium</span><span className="mt-1 block text-xs text-muted">Модель видна всем. Общение доступно только с действующей подпиской.</span></span>
       </label>
+      </>:null}
       <p className="mt-4 text-sm font-medium">Провайдеры · {draft.providers.length} / {MAX_MODEL_PROVIDERS}</p>
       <p className="mt-1 text-xs text-muted">Первый — основной. Следующий включается при ошибке. Порядок можно менять.</p>
       <div className="mt-3 space-y-2">
@@ -621,7 +631,7 @@ function ModelForm({
             </label>
             <label className="mt-2 block text-xs text-faint">
               Ключ
-              <SecretInput className="mt-1 font-mono text-sm" value={provider.apiKey} maxLength={400} autoComplete="off" label={`Ключ провайдера ${index + 1}`} placeholder="Пусто — ключ сервера" onChange={(apiKey) => patchProvider(index, { apiKey })} />
+              <SecretInput className="mt-1 font-mono text-sm" value={provider.apiKey} maxLength={400} autoComplete="off" label={`Ключ провайдера ${index + 1}`} placeholder={draft.purpose==="chat"?"Пусто — ключ сервера":"Ключ служебного провайдера"} onChange={(apiKey) => patchProvider(index, { apiKey })} />
             </label>
             <label className="mt-2 block text-xs text-faint">
               Имя модели на этом сервере

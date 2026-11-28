@@ -42,6 +42,8 @@ async function targets(): Promise<{ name: string; url: string; key: string; mode
            coalesce(nullif(p.model_id, ''), m.name) as model_id
     from catalog_models m
     left join catalog_providers p on p.model_name = m.name
+    where lower(m.name) not like 'service:%' or lower(m.name) like 'service:internal:%'
+    order by case when lower(m.name) like 'service:internal:%' then 0 else 1 end,m.created_at,p.slot
   `;
   const list = rows
     .map((row) => ({

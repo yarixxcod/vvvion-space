@@ -16,7 +16,7 @@ export const getServiceStatus = createServerFn({ method: "GET" })
       const sql = await getSql();
       await sql`select 1 as ok`;
       const results = await Promise.allSettled([
-        sql<{ n: number }>`select count(*)::int as n from catalog_models`,
+        sql<{ n: number }>`select count(*)::int as n from catalog_models where lower(name) not like 'service:%'`,
         sql<{
           n: number;
         }>`select count(*)::int as n from disk_files where user_id = ${context.userId}`,

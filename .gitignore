@@ -33,3 +33,6 @@ attachments/google-services.json
 
 # Downloaded, checksum-verified media engine (packaged during build)
 .bin/
+
+# Python Connect-agent test cache
+scripts/connect/__pycache__/

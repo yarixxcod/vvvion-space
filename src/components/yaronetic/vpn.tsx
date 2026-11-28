@@ -98,9 +98,9 @@ export function VpnService({ onBack }: { onBack: () => void }) {
         "Алдымен профильде поштаңызды растаңыз",
       );
     return t(
-      "Не удалось выполнить действие. Обновите страницу VPN и повторите",
-      "Could not complete the action. Refresh VPN and try again",
-      "Әрекет орындалмады. VPN бетін жаңартып, қайталаңыз",
+      "Не удалось выполнить действие. Обновите страницу Connect и повторите",
+      "Could not complete the action. Refresh Connect and try again",
+      "Әрекет орындалмады. Connect бетін жаңартып, қайталаңыз",
     );
   };
   function load() {
@@ -169,7 +169,7 @@ export function VpnService({ onBack }: { onBack: () => void }) {
         <header className="mt-3 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs tracking-widest text-muted">VVVION SPACE</p>
-            <h2 className="font-serif text-4xl">VPN</h2>
+            <h2 className="font-serif text-4xl">Connect</h2>
             <p className="mt-1 text-sm text-muted">
               {t(
                 "Ваше подключение, устройства и тариф",
@@ -182,7 +182,7 @@ export function VpnService({ onBack }: { onBack: () => void }) {
         </header>
         {!row && !failed ? (
           <div
-            aria-label={t("Загрузка VPN", "Loading VPN", "VPN жүктелуде")}
+            aria-label={t("Загрузка Connect", "Loading Connect", "Connect жүктелуде")}
             className="mt-5 grid animate-pulse gap-3 sm:grid-cols-2"
           >
             <div className="h-52 rounded-3xl bg-subtle" />
@@ -193,9 +193,9 @@ export function VpnService({ onBack }: { onBack: () => void }) {
           <div role="alert" className="mt-4 rounded-2xl border border-line p-4">
             <p>
               {t(
-                "VPN временно недоступен",
-                "VPN is temporarily unavailable",
-                "VPN уақытша қолжетімсіз",
+                "Connect временно недоступен",
+                "Connect is temporarily unavailable",
+                "Connect уақытша қолжетімсіз",
               )}
             </p>
             <button className={`${button} mt-3`} onClick={load}>
@@ -226,7 +226,7 @@ export function VpnService({ onBack }: { onBack: () => void }) {
                         : t("Выберите тариф", "Choose a plan", "Тариф таңдаңыз")}
                   </p>
                   <p className="mt-1 font-serif text-4xl tabular-nums">
-                    {row.active ? `${row.daysLeft} ${t("дн.", "days", "күн")}` : "VVVION VPN"}
+                    {row.active ? `${row.daysLeft} ${t("дн.", "days", "күн")}` : "VVVion Connect"}
                   </p>
                 </div>
                 {row.active ? (
@@ -266,9 +266,9 @@ export function VpnService({ onBack }: { onBack: () => void }) {
                 </summary>
                 <p>
                   {t(
-                    "Личное подключение настраивается автоматически. До завершения настройки прежний общий ключ может ещё действовать. Получение подписки приложением не подтверждает установку VPN-соединения.",
-                    "Your personal connection is set up automatically. The previous shared key may remain active during setup. Fetching a subscription does not confirm a VPN connection.",
-                    "Жеке байланыс автоматты түрде бапталады. Баптау кезінде бұрынғы ортақ кілт жұмыс істеуі мүмкін. Жазылымды жүктеу VPN қосылғанын растамайды.",
+                    "Личное подключение настраивается автоматически. До завершения настройки прежний общий ключ может ещё действовать. Получение подписки приложением не подтверждает установку защищённого соединения.",
+                    "Your personal connection is set up automatically. The previous shared key may remain active during setup. Fetching a subscription does not confirm a secure connection.",
+                    "Жеке байланыс автоматты түрде бапталады. Баптау кезінде бұрынғы ортақ кілт жұмыс істеуі мүмкін. Жазылымды жүктеу Connect қосылғанын растамайды.",
                   )}
                 </p>
               </details>
@@ -661,7 +661,7 @@ export function VpnService({ onBack }: { onBack: () => void }) {
             <PurchaseSheet
               formatAmount={amount}
               open={!!intent}
-              title={`VPN · ${intent?.title || ""}`}
+              title={`Connect · ${intent?.title || ""}`}
               price={intent?.price || 0}
               balance={row.balance}
               detail={

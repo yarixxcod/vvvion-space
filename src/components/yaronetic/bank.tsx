@@ -687,7 +687,7 @@ export function Bank() {
                       : row.note === "Premium"
                         ? "Premium"
                         : row.note === "VPN"
-                          ? "VPN"
+                          ? "Connect"
                           : row.note === "Кредит"
                             ? "Кредит"
                             : row.note === "Возврат кредита"

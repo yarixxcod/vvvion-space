@@ -229,3 +229,5 @@ test("server entitlement rejects direct calls without an active subscription", a
   actor = null;
   await access.assertBuiltinChat("Existing");
 });
+
+test("internal models persist providers but cannot be published through the chat catalogue",async(t)=>{const {admin,sql}=await fixture(t);await sql`alter table catalog_models add column api_enabled boolean not null default true`;await admin.saveModel({name:"service:embedding:test",displayName:"Embedding",providers:[{baseUrl:"https://embed.example/v1",apiKey:"test-key",model:"text-embedding-3-small"}]});const rows=await sql`select api_enabled from catalog_models where name='service:embedding:test'`;assert.equal(rows[0].api_enabled,false);assert.equal((await admin.listModels()).some(m=>m.name.startsWith('service:')),false);});

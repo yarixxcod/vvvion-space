@@ -43,6 +43,7 @@ export async function assertAdmin(userId: string): Promise<Access> {
 
 /** Explicit userId is used by Telegram; the web path resolves the verified session. */
 export async function assertModelEntitlement(model: string, userId: string | null) {
+  if(model.toLowerCase().startsWith("service:")) throw new Error("Служебная модель недоступна для чата");
   const sql = await getSql();
   const known = await sql<{ name: string; premium_only: boolean }>`select name,premium_only from catalog_models where name=${model}`;
   if (!known.length) throw new Error("Этой модели больше нет");

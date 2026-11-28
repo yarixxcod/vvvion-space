@@ -46,9 +46,9 @@ export const PLACES: Place[] = [
     slug: "services",
     tab: "services",
     name: "Сервисы",
-    title: "Погода, новости, курсы, VPN и календарь — vvvion.space",
-    description: "Погода, новости, курсы, подписка VVVION VPN и личный календарь.",
-    lead: "Погода, новости, курсы, VPN и календарь.",
+    title: "Погода, новости, курсы, Connect и календарь — vvvion.space",
+    description: "Погода, новости, курсы, подписка VVVion Connect и личный календарь.",
+    lead: "Погода, новости, курсы, Connect и календарь.",
   },
   {
     slug: "disk",

@@ -151,7 +151,7 @@ export function Services({
     },
     {
       id: "vpn",
-      title: "VPN",
+      title: "Connect",
       desc: tx({ ru: "Ваше подключение", en: "Your connection", kk: "Сіздің байланысыңыз" }),
     },
     {

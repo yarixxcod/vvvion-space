@@ -236,7 +236,7 @@ export function Shop() {
   const show = (name: Section) => section === "main" || section === name;
   const owned = [
     premium.active ? `Premium до ${untilLabel(premium.until)}` : "",
-    vpn?.active ? `VPN до ${untilLabel(vpn.until)}` : "",
+    vpn?.active ? `Connect до ${untilLabel(vpn.until)}` : "",
     mega?.active ? `Мегадиск до ${untilLabel(mega.until)}` : "",
     ...(shop?.items.filter((item) => item.owned && !item.free).map((item) => item.name) ?? []),
   ].filter(Boolean);
@@ -299,15 +299,15 @@ export function Shop() {
 
         {show("subs") ? (
           <Goods
-            kicker="VPN"
+            kicker="Connect"
             title={`Ссылка на ${vpn?.days ?? 30} дней`}
-            body={vpn?.active ? `Действует до ${untilLabel(vpn.until)}. Продление не меняет ссылку.` : "Сама ссылка и QR остаются в сервисе VPN."}
+            body={vpn?.active ? `Действует до ${untilLabel(vpn.until)}. Продление не меняет ссылку.` : "Сама ссылка и QR остаются в сервисе Connect."}
             price={vpn?.price ?? 2000}
             action={
               vpn?.verified === false ? (
                 <VerifyMailButton onVerified={() => void load()} />
               ) : (
-                <button type="button" className="press min-h-11 rounded-xl border border-line-strong bg-transparent px-3 text-sm" onClick={() => ask({ sku: "vpn", title: "VPN", price: vpn?.price ?? 2000, detail: `Ссылка VPN будет действовать ${vpn?.days ?? 30} дней.` })}>
+                <button type="button" className="press min-h-11 rounded-xl border border-line-strong bg-transparent px-3 text-sm" onClick={() => ask({ sku: "vpn", title: "Connect", price: vpn?.price ?? 2000, detail: `Ссылка Connect будет действовать ${vpn?.days ?? 30} дней.` })}>
                   {vpn?.active ? "Продлить" : "Купить"}
                 </button>
               )

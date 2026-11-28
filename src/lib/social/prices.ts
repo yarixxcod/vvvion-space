@@ -69,7 +69,7 @@ export async function listPriceRows(): Promise<ShopPrice[]> {
     from shop_prices
     order by section, price, sku
   `;
-  return rows.map((row) => ({ ...row, price: Number(row.price), enabled: Boolean(row.enabled) }));
+  return rows.map((row) => ({ ...row, title:row.sku==="vpn"?"Connect":row.title, price: Number(row.price), enabled: Boolean(row.enabled) }));
 }
 
 export const listShopPrices = createServerFn({ method: "GET" })

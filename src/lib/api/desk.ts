@@ -124,7 +124,7 @@ export const getApiAdmin = createServerFn({ method: "GET" })
     const { readApiSettings } = await import("@/lib/api/settings.server");
     const settings = await readApiSettings();
     const chats = await sql<{ name: string; display_name: string | null; api_enabled: boolean }>`
-      select name, display_name, api_enabled from catalog_models order by name asc
+      select name, display_name, api_enabled from catalog_models where lower(name) not like 'service:%' order by name asc
     `;
     const images = await sql<{ name: string; display_name: string | null; api_enabled: boolean }>`
       select name, display_name, api_enabled from image_models order by name asc
@@ -171,7 +171,7 @@ export const setApiModelFlag = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     const raw = input && typeof input === "object" ? (input as { name?: unknown; kind?: unknown; enabled?: unknown }) : {};
     const name = typeof raw.name === "string" ? raw.name.trim() : "";
-    if (!MODEL_RE.test(name)) throw new Error("Некорректное имя модели");
+    if (name.startsWith("service:") || !MODEL_RE.test(name)) throw new Error("Некорректное имя модели");
     if (raw.kind !== "chat" && raw.kind !== "image") throw new Error("Некорректная модель");
     return { name, kind: raw.kind, enabled: raw.enabled === true };
   })

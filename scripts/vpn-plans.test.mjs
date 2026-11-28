@@ -63,7 +63,7 @@ export async function vpnFixture() {
   };
   const sql = makeSql(db);
   const deps = {
-    "@tanstack/react-start": { createServerFn: builder },
+    "@tanstack/react-start": { createServerFn: builder,createServerOnlyFn:(fn)=>fn },
     "@/lib/auth/middleware": { authMiddleware: {} },
     "@/lib/db": {
       getSql: async () => sql,
@@ -84,6 +84,7 @@ export async function vpnFixture() {
       pushVpnRenewal: async () => {},
       pushVpnNodeDown: async () => {},
     },
+    "./connect-token.server":load("src/lib/social/connect-token.server.ts",{"node:crypto":crypto}),
     "node:crypto": crypto,
   };
   const vpn = load("src/lib/social/vpn.ts", deps);
@@ -305,4 +306,24 @@ test("Lower device cap preserves devices and blocks new ones; concurrent adds re
   } finally {
     await db.close();
   }
+});
+
+test('Connect node tokens are scoped; provisioning never re-enables a server disabled later',async()=>{
+ const f=await vpnFixture();try{
+ process.env.VPN_AGENT_TOKEN='connect-test-master';
+ const tokens=load('src/lib/social/connect-token.server.ts',{'node:crypto':crypto});
+ for(const id of ['connect-node-a','connect-node-b'])await f.sql`insert into vpn_nodes(id,name,uri,host,protocol,enabled,maintenance,shared_cut) values(${id},'Connect',${'connect-pending://'+id},'connect.example.com','vless',false,true,true)`;
+ const call=(nodeId,op,extra={},token=tokens.connectNodeToken('connect-node-a'))=>f.vpn.handleVpnAgent(new Request('https://test/api/vpn-agent',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({nodeId,op,...extra})}));
+ assert.equal((await call('connect-node-b','pull')).status,401);
+ await call('connect-node-a','report',{users:[{userId:'bob',upload:1000,download:2000}],reach:'up'});
+ assert.equal((await f.sql`select count(*)::int n from vpn_counters where node_id='connect-node-a'`)[0].n,0);
+ const uri='vless://{secret}@connect.example.com:443?security=reality&pbk=test';
+ assert.equal((await call('connect-node-a','provisioned',{uri})).status,409);
+ assert.equal((await call('connect-node-a','applied',{ok:true,clients:0})).status,200);
+ assert.equal((await call('connect-node-a','provisioned',{uri:uri.replace('connect.example.com','evil.example.com')})).status,400);
+ assert.equal((await call('connect-node-a','provisioned',{uri})).status,200);
+ let row=(await f.sql`select enabled,maintenance,shared_cut from vpn_nodes where id='connect-node-a'`)[0];assert.equal(row.enabled,true);assert.equal(row.maintenance,false);assert.equal(row.shared_cut,true);
+ await f.sql`update vpn_nodes set enabled=false,maintenance=true where id='connect-node-a'`;
+ await call('connect-node-a','provisioned',{uri});row=(await f.sql`select enabled,maintenance from vpn_nodes where id='connect-node-a'`)[0];assert.equal(row.enabled,false);assert.equal(row.maintenance,true);
+ }finally{await f.db.close();}
 });

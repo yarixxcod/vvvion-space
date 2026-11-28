@@ -147,7 +147,7 @@ async function readPublicModels(): Promise<PublicModel[]> {
   const sql = await getSql();
   const xaiReady = Boolean(process.env.XAI_API_KEY?.trim());
   const rows = await sql<{ name: string; display_name: string | null; system_prompt: string | null; premium_only: boolean; icon: string | null; base_url: string | null; api_key: string | null }>`
-    select name, display_name, system_prompt, premium_only, icon, base_url, api_key from catalog_models order by created_at asc, name asc
+    select name, display_name, system_prompt, premium_only, icon, base_url, api_key from catalog_models where lower(name) not like 'service:%' order by created_at asc, name asc
   `;
   const links = await sql<{ model_name: string; base_url: string | null; api_key: string | null }>`
     select model_name, base_url, api_key from catalog_providers
@@ -160,6 +160,7 @@ async function readPublicModels(): Promise<PublicModel[]> {
   }
   return rows
     .filter((row) => {
+      if(row.name.toLowerCase().startsWith("service:")) return false;
       const stored = byName.get(row.name);
       const list = stored?.length ? stored : [{ baseUrl: row.base_url, apiKey: row.api_key }];
       return list.some((item) => usableKey(item.baseUrl, item.apiKey, xaiReady));
@@ -308,6 +309,7 @@ export const saveModel = createServerFn({ method: "POST" })
         insert into catalog_models (name, display_name, base_url, api_key, system_prompt, icon, premium_only)
         values (${data.name}, ${data.displayName}, ${first.baseUrl}, ${first.apiKey}, ${data.prompt}, ${data.icon}, ${data.premiumOnly ?? false})
       `;
+      if (data.name.toLowerCase().startsWith("service:")) await sql`update catalog_models set api_enabled=false where name=${data.name}`;
       await writeProviders(data.name, data.providers);
       return readAdminModels();
     }
@@ -322,6 +324,7 @@ export const saveModel = createServerFn({ method: "POST" })
       set name = ${data.name}, display_name = ${data.displayName}, system_prompt = ${data.prompt}, icon = ${data.icon}, premium_only = coalesce(${data.premiumOnly ?? null}, premium_only)
       where name = ${previous}
     `;
+    if (data.name.toLowerCase().startsWith("service:")) await sql`update catalog_models set api_enabled=false where name=${data.name}`;
     await writeProviders(data.name, data.providers);
     return readAdminModels();
   });
@@ -332,8 +335,8 @@ export const removeModel = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<AdminModel[]> => {
     await assertAdmin(context.userId);
     const sql = await getSql();
-    const count = await sql<{ n: number }>`select count(*) as n from catalog_models`;
-    if (Number(count[0]?.n ?? 0) <= 1) throw new Error("Последнюю модель удалить нельзя");
+    const count = await sql<{ n: number }>`select count(*) as n from catalog_models where lower(name) not like 'service:%'`;
+    if (!data.toLowerCase().startsWith("service:") && Number(count[0]?.n ?? 0) <= 1) throw new Error("Последнюю модель удалить нельзя");
     const gone = await sql<{ name: string }>`
       delete from catalog_models where name = ${data} returning name
     `;

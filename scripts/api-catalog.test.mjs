@@ -15,6 +15,7 @@ function load(path, require = () => ({})) {
 }
 const helpers = load("src/lib/api/model-public.ts");
 const chats = [
+  {name:"service:embedding:test",display_name:"Private embedding",api_key:"secret",created:123},
   { name: "DeepSeek", display_name: "DeepSeek 4.1 Flash", api_key: "", created: 123 },
   { name: "Kimi", display_name: "Kimi", api_key: "key", created: 123 },
 ];

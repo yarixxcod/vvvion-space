@@ -150,7 +150,7 @@ export async function shopCatalog() {
   return {
     items: [
       { sku: "premium", title: "Premium", price: cost("premium", PREMIUM_PRICE), section: "subs", note: `${PREMIUM_DAYS} дней` },
-      { sku: "vpn", title: "VPN", price: cost("vpn", VPN_PRICE), section: "subs", note: "30 дней" },
+      { sku: "vpn", title: "Connect", price: cost("vpn", VPN_PRICE), section: "subs", note: "30 дней" },
       { sku: "mega", title: "Мегадиск", price: cost("mega", MEGA_PRICE), section: "storage", note: "2 ГБ, 30 дней" },
       { sku: "boost", title: "Сутки подлиннее", price: cost("boost", 1000), section: "ai", note: "+100 запросов на 24 часа" },
       { sku: "disk", title: "Место на диске", price: cost("disk", DISK_COST), section: "storage", note: "+100 МБ" },

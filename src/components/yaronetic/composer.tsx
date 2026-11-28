@@ -1,8 +1,10 @@
+import { pastedFiles, readClipboardImages } from "@/lib/clipboard-images";
 import { StickerPicker } from "@/components/yaronetic/sticker-picker";
 import { stickerBody } from "@/lib/stickers";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
+  ClipboardPaste,
   Smile,
   ArrowUp,
   AudioLines,
@@ -375,10 +377,11 @@ export function Composer({
           onPaste={(event) => {
             const data = event.clipboardData;
             if (!data || !captureFiles) return;
-            if (data.files.length) {
+            const pasted = pastedFiles(data);
+            if (pasted.length) {
               event.preventDefault();
               event.stopPropagation();
-              if (!attachLocked) void takeFiles([...data.files]);
+              if (!attachLocked) void takeFiles(pasted);
               return;
             }
             const text = data.getData("text/plain");
@@ -461,6 +464,7 @@ export function Composer({
       </div>
       <div className="mt-1 hidden min-w-0 flex-wrap items-center gap-1.5 lg:flex">
         <div className="flex shrink-0 items-center gap-0.5">
+          {captureFiles ? <button type="button" disabled={attachLocked} className="press inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-muted" onClick={()=>{void readClipboardImages().then(takeFiles).catch(()=>toast("Вставьте картинку через меню поля сообщения или Ctrl+V"));}} aria-label="Вставить изображение из буфера"><ClipboardPaste className="size-4"/><span className="lg:hidden">Из буфера</span></button> : null}
           {!imageMode && captureFiles ? (
             <button
               type="button"
@@ -605,6 +609,7 @@ export function Composer({
               }}
             />
           )}
+          {captureFiles?<ToolRow icon={<ClipboardPaste className="size-4"/>} title="Из буфера" hint="Вставить скопированное изображение" disabled={attachLocked || files.length>=CHAT_FILE_COUNT} onClick={()=>{void readClipboardImages().then(takeFiles).then(()=>setMore(false)).catch(()=>toast("Используйте «Вставить» в поле сообщения"));}}/>:null}
           <ToolRow
             icon={<ImageIcon className="size-4" />}
             title="Картинка"

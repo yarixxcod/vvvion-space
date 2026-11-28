@@ -1,4 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn,createServerOnlyFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql, withTransaction } from "@/lib/db";
 import { assertActive, assertAdmin } from "@/lib/social/access";
@@ -226,16 +226,6 @@ async function ipHash(request: Request): Promise<string> {
   return createHash("sha256").update(ip).digest("hex").slice(0, 32);
 }
 
-async function agentTokenOk(header: string | null): Promise<boolean> {
-  const { timingSafeEqual } = await import("node:crypto");
-  const expected = process.env.VPN_AGENT_TOKEN?.trim() || "";
-  if (!expected || !header) return false;
-  const got = header.replace(/^Bearer\s+/i, "").trim();
-  const a = Buffer.from(got);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || a.length === 0) return false;
-  return timingSafeEqual(a, b);
-}
 
 function protocolOf(uri: string, stored: string): "vless" | "hy2" {
   if (stored === "vless" || stored === "hy2") return stored;
@@ -774,8 +764,8 @@ export async function purchaseVpn(
       .then((mod) =>
         mod.pushNotice(userId, "subs", {
           id: `shop:${id}`,
-          title: "VPN",
-          body: `Подписка VPN на ${chosen!.days} дней · ${chosen!.price} вублей`,
+          title: "Connect",
+          body: `Подписка Connect на ${chosen!.days} дней · ${chosen!.price} вублей`,
           url: "/c/services",
         }),
       )
@@ -1241,19 +1231,23 @@ export async function renewDueVpn(): Promise<number> {
   return done;
 }
 
-export async function handleVpnAgent(request: Request): Promise<Response> {
+export const handleVpnAgent=createServerOnlyFn(async (request: Request): Promise<Response> => {
+  const {connectTokenReady,verifyConnectToken}=await import("./connect-token.server");
   const deny = (status: number, message: string) =>
     Response.json({ message }, { status, headers: { "cache-control": "no-store" } });
-  if (!process.env.VPN_AGENT_TOKEN?.trim()) return deny(503, "Агент не настроен");
-  if (!(await agentTokenOk(request.headers.get("authorization")))) return deny(401, "Нет доступа");
+  if (!connectTokenReady()) return deny(503, "Агент не настроен");
+  if(!request.headers.get("authorization")) return deny(401,"Нет доступа");
   let body: Record<string, unknown> = {};
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    const text=await request.text();if(text.length>1000000)return deny(413,"Слишком большой отчёт");
+    const parsed=JSON.parse(text);if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return deny(400,"Некорректный JSON");
+    body = parsed as Record<string, unknown>;
   } catch {
     return deny(400, "Некорректный JSON");
   }
   const nodeId = typeof body.nodeId === "string" ? body.nodeId.trim() : "";
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(nodeId)) return deny(404, "Сервер не найден");
+  if (!verifyConnectToken(request.headers.get("authorization"),nodeId)) return deny(401,"Нет доступа");
   const sql = await getSql();
   const nodes = await sql<{
     id: string;
@@ -1269,6 +1263,20 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
   const node = nodes[0];
   if (!node) return deny(404, "Сервер не найден");
   const quiet = { headers: { "cache-control": "no-store" } };
+  if (body.op === "installation") {
+    const phase=typeof body.phase==="string"?body.phase.slice(0,80):"Установка";
+    await sql`update vpn_nodes set load_note=${phase},last_check_at=now() where id=${nodeId} and uri like 'connect-pending:%'`;
+    return Response.json({ok:true},quiet);
+  }
+  if (body.op === "provisioned") {
+    if(!node.agent_enrolled)return deny(409,"Сначала примените клиентов");
+    const uri=nodeUri(body.uri);
+    const info=await sql<{host:string;protocol:string}>`select host,protocol from vpn_nodes where id=${nodeId}`;
+    const host=info[0]?.host||"";
+    if (!uri.startsWith((info[0]?.protocol||"")+"://{secret}@"+(host.includes(":")?"["+host+"]":host)+":")) return deny(400,"Адрес сервера не совпал");
+    await sql`update vpn_nodes set uri=${uri},enabled=true,maintenance=false,load_note='sing-box · синхронизация активна',last_error='' where id=${nodeId} and uri like 'connect-pending:%'`;
+    return Response.json({ok:true},quiet);
+  }
   if (body.op === "enroll") {
     const mark = afterAgent({ wasEnrolled: Boolean(node.agent_enrolled), event: "seen" });
     await sql`update vpn_nodes set last_check_at = now() where id = ${nodeId}`;
@@ -1421,31 +1429,33 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
         if (!clean.size) return;
         const previous = await tx.query<{
           user_id: string;
-          upload_bytes: string;
-          download_bytes: string;
-          baseline_upload: string;
-          baseline_download: string;
-        }>(`select * from vpn_counters where node_id=$1 and user_id=any($2::text[])`, [
+          upload_bytes: string | null;
+          download_bytes: string | null;
+          baseline_upload: string | null;
+          baseline_download: string | null;
+        }>(`select distinct k.user_id,c.upload_bytes,c.download_bytes,c.baseline_upload,c.baseline_download from vpn_keys k left join vpn_counters c on c.node_id=k.node_id and c.user_id=k.user_id where k.node_id=$1 and k.user_id=any($2::text[])`, [
           nodeId,
           [...clean.keys()],
         ]);
         const byUser = new Map(previous.map((v) => [v.user_id, v]));
+        for(const userId of clean.keys())if(!byUser.has(userId))clean.delete(userId);
+        if(!clean.size)return;
         const rows = [...clean.values()].map((r) => {
           const p = byUser.get(r.userId);
           return {
             ...r,
             baseUp: nextBaseline(
-              p ? Number(p.upload_bytes) : null,
-              p ? Number(p.baseline_upload) : null,
+              p?.upload_bytes != null ? Number(p.upload_bytes) : null,
+              p?.baseline_upload != null ? Number(p.baseline_upload) : null,
               r.upload,
             ),
             baseDown: nextBaseline(
-              p ? Number(p.download_bytes) : null,
-              p ? Number(p.baseline_download) : null,
+              p?.download_bytes != null ? Number(p.download_bytes) : null,
+              p?.baseline_download != null ? Number(p.baseline_download) : null,
               r.download,
             ),
-            deltaUp: p ? counterDelta(Number(p.upload_bytes), r.upload) : 0,
-            deltaDown: p ? counterDelta(Number(p.download_bytes), r.download) : 0,
+            deltaUp: p?.upload_bytes != null ? counterDelta(Number(p.upload_bytes), r.upload) : 0,
+            deltaDown: p?.download_bytes != null ? counterDelta(Number(p.download_bytes), r.download) : 0,
           };
         });
         await tx.query(
@@ -1476,7 +1486,7 @@ export async function handleVpnAgent(request: Request): Promise<Response> {
     return Response.json({ ok: true }, quiet);
   }
   return deny(400, "Неизвестное действие");
-}
+});
 
 export const setVpnSharedCut = createServerFn({ method: "POST" })
   .middleware([authMiddleware])

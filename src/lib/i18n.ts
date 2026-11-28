@@ -97,9 +97,9 @@ const UI = {
   },
   tourServicesTitle: { ru: "Сервисы", en: "Services", kk: "Қызметтер" },
   tourServicesBody: {
-    ru: "Погода, новости, курсы и VPN.",
-    en: "Weather, news, rates and VPN.",
-    kk: "Ауа райы, жаңалық, бағам және VPN.",
+    ru: "Погода, новости, курсы и Connect.",
+    en: "Weather, news, rates and Connect.",
+    kk: "Ауа райы, жаңалық, бағам және Connect.",
   },
   tourDiskTitle: { ru: "Диск", en: "Disk", kk: "Диск" },
   tourDiskBody: {
@@ -150,7 +150,7 @@ const UI = {
   subAdmin: { ru: "Модели, лимиты и участники", en: "Models, limits and members", kk: "Модельдер, лимит және қатысушылар" },
   subFeed: { ru: "Записи и ответы", en: "Posts and replies", kk: "Жазбалар мен жауаптар" },
   subPlay: { ru: "Читальня, смотрельня и игры", en: "Books, video and games", kk: "Кітап, бейне және ойын" },
-  subServices: { ru: "Погода, новости, курсы и VPN", en: "Weather, news, rates and VPN", kk: "Ауа райы, жаңалық, бағам және VPN" },
+  subServices: { ru: "Погода, новости, курсы и Connect", en: "Weather, news, rates and Connect", kk: "Ауа райы, жаңалық, бағам және Connect" },
   subDisk: { ru: "Картинки и голосовые", en: "Pictures and voice", kk: "Сурет пен дауыс" },
   subBank: { ru: "Вубли и переводы", en: "Vubles and transfers", kk: "Вубль және аударым" },
   subShop: { ru: "Подписка, место и персонажи", en: "Plan, space and characters", kk: "Жазылым, орын және кейіпкер" },
@@ -373,7 +373,7 @@ const ABOUT: Record<Lang, { title: string; description: string; lead: string; bl
       {
         title: "Круг",
         paragraphs: [
-          "Сообщения, группы, лента, погода, новости, курсы и VPN живут в одном круге. У раздела свой адрес: его можно отправить, и откроется именно он.",
+          "Сообщения, группы, лента, погода, новости, курсы и Connect живут в одном круге. У раздела свой адрес: его можно отправить, и откроется именно он.",
           "Читальня принимает EPUB, FB2, TXT и PDF до 20 МБ, в том числе с картинками. Смотрельня показывает ролики YouTube, Rutube и VK.",
         ],
       },
@@ -450,7 +450,7 @@ const ABOUT: Record<Lang, { title: string; description: string; lead: string; bl
       {
         title: "Circle",
         paragraphs: [
-          "Messages, groups, the feed, weather, news, rates and VPN live in one circle. Each section has an address: send it and that section opens.",
+          "Messages, groups, the feed, weather, news, rates and Connect live in one circle. Each section has an address: send it and that section opens.",
           "The shelf takes EPUB, FB2, TXT and PDF up to 20 MB, including books with pictures. The player shows YouTube, Rutube and VK.",
         ],
       },
@@ -527,7 +527,7 @@ const ABOUT: Record<Lang, { title: string; description: string; lead: string; bl
       {
         title: "Шеңбер",
         paragraphs: [
-          "Хабарлама, топ, таспа, ауа райы, жаңалық, бағам және VPN бір шеңберде. Әр бөлімнің мекенжайы бар: жіберсеңіз, сол бөлім ашылады.",
+          "Хабарлама, топ, таспа, ауа райы, жаңалық, бағам және Connect бір шеңберде. Әр бөлімнің мекенжайы бар: жіберсеңіз, сол бөлім ашылады.",
           "Сөре EPUB, FB2, TXT және 20 МБ-қа дейінгі PDF алады, суреттері бар кітаптарды да. Ойнатқыш YouTube, Rutube және VK көрсетеді.",
         ],
       },
@@ -633,9 +633,9 @@ const PLACES: Record<string, Record<Lang, PlaceCopy>> = {
     kk: { name: "Ойын-сауық", title: "Кітап, бейне және ойын — vvvion.space", description: "vvvion.space ішіндегі кітап, бейне және ойын.", lead: "Сөреде EPUB, FB2, TXT және PDF. Ойнатқыш сілтемедегі бейнені көрсетеді. Ойында тапсырыс вубльге өтеді." },
   },
   services: {
-    ru: { name: "Сервисы", title: "Погода, новости, курсы, VPN и календарь — vvvion.space", description: "Погода, новости, курсы, VPN и личный календарь внутри vvvion.space.", lead: "Погода, новости, курсы, VPN и календарь." },
-    en: { name: "Services", title: "Weather, news, rates, VPN and calendar — vvvion.space", description: "Weather, news, rates, a VPN plan and a personal calendar inside vvvion.space.", lead: "Weather, news, rates, VPN and a calendar." },
-    kk: { name: "Қызметтер", title: "Ауа райы, жаңалық, бағам, VPN және күнтізбе — vvvion.space", description: "vvvion.space ішіндегі ауа райы, жаңалық, бағам, VPN және жеке күнтізбе.", lead: "Ауа райы, жаңалық, бағам, VPN және күнтізбе." },
+    ru: { name: "Сервисы", title: "Погода, новости, курсы, Connect и календарь — vvvion.space", description: "Погода, новости, курсы, Connect и личный календарь внутри vvvion.space.", lead: "Погода, новости, курсы, Connect и календарь." },
+    en: { name: "Services", title: "Weather, news, rates, Connect and calendar — vvvion.space", description: "Weather, news, rates, a Connect plan and a personal calendar inside vvvion.space.", lead: "Weather, news, rates, Connect and a calendar." },
+    kk: { name: "Қызметтер", title: "Ауа райы, жаңалық, бағам, Connect және күнтізбе — vvvion.space", description: "vvvion.space ішіндегі ауа райы, жаңалық, бағам, Connect және жеке күнтізбе.", lead: "Ауа райы, жаңалық, бағам, Connect және күнтізбе." },
   },
   disk: {
     ru: { name: "Диск", title: "Диск — картинки и голосовые — vvvion.space", description: "Личный диск vvvion.space: картинки, голосовые, общая ссылка и архив.", lead: "Сюда сами складываются рисунки и голос из чата. Место можно докупить, архив скачивается целиком." },

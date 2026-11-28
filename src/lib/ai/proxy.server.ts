@@ -552,6 +552,7 @@ async function readJson(request: Request) {
 	}
 }
 async function loadCatalog(model: string): Promise<CatalogChat> {
+    if(model.toLowerCase().startsWith("service:")) throw new Error("Служебная модель недоступна для чата");
 	const sql = await getSql();
 	const direct = await sql<{ name: string }>`select name from catalog_models where name = ${model} limit 1`;
 	if (!direct[0]) {
@@ -559,9 +560,10 @@ async function loadCatalog(model: string): Promise<CatalogChat> {
       select model_name from catalog_providers where model_id = ${model} and model_id <> '' order by slot asc limit 1
     `;
 		if (via[0]?.model_name) model = via[0].model_name;
+    if(model.toLowerCase().startsWith("service:")) throw new Error("Служебная модель недоступна для чата");
 	}
 	const rows = await sql<{ base_url?: string; api_key?: string; system_prompt?: string; premium_only?: boolean }>`
-    select base_url, api_key, system_prompt, premium_only from catalog_models where name = ${model}
+    select base_url, api_key, system_prompt, premium_only from catalog_models where name = ${model} and lower(name) not like 'service:%'
   `;
 	const row = rows[0];
 	const extra = await sql<{ base_url?: string; api_key?: string; model_id?: string; provider_id?: string; slot?: number }>`

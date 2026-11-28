@@ -201,7 +201,7 @@ export function PushSettingsCard() {
     {
       key: "subs",
       label: tx({ ru: "Подписки", en: "Subscriptions", kk: "Жазылымдар" }),
-      hint: tx({ ru: "MegaDisk, Премиум и VPN", en: "MegaDisk, Premium and VPN", kk: "MegaDisk, Премиум және VPN" }),
+      hint: tx({ ru: "MegaDisk, Премиум и Connect", en: "MegaDisk, Premium and Connect", kk: "MegaDisk, Премиум және Connect" }),
     },
     {
       key: "money",

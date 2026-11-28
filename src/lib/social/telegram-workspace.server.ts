@@ -75,7 +75,7 @@ export async function workspaceAction(
       name: string;
       label: string;
       key: string;
-    }>`select name,coalesce(nullif(display_name,''),name) as label,md5(name) as key from catalog_models order by name limit 9 offset ${page * 8}`;
+    }>`select name,coalesce(nullif(display_name,''),name) as label,md5(name) as key from catalog_models where lower(name) not like 'service:%' order by name limit 9 offset ${page * 8}`;
     const s = await session(userId);
     const keys: Key = rows.slice(0, 8).map((r) => [
       {
@@ -104,7 +104,7 @@ export async function workspaceAction(
     const [model] = await sql<{
       name: string;
       label: string;
-    }>`select name, coalesce(nullif(display_name, ''), name) as label from catalog_models where md5(name) = ${key}`;
+    }>`select name, coalesce(nullif(display_name, ''), name) as label from catalog_models where md5(name) = ${key} and lower(name) not like 'service:%'`;
     if (!model) {
       await say(token, chatId, "Модель больше не найдена. Откройте /models.", AI);
       return true;

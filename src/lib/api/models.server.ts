@@ -56,7 +56,7 @@ export async function listApiModels(): Promise<ApiModel[]> {
     api_enabled: boolean;
   }>`
     select name, display_name, extract(epoch from created_at)::int as created, base_url, api_key, api_enabled
-    from catalog_models where api_enabled = true order by created_at asc, name asc
+    from catalog_models where api_enabled = true and lower(name) not like 'service:%' order by created_at asc, name asc
   `;
   const links = await sql<{
     model_name: string;
@@ -78,7 +78,7 @@ export async function listApiModels(): Promise<ApiModel[]> {
   const visible: ApiModel[] = [];
   const taken = new Set<string>();
   for (const row of chats) {
-    if (!MODEL_RE.test(row.name)) continue;
+    if (row.name.toLowerCase().startsWith("service:") || !MODEL_RE.test(row.name)) continue;
     const stored = byName.get(row.name);
     const list = stored?.length
       ? stored
@@ -114,7 +114,7 @@ export async function listApiModels(): Promise<ApiModel[]> {
     from image_models where api_enabled = true order by created_at asc, name asc
   `;
   for (const row of images) {
-    if (!MODEL_RE.test(row.name)) continue;
+    if (row.name.toLowerCase().startsWith("service:") || !MODEL_RE.test(row.name)) continue;
     if (!(row.api_key || "").trim()) continue;
     const label = (row.display_name || "").trim() || row.name;
     if (!publishedChatId(label, row.name, row.api_key)) continue;

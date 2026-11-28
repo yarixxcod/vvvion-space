@@ -534,7 +534,7 @@ async function remindVpn(window: "7d" | "3d" | "1d") {
         `;
   const copy =
     window === "7d"
-      ? { id: "sub:vpn:7d", title: "VPN", body: "VPN закончится через 7 дней", url: "/c/services" }
+      ? { id: "sub:vpn:7d", title: "Connect", body: "Connect закончится через 7 дней", url: "/c/services" }
       : subCopy("vpn", window);
   for (const row of rows) {
     const ends = new Date(row.until_at);
@@ -554,7 +554,7 @@ async function remindVpnExpired() {
     const ends = new Date(row.until_at);
     if (Number.isNaN(ends.getTime())) continue;
     if (!(await claimOnce(row.user_id, "vpn:expired", subRef(ends)))) continue;
-    await sendPush(row.user_id, "subs", { id: "sub:vpn:expired", title: "VPN", body: "Подписка VPN закончилась", url: "/c/services" });
+    await sendPush(row.user_id, "subs", { id: "sub:vpn:expired", title: "Connect", body: "Подписка Connect закончилась", url: "/c/services" });
   }
 }
 
@@ -565,10 +565,10 @@ export async function pushVpnNodeDown(nodeId: string, name: string) {
   const people = await sql<{ user_id: string }>`
     select user_id from vpn_passes where blocked_at is null and until_at > now() limit 200
   `;
-  const body = `Сервер «${clipText(name, 32) || "VPN"}» сейчас не отвечает`;
+  const body = `Сервер «${clipText(name, 32) || "Connect"}» сейчас не отвечает`;
   for (const person of people) {
     if (!(await claimOnce(person.user_id, "vpn:down", `${nodeId}:${day}`))) continue;
-    await sendPush(person.user_id, "subs", { id: `vpn-down:${nodeId}`, title: "VPN", body, url: "/c/services" });
+    await sendPush(person.user_id, "subs", { id: `vpn-down:${nodeId}`, title: "Connect", body, url: "/c/services" });
   }
 }
 
@@ -604,8 +604,8 @@ async function remindVpnTraffic() {
     if (!(await claimOnce(row.user_id, `vpn:traffic${level}`, row.anchor || "open"))) continue;
     await sendPush(row.user_id, "subs", {
       id: `vpn-traffic:${level}`,
-      title: "VPN",
-      body: level === "95" ? "Трафик VPN почти закончился" : "Использовано больше 80% трафика VPN",
+      title: "Connect",
+      body: level === "95" ? "Трафик Connect почти закончился" : "Использовано больше 80% трафика Connect",
       url: "/c/services",
     });
   }
@@ -629,5 +629,5 @@ export async function pushDiskLevel(userId: string) {
 
 export async function pushVpnRenewal(userId:string,day:string,success:boolean,days:number,price:number){
   if(!(await claimOnce(userId,"vpn:auto-renew",day))) return;
-  await sendPush(userId,"subs",{id:`vpn-renew:${day}`,title:"VPN",body:success?`VPN продлён на ${days} дней, списано ${price} вублей`:"Не хватило вублей для продления VPN, пополните баланс",url:"/c/services"});
+  await sendPush(userId,"subs",{id:`vpn-renew:${day}`,title:"Connect",body:success?`Connect продлён на ${days} дней, списано ${price} вублей`:"Не хватило вублей для продления Connect, пополните баланс",url:"/c/services"});
 }

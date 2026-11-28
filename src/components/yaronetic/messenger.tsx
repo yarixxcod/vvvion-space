@@ -1,10 +1,11 @@
+import { pastedFiles, readClipboardImages } from "@/lib/clipboard-images";
 import { ChatImage, ImageViewer } from "./chat-image";
 import {StickerPicker, StickerImage} from "@/components/yaronetic/sticker-picker";
 import {setRoomMessageLike} from "@/lib/social/messenger";
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { SourcePicker } from "@/components/yaronetic/source-picker";
 import { sizeLabel, UploadMeter, type UploadView } from "@/components/yaronetic/upload-meter";
-import { ArrowLeft, AudioLines, BookOpen, Check, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
+import { ArrowLeft, ClipboardPaste, AudioLines, BookOpen, Check, Library, Mic, Newspaper, Paperclip, Pause, Plus, Send, Smile, X } from "lucide-react";
 import { LikePin } from "@/components/yaronetic/message-like";
 import { BackButton } from "@/components/yaronetic/back-button";
 import { PersonFace } from "@/components/yaronetic/person-face";
@@ -438,6 +439,7 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<UploadView | null>(null);
+  const [attachmentMenu,setAttachmentMenu]=useState(false);
   const [fromCircle, setFromCircle] = useState(false);
   const [stickers, setStickers] = useState(false);
   const [likeBusy,setLikeBusy]=useState<string[]>([]);
@@ -532,11 +534,12 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  async function onPick(list: FileList | null) {
+  async function onPick(list: FileList | File[] | null) {
     if (!list?.length) return;
-    const next = [...files];
+    if (busyRef.current) return;
+    const next:File[] = [];
     for (const file of [...list]) {
-      if (next.length >= 8) {
+      if (next.length + files.length >= 8) {
         toast("Не больше 8 файлов");
         break;
       }
@@ -550,7 +553,7 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
       }
       next.push(file);
     }
-    setFiles(next.slice(0, 8));
+    setFiles(current=>[...current,...next].slice(0,8));
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -814,6 +817,7 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
       />
       {reportId ? <ReportDialog targetType="message" targetId={reportId} onClose={() => setReportId(null)} /> : null}
       <form className="border-t border-line bg-bg p-2" onSubmit={(event) => void submit(event)}>
+        {attachmentMenu?<div className="mb-2 grid grid-cols-2 gap-2 rounded-2xl border border-line bg-elev p-2"><button type="button" className="press flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm" onClick={()=>{setAttachmentMenu(false);fileRef.current?.click();}}><Paperclip className="size-4"/>Выбрать файл</button><button type="button" disabled={busy} className="press flex min-h-11 items-center justify-center gap-2 rounded-xl text-sm" onClick={()=>{void readClipboardImages().then(onPick).then(()=>setAttachmentMenu(false)).catch(()=>toast("Используйте «Вставить» в поле сообщения"));}}><ClipboardPaste className="size-4"/>Из буфера</button></div>:null}
         {progress ? (
           <div className="mb-2">
             <div className="flex justify-end">
@@ -855,7 +859,8 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
             type="button"
             className="press inline-flex size-11 shrink-0 items-center justify-center rounded-full text-muted"
             aria-label="Приложить файлы"
-            onClick={() => fileRef.current?.click()}
+            aria-expanded={attachmentMenu}
+            onClick={() => setAttachmentMenu(value=>!value)}
           >
             <Paperclip className="size-4" />
           </button>
@@ -879,13 +884,16 @@ export function Thread({ room, onBack }: { room: RoomSummary; onBack: () => void
           >
             <Smile className="size-5" />
           </button>
+          <button type="button" disabled={busy} className="press hidden size-11 shrink-0 place-items-center rounded-full text-muted sm:grid" aria-label="Вставить изображение из буфера" onClick={()=>{void readClipboardImages().then(onPick).catch(()=>toast("Вставьте картинку через меню поля сообщения или Ctrl+V"));}}><ClipboardPaste className="size-5"/></button>
           <textarea
             value={draft}
             rows={1}
             maxLength={4000}
             placeholder="Сообщение"
-            className="field field-line max-h-32 flex-1 resize-none rounded-3xl text-base"
+            className="field field-line max-h-32 min-w-0 flex-1 resize-none rounded-3xl text-base"
             onChange={(event) => setDraft(event.target.value)}
+            onPaste={event=>{const pasted=pastedFiles(event.clipboardData);if(!pasted.length)return;event.preventDefault();if(!busyRef.current)void onPick(pasted);}}
+
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing || event.keyCode === 229) return;
               const coarse = window.matchMedia("(pointer: coarse)").matches;
